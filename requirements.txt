@@ -1,0 +1,10 @@
+torch
+datasets
+transformers
+trl
+peft
+requests
+codebleu
+openai
+tree-sitter==0.21.3
+network==0.1

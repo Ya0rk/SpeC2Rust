@@ -1,0 +1,24 @@
+strict digraph {
+"md5.c:rotateLeft";
+"md5.c:md5Step";
+"md5.c:md5Init";
+"md5.c:md5String";
+"md5.c:md5File";
+"md5.c:md5Update";
+"md5.c:md5Finalize";
+"main.c:main";
+"main.c:print_hash";
+"md5.c:md5Step" -> "md5.c:rotateLeft";
+"md5.c:md5String" -> "md5.c:md5Init";
+"md5.c:md5String" -> "md5.c:md5Update";
+"md5.c:md5String" -> "md5.c:md5Finalize";
+"md5.c:md5File" -> "md5.c:md5Init";
+"md5.c:md5File" -> "md5.c:md5Update";
+"md5.c:md5File" -> "md5.c:md5Finalize";
+"md5.c:md5Update" -> "md5.c:md5Step";
+"md5.c:md5Finalize" -> "md5.c:md5Update";
+"md5.c:md5Finalize" -> "md5.c:md5Step";
+"main.c:main" -> "md5.c:md5String";
+"main.c:main" -> "md5.c:md5File";
+"main.c:main" -> "main.c:print_hash";
+}

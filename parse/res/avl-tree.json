@@ -1,0 +1,1650 @@
+[
+  {
+    "func_defid": "avl_data.c:makedata",
+    "span": "avl_data.c:11:1:20:2",
+    "pieces": [
+      "avl_data.c:11:1:20:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 10,
+    "source": "mydata *makedata(int key)\n{\n\tmydata *p;\n\n\tp = (mydata *) malloc(sizeof(mydata));\n\tif (p != NULL)\n\t\tp->key = key;\n\n\treturn p;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:tree_insert",
+        "span": "avl_test.c:139:14:139:27",
+        "source": "if ((data = makedata(key)) == NULL || (node = avl_insert(avlt, data)) == NULL) {"
+      },
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:26:15:26:29",
+        "source": "if ((data = makedata(a[i])) == NULL || avl_insert(avlt, data) == NULL) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_data.c:compare_func",
+    "span": "avl_data.c:22:1:37:2",
+    "pieces": [
+      "avl_data.c:22:1:37:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 16,
+    "source": "int compare_func(const void *d1, const void *d2)\n{\n\tmydata *p1, *p2;\n\t\n\tassert(d1 != NULL);\n\tassert(d2 != NULL);\n\t\n\tp1 = (mydata *) d1;\n\tp2 = (mydata *) d2;\n\tif (p1->key == p2->key)\n\t\treturn 0;\n\telse if (p1->key > p2->key)\n\t\treturn 1;\n\telse\n\t\treturn -1;\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_data.c:destroy_func",
+    "span": "avl_data.c:39:1:47:2",
+    "pieces": [
+      "avl_data.c:39:1:47:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "void destroy_func(void *d)\n{\n\tmydata *p;\n\t\n\tassert(d != NULL);\n\t\n\tp = (mydata *) d;\n\tfree(p);\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_data.c:print_func",
+    "span": "avl_data.c:49:1:57:2",
+    "pieces": [
+      "avl_data.c:49:1:57:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "void print_func(void *d)\n{\n\tmydata *p;\n\t\n\tassert(d != NULL);\n\t\n\tp = (mydata *) d;\n\tprintf(\"%d\", p->key);\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:print",
+        "span": "avl_bf.c:636:3:636:22",
+        "source": "print_func(n->data);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_data.c:print_char_func",
+    "span": "avl_data.c:59:1:67:2",
+    "pieces": [
+      "avl_data.c:59:1:67:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "void print_char_func(void *d)\n{\n\tmydata *p;\n\t\n\tassert(d != NULL);\n\t\n\tp = (mydata *) d;\n\tprintf(\"%c\", p->key & 127);\n}",
+    "calls": [
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:48:3:48:30",
+        "source": "print_char_func(node->data);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:all_tests",
+    "span": "avl_test.c:51:1:75:2",
+    "pieces": [
+      "avl_test.c:51:1:75:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 25,
+    "source": "void all_tests()\n{\n\tmu_test(\"unit_test_create\", unit_test_create());\n\n\tmu_test(\"unit_test_find\", unit_test_find());\n\n\tmu_test(\"unit_test_successor\", unit_test_successor());\n\n\tmu_test(\"unit_test_atomic_insertion\", unit_test_atomic_insertion());\n\tmu_test(\"unit_test_atomic_deletion\", unit_test_atomic_deletion());\n\n\tmu_test(\"unit_test_chain_insertion\", unit_test_chain_insertion());\n\tmu_test(\"unit_test_chain_deletion\", unit_test_chain_deletion());\n\n\tmu_test(\"unit_test_permutation_insertion\", unit_test_permutation_insertion());\n\tmu_test(\"unit_test_permutation_deletion\", unit_test_permutation_deletion());\n\n\tmu_test(\"unit_test_random_insertion_deletion\", unit_test_random_insertion_deletion());\n\n\tmu_test(\"unit_test_dup\", unit_test_dup());\n\n\t#ifdef AVL_MIN\n\tmu_test(\"unit_test_min\", unit_test_min());\n\t#endif\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:main",
+        "span": "avl_test.c:79:2:79:13",
+        "source": "all_tests();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:main",
+    "span": "avl_test.c:77:1:88:2",
+    "pieces": [
+      "avl_test.c:77:1:88:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 12,
+    "source": "int main(int argc, char **argv)\n{\n\tall_tests();\n\n\tif (mu_fails) {\n\t\tprintf(\"*** %d/%d TESTS FAILED ***\\n\", mu_fails, mu_tests);\n\t\treturn 1;\n\t} else {\n\t\tprintf(\"ALL TESTS PASSED\\n\");\n\t\treturn 0;\n\t}\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:tree_create",
+    "span": "avl_test.c:90:1:93:2",
+    "pieces": [
+      "avl_test.c:90:1:93:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 4,
+    "source": "avltree *tree_create()\n{\n\treturn avl_create(compare_func, destroy_func);\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:permutation_insert",
+        "span": "avl_test.c:196:14:196:27",
+        "source": "if ((avlt = tree_create()) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:permutation_delete",
+        "span": "avl_test.c:219:14:219:27",
+        "source": "if ((avlt = tree_create()) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_create",
+        "span": "avl_test.c:250:14:250:27",
+        "source": "if ((avlt = tree_create()) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:281:14:281:27",
+        "source": "if ((avlt = tree_create()) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:329:14:329:27",
+        "source": "if ((avlt = tree_create()) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_insertion",
+        "span": "avl_test.c:439:15:439:28",
+        "source": "if ((avlt = tree_create()) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_deletion",
+        "span": "avl_test.c:567:15:567:28",
+        "source": "if ((avlt = tree_create()) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_insertion",
+        "span": "avl_test.c:628:15:628:28",
+        "source": "if ((avlt = tree_create()) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_deletion",
+        "span": "avl_test.c:671:15:671:28",
+        "source": "if ((avlt = tree_create()) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_random_insertion_deletion",
+        "span": "avl_test.c:725:14:725:27",
+        "source": "if ((avlt = tree_create()) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:774:14:774:27",
+        "source": "if ((avlt = tree_create()) == NULL) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:tree_find",
+    "span": "avl_test.c:95:1:100:2",
+    "pieces": [
+      "avl_test.c:95:1:100:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 6,
+    "source": "avlnode *tree_find(avltree *avlt, int key)\n{\n\tmydata query;\n\tquery.key = key;\n\treturn avl_find(avlt, &query);\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:tree_delete",
+        "span": "avl_test.c:152:14:152:34",
+        "source": "if ((node = tree_find(avlt, key)) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:tree_delete",
+        "span": "avl_test.c:159:6:159:26",
+        "source": "if (tree_find(avlt, key) == node) {"
+      },
+      {
+        "caller": "avl_test.c:permutation_insert",
+        "span": "avl_test.c:203:51:203:72",
+        "source": "if ((node = tree_insert(avlt, a[i])) == NULL || tree_find(avlt, a[i]) != node || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:permutation_delete",
+        "span": "avl_test.c:228:51:228:72",
+        "source": "if ((node = tree_insert(avlt, b[i])) == NULL || tree_find(avlt, b[i]) != node || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_random_insertion_deletion",
+        "span": "avl_test.c:738:7:738:27",
+        "source": "if (tree_find(avlt, key) != NULL)"
+      },
+      {
+        "caller": "avl_test.c:unit_test_random_insertion_deletion",
+        "span": "avl_test.c:749:7:749:27",
+        "source": "if (tree_find(avlt, key) == NULL)"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:780:58:780:78",
+        "source": "tree_insert(avlt, 'B') == NULL || AVL_MINIMAL(avlt) != tree_find(avlt, 'B') || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:781:58:781:78",
+        "source": "tree_insert(avlt, 'A') == NULL || AVL_MINIMAL(avlt) != tree_find(avlt, 'A') || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:782:58:782:78",
+        "source": "tree_insert(avlt, 'C') == NULL || AVL_MINIMAL(avlt) != tree_find(avlt, 'A') || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:783:55:783:75",
+        "source": "tree_delete(avlt, 'B') != 1 || AVL_MINIMAL(avlt) != tree_find(avlt, 'A') || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:784:55:784:75",
+        "source": "tree_delete(avlt, 'A') != 1 || AVL_MINIMAL(avlt) != tree_find(avlt, 'C') || \\"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:tree_print",
+    "span": "avl_test.c:102:1:105:2",
+    "pieces": [
+      "avl_test.c:102:1:105:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 4,
+    "source": "void tree_print(avltree *avlt)\n{\n\tavl_print(avlt, print_func);\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:tree_check",
+    "span": "avl_test.c:107:1:127:2",
+    "pieces": [
+      "avl_test.c:107:1:127:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 21,
+    "source": "int tree_check(avltree *avlt)\n{\n\tmydata min, max;\n\tint rc;\n\n\tmin.key = MIN;\n\tmax.key = MAX;\n\trc = 1;\n\n\tif (avl_check_order(avlt, &min, &max) != 1) {\n\t\tfprintf(stdout, \"tree_check: invalid order\\n\");\n\t\trc = 0;\n\t}\n\n\tif (avl_check_height(avlt) != 1) {\n\t\tfprintf(stdout, \"tree_check: invalid height\\n\");\n\t\trc = 0;\n\t}\n\n\treturn rc;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:permutation_insert",
+        "span": "avl_test.c:203:84:203:100",
+        "source": "if ((node = tree_insert(avlt, a[i])) == NULL || tree_find(avlt, a[i]) != node || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:permutation_delete",
+        "span": "avl_test.c:228:84:228:100",
+        "source": "if ((node = tree_insert(avlt, b[i])) == NULL || tree_find(avlt, b[i]) != node || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:permutation_delete",
+        "span": "avl_test.c:236:39:236:55",
+        "source": "if (tree_delete(avlt, a[i]) != 1 || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:296:3:296:19",
+        "source": "tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:345:3:345:19",
+        "source": "tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_insertion",
+        "span": "avl_test.c:445:50:445:66",
+        "source": "if (tree_insert(avlt, cases[i][j]) == NULL || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_deletion",
+        "span": "avl_test.c:573:50:573:66",
+        "source": "if (tree_insert(avlt, cases[i][j]) == NULL || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_deletion",
+        "span": "avl_test.c:580:51:580:67",
+        "source": "if (tree_delete(avlt, cases[i + 1][j]) == 0 || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_insertion",
+        "span": "avl_test.c:634:50:634:66",
+        "source": "if (tree_insert(avlt, cases[i][j]) == NULL || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_deletion",
+        "span": "avl_test.c:677:50:677:66",
+        "source": "if (tree_insert(avlt, cases[i][j]) == NULL || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_deletion",
+        "span": "avl_test.c:684:51:684:67",
+        "source": "if (tree_delete(avlt, cases[i + 1][j]) == 0 || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_random_insertion_deletion",
+        "span": "avl_test.c:741:41:741:57",
+        "source": "if (tree_insert(avlt, key) == NULL || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_random_insertion_deletion",
+        "span": "avl_test.c:752:38:752:54",
+        "source": "if (tree_delete(avlt, key) != 1 || tree_check(avlt) != 1) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:tree_insert",
+    "span": "avl_test.c:129:1:146:2",
+    "pieces": [
+      "avl_test.c:129:1:146:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 18,
+    "source": "avlnode *tree_insert(avltree *avlt, int key)\n{\n\tavlnode *node;\n\tmydata *data;\n\n\tif (key < MIN || key > MAX) {\n\t\tfprintf(stdout, \"tree_insert: invalid key %d\\n\", key);\n\t\treturn NULL;\n\t}\n\t\n\tif ((data = makedata(key)) == NULL || (node = avl_insert(avlt, data)) == NULL) {\n\t\tfprintf(stdout, \"tree_insert: insert %d failed\\n\", key);\n\t\tfree(data);\n\t\treturn NULL;\n\t}\n\n\treturn node;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:permutation_insert",
+        "span": "avl_test.c:203:15:203:38",
+        "source": "if ((node = tree_insert(avlt, a[i])) == NULL || tree_find(avlt, a[i]) != node || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:permutation_delete",
+        "span": "avl_test.c:228:15:228:38",
+        "source": "if ((node = tree_insert(avlt, b[i])) == NULL || tree_find(avlt, b[i]) != node || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:286:11:286:33",
+        "source": "if ((r = tree_insert(avlt, 'R')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:287:8:287:30",
+        "source": "(e = tree_insert(avlt, 'E')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:288:8:288:30",
+        "source": "(d = tree_insert(avlt, 'D')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:289:8:289:30",
+        "source": "(s = tree_insert(avlt, 'S')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:290:8:290:30",
+        "source": "(o = tree_insert(avlt, 'O')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:291:8:291:30",
+        "source": "(x = tree_insert(avlt, 'X')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:292:8:292:30",
+        "source": "(c = tree_insert(avlt, 'C')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:293:8:293:30",
+        "source": "(u = tree_insert(avlt, 'U')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:294:8:294:30",
+        "source": "(b = tree_insert(avlt, 'B')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:295:8:295:30",
+        "source": "(t = tree_insert(avlt, 'T')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:334:11:334:33",
+        "source": "if ((r = tree_insert(avlt, 'R')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:335:8:335:30",
+        "source": "(e = tree_insert(avlt, 'E')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:336:8:336:30",
+        "source": "(d = tree_insert(avlt, 'D')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:337:8:337:30",
+        "source": "(s = tree_insert(avlt, 'S')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:338:8:338:30",
+        "source": "(o = tree_insert(avlt, 'O')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:339:8:339:30",
+        "source": "(x = tree_insert(avlt, 'X')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:340:8:340:30",
+        "source": "(c = tree_insert(avlt, 'C')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:341:8:341:30",
+        "source": "(u = tree_insert(avlt, 'U')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:342:8:342:30",
+        "source": "(b = tree_insert(avlt, 'B')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:343:8:343:30",
+        "source": "(t = tree_insert(avlt, 'T')) == NULL || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_insertion",
+        "span": "avl_test.c:445:8:445:38",
+        "source": "if (tree_insert(avlt, cases[i][j]) == NULL || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_deletion",
+        "span": "avl_test.c:573:8:573:38",
+        "source": "if (tree_insert(avlt, cases[i][j]) == NULL || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_insertion",
+        "span": "avl_test.c:634:8:634:38",
+        "source": "if (tree_insert(avlt, cases[i][j]) == NULL || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_deletion",
+        "span": "avl_test.c:677:8:677:38",
+        "source": "if (tree_insert(avlt, cases[i][j]) == NULL || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_random_insertion_deletion",
+        "span": "avl_test.c:741:7:741:29",
+        "source": "if (tree_insert(avlt, key) == NULL || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:780:3:780:25",
+        "source": "tree_insert(avlt, 'B') == NULL || AVL_MINIMAL(avlt) != tree_find(avlt, 'B') || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:781:3:781:25",
+        "source": "tree_insert(avlt, 'A') == NULL || AVL_MINIMAL(avlt) != tree_find(avlt, 'A') || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:782:3:782:25",
+        "source": "tree_insert(avlt, 'C') == NULL || AVL_MINIMAL(avlt) != tree_find(avlt, 'A') || \\"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:tree_delete",
+    "span": "avl_test.c:148:1:165:2",
+    "pieces": [
+      "avl_test.c:148:1:165:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 18,
+    "source": "int tree_delete(avltree *avlt, int key)\n{\n\tavlnode *node;\n\n\tif ((node = tree_find(avlt, key)) == NULL) {\n\t\tfprintf(stdout, \"tree_delete: %d not found\\n\", key);\n\t\treturn 0;\n\t}\n\n\tavl_delete(avlt, node, 0);\n\n\tif (tree_find(avlt, key) == node) {\n\t\tfprintf(stdout, \"tree_delete: delete %d failed\\n\", key);\n\t\treturn 0;\n\t}\n\n\treturn 1;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:permutation_delete",
+        "span": "avl_test.c:236:7:236:30",
+        "source": "if (tree_delete(avlt, a[i]) != 1 || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:344:3:344:25",
+        "source": "tree_delete(avlt, 'O') != 1 || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_deletion",
+        "span": "avl_test.c:580:8:580:42",
+        "source": "if (tree_delete(avlt, cases[i + 1][j]) == 0 || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_deletion",
+        "span": "avl_test.c:684:8:684:42",
+        "source": "if (tree_delete(avlt, cases[i + 1][j]) == 0 || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_random_insertion_deletion",
+        "span": "avl_test.c:752:7:752:29",
+        "source": "if (tree_delete(avlt, key) != 1 || tree_check(avlt) != 1) {"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:783:3:783:25",
+        "source": "tree_delete(avlt, 'B') != 1 || AVL_MINIMAL(avlt) != tree_find(avlt, 'A') || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:784:3:784:25",
+        "source": "tree_delete(avlt, 'A') != 1 || AVL_MINIMAL(avlt) != tree_find(avlt, 'C') || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:785:3:785:25",
+        "source": "tree_delete(avlt, 'C') != 1 || AVL_MINIMAL(avlt) != NULL) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:swap",
+    "span": "avl_test.c:167:1:173:2",
+    "pieces": [
+      "avl_test.c:167:1:173:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 7,
+    "source": "void swap(char *x, char *y)\n{\n\tchar temp;\n\ttemp = *x;\n\t*x = *y;\n\t*y = temp;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:permute",
+        "span": "avl_test.c:184:3:184:25",
+        "source": "swap(a + start, a + i);"
+      },
+      {
+        "caller": "avl_test.c:permute",
+        "span": "avl_test.c:186:3:186:25",
+        "source": "swap(a + start, a + i);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:permute",
+    "span": "avl_test.c:175:1:188:2",
+    "pieces": [
+      "avl_test.c:175:1:188:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 14,
+    "source": "void permute(char *a, int start, int end, void func(char *))\n{\n\tif (start == end) {\n\t\tfunc(a);\n\t\treturn;\n\t}\n\n\tint i;\n\tfor (i = start; i <= end; i++) {\n\t\tswap(a + start, a + i);\n\t\tpermute(a, start + 1, end, func);\n\t\tswap(a + start, a + i);\n\t}\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:permute",
+        "span": "avl_test.c:185:3:185:35",
+        "source": "permute(a, start + 1, end, func);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_permutation_insertion",
+        "span": "avl_test.c:706:2:706:50",
+        "source": "permute(a, 0, strlen(a) - 1, permutation_insert);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_permutation_deletion",
+        "span": "avl_test.c:715:2:715:50",
+        "source": "permute(a, 0, strlen(a) - 1, permutation_delete);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:permutation_insert",
+    "span": "avl_test.c:190:1:211:2",
+    "pieces": [
+      "avl_test.c:190:1:211:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 22,
+    "source": "void permutation_insert(char *a)\n{\n\tavltree *avlt;\n\tavlnode *node;\n\tint i;\n\t\n\tif ((avlt = tree_create()) == NULL) {\n\t\tfprintf(stdout, \"create AVL tree failed\\n\");\n\t\tpermutation_error++;\n\t\treturn;\n\t}\n\n\tfor (i = 0; i < strlen(a); i++) {\n\t\tif ((node = tree_insert(avlt, a[i])) == NULL || tree_find(avlt, a[i]) != node || tree_check(avlt) != 1) {\n\t\t\tfprintf(stdout, \"insert %c failed\\n\", a[i]);\n\t\t\tpermutation_error++;\n\t\t\treturn;\n\t\t}\n\t}\n\n\tavl_destroy(avlt);\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:permutation_delete",
+    "span": "avl_test.c:213:1:244:2",
+    "pieces": [
+      "avl_test.c:213:1:244:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 32,
+    "source": "void permutation_delete(char *a)\n{\n\tavltree *avlt;\n\tavlnode *node;\n\tint i;\n\t\n\tif ((avlt = tree_create()) == NULL) {\n\t\tfprintf(stdout, \"create AVL tree failed\\n\");\n\t\tpermutation_error++;\n\t\treturn;\n\t}\n\n\tchar b[] = CHARS;\n\n\tfor (i = 0; i < strlen(b); i++) {\n\t\tif ((node = tree_insert(avlt, b[i])) == NULL || tree_find(avlt, b[i]) != node || tree_check(avlt) != 1) {\n\t\t\tfprintf(stdout, \"insert %c failed\\n\", b[i]);\n\t\t\tpermutation_error++;\n\t\t\treturn;\n\t\t}\n\t}\n\n\tfor (i = 0; i < strlen(a); i++) {\n\t\tif (tree_delete(avlt, a[i]) != 1 || tree_check(avlt) != 1) {\n\t\t\tfprintf(stdout, \"delete %c failed\\n\", a[i]);\n\t\t\tpermutation_error++;\n\t\t\treturn;\n\t\t}\n\t}\n\n\tavl_destroy(avlt);\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:unit_test_create",
+    "span": "avl_test.c:246:1:274:2",
+    "pieces": [
+      "avl_test.c:246:1:274:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 29,
+    "source": "int unit_test_create()\n{\n\tavltree *avlt;\n\n\tif ((avlt = tree_create()) == NULL) {\n\t\tfprintf(stdout, \"create AVL tree failed\\n\");\n\t\treturn 0;\n\t}\n\n\tif (avlt->compare != compare_func || \\\n\t\tavlt->destroy != destroy_func || \\\n\t\tavlt->nil.left != AVL_NIL(avlt) || \\\n\t\tavlt->nil.right != AVL_NIL(avlt) || \\\n\t\tavlt->nil.parent != AVL_NIL(avlt) || \\\n\t\tavlt->nil.bf != 0 || \\\n\t\tavlt->nil.data != NULL || \\\n\t\tavlt->root.left != AVL_NIL(avlt) || \\\n\t\tavlt->root.right != AVL_NIL(avlt) || \\\n\t\tavlt->root.parent != AVL_NIL(avlt) || \\\n\t\tavlt->root.bf != 0 || \\\n\t\tavlt->root.data != NULL) {\n\t\tfprintf(stdout, \"init 1\\n\");\n\t\tavl_destroy(avlt);\n\t\treturn 0;\n\t}\n\n\tavl_destroy(avlt);\n\treturn 1;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:all_tests",
+        "span": "avl_test.c:53:30:53:48",
+        "source": "mu_test(\"unit_test_create\", unit_test_create());"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:unit_test_find",
+    "span": "avl_test.c:276:1:322:2",
+    "pieces": [
+      "avl_test.c:276:1:322:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 47,
+    "source": "int unit_test_find()\n{\n\tavltree *avlt;\n\tavlnode *r, *e, *d, *s, *o, *x, *c, *u, *b, *t;\n\t\n\tif ((avlt = tree_create()) == NULL) {\n\t\tfprintf(stdout, \"create AVL tree failed\\n\");\n\t\tgoto err0;\n\t}\n\n\tif ((r = tree_insert(avlt, 'R')) == NULL || \\\n\t\t(e = tree_insert(avlt, 'E')) == NULL || \\\n\t\t(d = tree_insert(avlt, 'D')) == NULL || \\\n\t\t(s = tree_insert(avlt, 'S')) == NULL || \\\n\t\t(o = tree_insert(avlt, 'O')) == NULL || \\\n\t\t(x = tree_insert(avlt, 'X')) == NULL || \\\n\t\t(c = tree_insert(avlt, 'C')) == NULL || \\\n\t\t(u = tree_insert(avlt, 'U')) == NULL || \\\n\t\t(b = tree_insert(avlt, 'B')) == NULL || \\\n\t\t(t = tree_insert(avlt, 'T')) == NULL || \\\n\t\ttree_check(avlt) != 1) {\n\t\tfprintf(stdout, \"init failed\\n\");\n\t\tgoto err;\n\t}\n\n\tif (avl_find(avlt, r->data) != r || \\\n\t\tavl_find(avlt, e->data) != e || \\\n\t\tavl_find(avlt, d->data) != d || \\\n\t\tavl_find(avlt, s->data) != s || \\\n\t\tavl_find(avlt, o->data) != o || \\\n\t\tavl_find(avlt, x->data) != x || \\\n\t\tavl_find(avlt, c->data) != c || \\\n\t\tavl_find(avlt, u->data) != u || \\\n\t\tavl_find(avlt, b->data) != b || \\\n\t\tavl_find(avlt, t->data) != t) {\n\t\tfprintf(stdout, \"find failed\\n\");\n\t\tgoto err;\n\t}\n\n\tavl_destroy(avlt);\n\treturn 1;\n\nerr:\n\tavl_destroy(avlt);\nerr0:\n\treturn 0;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:all_tests",
+        "span": "avl_test.c:55:28:55:44",
+        "source": "mu_test(\"unit_test_find\", unit_test_find());"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:unit_test_successor",
+    "span": "avl_test.c:324:1:370:2",
+    "pieces": [
+      "avl_test.c:324:1:370:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 47,
+    "source": "int unit_test_successor()\n{\n\tavltree *avlt;\n\tavlnode *r, *e, *d, *s, *o, *x, *c, *u, *b, *t;\n\t\n\tif ((avlt = tree_create()) == NULL) {\n\t\tfprintf(stdout, \"create AVL tree failed\\n\");\n\t\tgoto err0;\n\t}\n\n\tif ((r = tree_insert(avlt, 'R')) == NULL || \\\n\t\t(e = tree_insert(avlt, 'E')) == NULL || \\\n\t\t(d = tree_insert(avlt, 'D')) == NULL || \\\n\t\t(s = tree_insert(avlt, 'S')) == NULL || \\\n\t\t(o = tree_insert(avlt, 'O')) == NULL || \\\n\t\t(x = tree_insert(avlt, 'X')) == NULL || \\\n\t\t(c = tree_insert(avlt, 'C')) == NULL || \\\n\t\t(u = tree_insert(avlt, 'U')) == NULL || \\\n\t\t(b = tree_insert(avlt, 'B')) == NULL || \\\n\t\t(t = tree_insert(avlt, 'T')) == NULL || \\\n\t\ttree_delete(avlt, 'O') != 1 || \\\n\t\ttree_check(avlt) != 1) {\n\t\tfprintf(stdout, \"init failed\\n\");\n\t\tgoto err;\n\t}\n\n\tif (avl_successor(avlt, b) != c || \\\n\t\tavl_successor(avlt, c) != d || \\\n\t\tavl_successor(avlt, d) != e || \\\n\t\tavl_successor(avlt, e) != r || \\\n\t\tavl_successor(avlt, r) != s || \\\n\t\tavl_successor(avlt, s) != t || \\\n\t\tavl_successor(avlt, t) != u || \\\n\t\tavl_successor(avlt, u) != x || \\\n\t\tavl_successor(avlt, x) != NULL) {\n\t\tfprintf(stdout, \"successor failed\\n\");\n\t\tgoto err;\n\t}\n\n\tavl_destroy(avlt);\n\treturn 1;\n\nerr:\n\tavl_destroy(avlt);\nerr0:\n\treturn 0;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:all_tests",
+        "span": "avl_test.c:57:33:57:54",
+        "source": "mu_test(\"unit_test_successor\", unit_test_successor());"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:unit_test_atomic_insertion",
+    "span": "avl_test.c:372:1:460:2",
+    "pieces": [
+      "avl_test.c:372:1:460:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 89,
+    "source": "int unit_test_atomic_insertion()\n{\n\tavltree *avlt;\n\tint i, j;\n\n\tchar *cases[] = {\n\n\t/* we could make a full tree by inserting A-Z and a-e */\n\n\t/* balanced */\n\t\t\n\t\t/* height insreased */\n\t\t\"P\",\n\t\t\"PH\",\n\t\t\"PX\",\n\n\t\t/* height unchanged\n\t\t\"PHX\",\n\t\t\"PXH\",\n\n\t/* arrangements required: insertion under P.left */\n\n\t\t/* P.left is left-heavy */\n\n\t\t/* H.height = 0 + 2 */\n\t\t\"PHD\"\n\n\t\t/* H.height = 1 + 2 */\n\t\t\"PHXDLB\",\n\t\t\"PHXDLF\",\n\n\t\t/* P.left is right-heavy */\n\n\t\t/* H.height = 0 + 2 */\n\t\t\"PHL\",\n\n\t\t/* H.height = 1 + 2 */\n\t\t\"PHXDLJ\",\n\t\t\"PHXDLN\",\n\n\t/* arrangements required: insertion under P.right */\n\n\t\t/* P.right is right-heavy */\n\t\t\n\t\t/* X.height = 0 + 2 */\n\t\t\"PXb\",\n\n\t\t/* X.height = 1 + 2 */\n\t\t\"PHXTbZ\",\n\t\t\"PHXTbd\",\n\n\t\t/* P.right is left-heavy */\n\n\t\t/* X.height = 0 + 2 */\n\t\t\"PHXT\",\n\n\t\t/* X.height = 1 + 2 */\n\t\t\"PHXTbRV\",\n\t\t\"PHXTbR\",\n\t\t\"PHXTbV\",\n\n\t/* end */\n\t\t0\n\n\t};\n\n\tfor (i = 0; i < sizeof(cases) / sizeof(cases[0]) && cases[i]; i++) {\n\t\tif ((avlt = tree_create()) == NULL) {\n\t\t\tfprintf(stdout, \"%s - create AVL tree failed\\n\", cases[i]);\n\t\t\tgoto err0;\n\t\t}\n\n\t\tfor (j = 0; j < strlen(cases[i]); j++) {\n\t\t\tif (tree_insert(avlt, cases[i][j]) == NULL || tree_check(avlt) != 1) {\n\t\t\t\tfprintf(stdout, \"%s - insert %c failed\\n\", cases[i], cases[i][j]);\n\t\t\t\tgoto err;\n\t\t\t}\n\t\t}\n\n\t\tavl_destroy(avlt);\n\t}\n\t\n\treturn 1;\n\nerr:\n\tavl_destroy(avlt);\nerr0:\n\treturn 0;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:all_tests",
+        "span": "avl_test.c:59:40:59:68",
+        "source": "mu_test(\"unit_test_atomic_insertion\", unit_test_atomic_insertion());"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:unit_test_atomic_deletion",
+    "span": "avl_test.c:462:1:595:2",
+    "pieces": [
+      "avl_test.c:462:1:595:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 134,
+    "source": "int unit_test_atomic_deletion()\n{\n\tavltree *avlt;\n\tint i, j;\n\n\tchar *cases[] = {\n\n\t/* we could make a full tree by inserting A-Z and a-e */\n\n\t/* balanced */\n\n\t\t/* height decreased */\n\t\t\"P\", \"P\", \n\t\t\"PH\", \"H\",\n\t\t\"PH\", \"P\",\n\t\t\"PX\", \"P\",\n\t\t\"PX\", \"X\",\n\n\t\t/* height unchanged */\n\t\t\"PHX\", \"H\",\n\t\t\"PHX\", \"P\",\n\t\t\"PHX\", \"X\",\n\n\t/* arrangements required: deletion under P.right */\n\n\t\t/* P.left is left-heavy */  /* height decreased */\n\n\t\t/* H.height = 0 + 2 */\n\t\t\"PHXD\", \"X\",\n\n\t\t/* H.height = 1 + 2 */\n\t\t\"PHXDLTBF\", \"X\", \n\t\t\"PHXDLTB\", \"X\",\n\t\t\"PHXDLTF\", \"X\",\t\t\n\n\t\t/* P.left is balanced */\n\n\t\t/* H.height = 0 + 2 */\n\t\t\"PHXDL\", \"X\",\n\n\t\t/* H.height = 1 + 2 */\n\t\t\"PHXDLTBFJN\", \"X\",\n\t\t\"PHXDLTBFJ\", \"X\",\n\t\t\"PHXDLTBFN\", \"X\",\n\t\t\"PHXDLTBJN\", \"X\",\n\t\t\"PHXDLTBJ\", \"X\",\n\t\t\"PHXDLTBN\", \"X\",\n\t\t\"PHXDLTFJN\", \"X\",\n\t\t\"PHXDLTFJ\", \"X\",\n\t\t\"PHXDLTFN\", \"X\",\n\n\t\t/* P.left is right-heavy */  /* height decreased */\n\n\t\t/* H.height = 0 + 2 */\n\t\t\"PHXL\", \"X\",\n\n\t\t/* H.height = 1 + 2 */\n\t\t\"PHXDLTJN\", \"X\",\n\t\t\"PHXDLTJ\", \"X\",\n\t\t\"PHXDLTN\", \"X\",\n\n\t/* arrangements required: deletion under P.left */\n\n\t\t/* P.right is right-heavy */  /* height decreased */\n\t\t\n\t\t/* X.height = 0 + 2 */\n\t\t\"PHXb\", \"H\",\n\n\t\t/* X.height = 1 + 2 */\n\t\t\"PHXDTbZd\", \"H\",\n\t\t\"PHXDTbZ\", \"H\",\n\t\t\"PHXDTbd\", \"H\",\n\n\t\t/* P.right is balanced */\n\t\t\n\t\t/* X.height = 0 + 2 */\n\t\t\"PHXTb\", \"H\",\n\n\t\t/* X.height = 1 + 2 */\n\t\t\"PHXDTbRVZd\", \"H\",\n\t\t\"PHXDTbRVZ\", \"H\",\n\t\t\"PHXDTbRVd\", \"H\",\n\t\t\"PHXDTbRZd\", \"H\",\n\t\t\"PHXDTbRZ\", \"H\",\n\t\t\"PHXDTbRd\", \"H\",\n\t\t\"PHXDTbVZd\", \"H\",\n\t\t\"PHXDTbVZ\", \"H\",\n\t\t\"PHXDTbVd\", \"H\",\n\n\t\t/* P.right is left-heavy */  /* height decreased */\n\n\t\t/* X.height = 0 + 2 */\n\t\t\"PHXT\", \"H\",\n\n\t\t/* X.height = 1 + 2 */\n\t\t\"PHXDTbRV\", \"H\",\n\t\t\"PHXDTbR\", \"H\",\n\t\t\"PHXDTbV\", \"H\",\n\n\t/* end */\n\t\t0, 0\n\n\t};\n\n\tfor (i = 0; i < sizeof(cases) / sizeof(cases[0]) && cases[i] != 0; i += 2) {\n\t\tif ((avlt = tree_create()) == NULL) {\n\t\t\tfprintf(stdout, \"%s-%s - create AVL tree failed\\n\", cases[i], cases[i + 1]);\n\t\t\tgoto err0;\n\t\t}\n\n\t\tfor (j = 0; j < strlen(cases[i]); j++) {\n\t\t\tif (tree_insert(avlt, cases[i][j]) == NULL || tree_check(avlt) != 1) {\n\t\t\t\tfprintf(stdout, \"%s-%s - insert %c failed\\n\", cases[i], cases[i + 1], cases[i][j]);\n\t\t\t\tgoto err;\n\t\t\t}\n\t\t}\n\n\t\tfor (j = 0; j < strlen(cases[i + 1]); j++) {\n\t\t\tif (tree_delete(avlt, cases[i + 1][j]) == 0 || tree_check(avlt) != 1) {\n\t\t\t\tfprintf(stdout, \"%s-%s - delete %c failed\\n\", cases[i], cases[i + 1], cases[i + 1][j]);\n\t\t\t\tgoto err;\n\t\t\t}\n\t\t}\n\n\t\tavl_destroy(avlt);\n\t}\n\t\n\treturn 1;\n\nerr:\n\tavl_destroy(avlt);\nerr0:\n\treturn 0;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:all_tests",
+        "span": "avl_test.c:60:39:60:66",
+        "source": "mu_test(\"unit_test_atomic_deletion\", unit_test_atomic_deletion());"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:unit_test_chain_insertion",
+    "span": "avl_test.c:601:1:649:2",
+    "pieces": [
+      "avl_test.c:601:1:649:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 49,
+    "source": "int unit_test_chain_insertion()\n{\n\tavltree *avlt;\n\tint i, j;\n\n\tchar *cases[] = {\n\t\t\"PHXDB\",\n\t\t\"PHXDF\",\n\t\t\"PHXLJ\",\n\t\t\"PHXLN\",\n\t\t\"PHXTR\",\n\t\t\"PHXTV\",\n\t\t\"PHXbZ\",\n\t\t\"PHXbd\",\n\t\t\"PHXDLB\",\n\t\t\"PHXDLF\",\n\t\t\"PHXDLJ\",\n\t\t\"PHXDLN\",\n\t\t\"PHXTbR\",\n\t\t\"PHXTbV\",\n\t\t\"PHXTbV\",\n\t\t\"PHXTbZ\",\n\t\t\"PHXTbd\",\n\t\t0\n\t};\n\t\n\tfor (i = 0; i < sizeof(cases) / sizeof(cases[0]) && cases[i] != 0; i++) {\n\t\tif ((avlt = tree_create()) == NULL) {\n\t\t\tfprintf(stdout, \"%s - create AVL tree failed\\n\", cases[i]);\n\t\t\tgoto err0;\n\t\t}\n\n\t\tfor (j = 0; j < strlen(cases[i]); j++) {\n\t\t\tif (tree_insert(avlt, cases[i][j]) == NULL || tree_check(avlt) != 1) {\n\t\t\t\tfprintf(stdout, \"%s - insert %c failed\\n\", cases[i], cases[i][j]);\n\t\t\t\tgoto err;\n\t\t\t}\n\t\t}\n\n\t\tavl_destroy(avlt);\n\t}\n\n\treturn 1;\n\nerr:\n\tavl_destroy(avlt);\nerr0:\n\treturn 0;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:all_tests",
+        "span": "avl_test.c:62:39:62:66",
+        "source": "mu_test(\"unit_test_chain_insertion\", unit_test_chain_insertion());"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:unit_test_chain_deletion",
+    "span": "avl_test.c:655:1:699:2",
+    "pieces": [
+      "avl_test.c:655:1:699:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 45,
+    "source": "int unit_test_chain_deletion()\n{\n\tavltree *avlt;\n\tint i, j;\n\n\tchar *cases[] = {\n\t\t\"PHXDLTbFJNZK\", \"T\",\n\t\t\"PHXDLTbFJNZdK\", \"T\",\n\t\t\"PHXDLTbFJNdK\", \"T\", /* equivalents to PHXDLTzFJNbK */\n\t\t\"PHXDLTbFRVZU\", \"L\",\n\t\t\"PHXDLTbBFRVZU\", \"L\",\n\t\t\"PHXDLTbBRVZU\", \"L\", /* equivalents to PHXFLTbDRVZU */\n\t\t0, 0\n\t};\n\n\tfor (i = 0; i < sizeof(cases) / sizeof(cases[0]) && cases[i] != 0; i += 2) {\n\t\tif ((avlt = tree_create()) == NULL) {\n\t\t\tfprintf(stdout, \"%s-%s - create AVL tree failed\\n\", cases[i], cases[i + 1]);\n\t\t\tgoto err0;\n\t\t}\n\n\t\tfor (j = 0; j < strlen(cases[i]); j++) {\n\t\t\tif (tree_insert(avlt, cases[i][j]) == NULL || tree_check(avlt) != 1) {\n\t\t\t\tfprintf(stdout, \"%s-%s - insert %c failed\\n\", cases[i], cases[i + 1], cases[i][j]);\n\t\t\t\tgoto err;\n\t\t\t}\n\t\t}\n\n\t\tfor (j = 0; j < strlen(cases[i + 1]); j++) {\n\t\t\tif (tree_delete(avlt, cases[i + 1][j]) == 0 || tree_check(avlt) != 1) {\n\t\t\t\tfprintf(stdout, \"%s-%s - delete %c failed\\n\", cases[i], cases[i + 1], cases[i + 1][j]);\n\t\t\t\tgoto err;\n\t\t\t}\n\t\t}\n\n\t\tavl_destroy(avlt);\n\t}\n\n\treturn 1;\n\nerr:\n\tavl_destroy(avlt);\nerr0:\n\treturn 0;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:all_tests",
+        "span": "avl_test.c:63:38:63:64",
+        "source": "mu_test(\"unit_test_chain_deletion\", unit_test_chain_deletion());"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:unit_test_permutation_insertion",
+    "span": "avl_test.c:701:1:708:2",
+    "pieces": [
+      "avl_test.c:701:1:708:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 8,
+    "source": "int unit_test_permutation_insertion()\n{\n\tchar a[] = CHARS;\n\t\n\tpermutation_error = 0;\n\tpermute(a, 0, strlen(a) - 1, permutation_insert);\n\treturn (permutation_error == 0);\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:all_tests",
+        "span": "avl_test.c:65:45:65:78",
+        "source": "mu_test(\"unit_test_permutation_insertion\", unit_test_permutation_insertion());"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:unit_test_permutation_deletion",
+    "span": "avl_test.c:710:1:717:2",
+    "pieces": [
+      "avl_test.c:710:1:717:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 8,
+    "source": "int unit_test_permutation_deletion()\n{\n\tchar a[] = CHARS;\n\t\n\tpermutation_error = 0;\n\tpermute(a, 0, strlen(a) - 1, permutation_delete);\n\treturn (permutation_error == 0);\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:all_tests",
+        "span": "avl_test.c:66:44:66:76",
+        "source": "mu_test(\"unit_test_permutation_deletion\", unit_test_permutation_deletion());"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:unit_test_random_insertion_deletion",
+    "span": "avl_test.c:719:1:767:2",
+    "pieces": [
+      "avl_test.c:719:1:767:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 49,
+    "source": "int unit_test_random_insertion_deletion()\n{\n\tavltree *avlt;\n\tint ninsert, ndelete;\n\tint i, key, max;\n\t\n\tif ((avlt = tree_create()) == NULL) {\n\t\tfprintf(stdout, \"create AVL tree failed\\n\");\n\t\tgoto err0;\n\t}\n\t\n\tninsert = 0;\n\tndelete = 0;\n\tmax = 9999;\n\n\tsrand((unsigned int) time(NULL));\n\n\tfor (i = 1; i <= 1999; i++) {\n\t\tkey = rand() % max;\n\t\tif (tree_find(avlt, key) != NULL)\n\t\t\tcontinue;\n\t\tninsert++;\n\t\tif (tree_insert(avlt, key) == NULL || tree_check(avlt) != 1) {\n\t\t\tfprintf(stdout, \"insert %d failed\\n\", key);\n\t\t\tgoto err;\n\t\t}\n\t}\n\n\tfor (i = 1; i < max; i++) {\n\t\tkey = rand() % max;\n\t\tif (tree_find(avlt, key) == NULL)\n\t\t\tcontinue;\n\t\tndelete++;\n\t\tif (tree_delete(avlt, key) != 1 || tree_check(avlt) != 1) {\n\t\t\tfprintf(stdout, \"delete %d failed\\n\", key);\n\t\t\tgoto err;\n\t\t}\n\t}\n\n\tprintf(\"\\tstat: ninsert=%d, ndelete=%d\\n\", ninsert, ndelete);\n\n\tavl_destroy(avlt);\n\treturn 1;\n\nerr:\n\tavl_destroy(avlt);\nerr0:\n\treturn 0;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:all_tests",
+        "span": "avl_test.c:68:49:68:86",
+        "source": "mu_test(\"unit_test_random_insertion_deletion\", unit_test_random_insertion_deletion());"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_test.c:unit_test_min",
+    "span": "avl_test.c:770:1:797:2",
+    "pieces": [
+      "avl_test.c:770:1:797:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 28,
+    "source": "int unit_test_min()\n{\n\tavltree *avlt;\n\n\tif ((avlt = tree_create()) == NULL) {\n\t\tfprintf(stdout, \"create AVL tree failed\\n\");\n\t\tgoto err0;\n\t}\n\n\tif (AVL_MINIMAL(avlt) != NULL || \\\n\t\ttree_insert(avlt, 'B') == NULL || AVL_MINIMAL(avlt) != tree_find(avlt, 'B') || \\\n\t\ttree_insert(avlt, 'A') == NULL || AVL_MINIMAL(avlt) != tree_find(avlt, 'A') || \\\n\t\ttree_insert(avlt, 'C') == NULL || AVL_MINIMAL(avlt) != tree_find(avlt, 'A') || \\\n\t\ttree_delete(avlt, 'B') != 1 || AVL_MINIMAL(avlt) != tree_find(avlt, 'A') || \\\n\t\ttree_delete(avlt, 'A') != 1 || AVL_MINIMAL(avlt) != tree_find(avlt, 'C') || \\\n\t\ttree_delete(avlt, 'C') != 1 || AVL_MINIMAL(avlt) != NULL) {\n\t\tfprintf(stdout, \"invalid min\\n\");\n\t\tgoto err;\n\t}\n\n\tavl_destroy(avlt);\n\treturn 1;\n\nerr:\n\tavl_destroy(avlt);\nerr0:\n\treturn 0;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:all_tests",
+        "span": "avl_test.c:73:27:73:42",
+        "source": "mu_test(\"unit_test_min\", unit_test_min());"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_create",
+    "span": "avl_bf.c:28:1:54:2",
+    "pieces": [
+      "avl_bf.c:28:1:54:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 27,
+    "source": "avltree *avl_create(int (*compare_func)(const void *, const void *), void (*destroy_func)(void *))\n{\n\tavltree *avlt;\n\n\tavlt = (avltree *) malloc(sizeof(avltree));\n\tif (avlt == NULL)\n\t\treturn NULL; /* out of memory */\n\n\tavlt->compare = compare_func;\n\tavlt->destroy = destroy_func;\n\n\t/* sentinel node nil */\n\tavlt->nil.left = avlt->nil.right = avlt->nil.parent = AVL_NIL(avlt);\n\tavlt->nil.bf = 0;\n\tavlt->nil.data = NULL;\n\n\t/* sentinel node root */\n\tavlt->root.left = avlt->root.right = avlt->root.parent = AVL_NIL(avlt);\n\tavlt->root.bf = 0;\n\tavlt->root.data = NULL;\n\n\t#ifdef AVL_MIN\n\tavlt->min = NULL;\n\t#endif\n\n\treturn avlt;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:tree_create",
+        "span": "avl_test.c:92:9:92:47",
+        "source": "return avl_create(compare_func, destroy_func);"
+      },
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:16:14:16:52",
+        "source": "if ((avlt = avl_create(compare_func, destroy_func)) == NULL) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_destroy",
+    "span": "avl_bf.c:59:1:63:2",
+    "pieces": [
+      "avl_bf.c:59:1:63:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 5,
+    "source": "void avl_destroy(avltree *avlt)\n{\n\tdestroy(avlt, AVL_FIRST(avlt));\n\tfree(avlt);\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:permutation_insert",
+        "span": "avl_test.c:210:2:210:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:permutation_delete",
+        "span": "avl_test.c:243:2:243:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_create",
+        "span": "avl_test.c:268:3:268:20",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_create",
+        "span": "avl_test.c:272:2:272:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:315:2:315:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:319:2:319:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:363:2:363:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:367:2:367:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_insertion",
+        "span": "avl_test.c:451:3:451:20",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_insertion",
+        "span": "avl_test.c:457:2:457:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_deletion",
+        "span": "avl_test.c:586:3:586:20",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_deletion",
+        "span": "avl_test.c:592:2:592:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_insertion",
+        "span": "avl_test.c:640:3:640:20",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_insertion",
+        "span": "avl_test.c:646:2:646:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_deletion",
+        "span": "avl_test.c:690:3:690:20",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_deletion",
+        "span": "avl_test.c:696:2:696:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_random_insertion_deletion",
+        "span": "avl_test.c:760:2:760:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_random_insertion_deletion",
+        "span": "avl_test.c:764:2:764:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:790:2:790:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:794:2:794:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:54:2:54:19",
+        "source": "avl_destroy(avlt);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_find",
+    "span": "avl_bf.c:69:1:84:2",
+    "pieces": [
+      "avl_bf.c:69:1:84:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 16,
+    "source": "avlnode *avl_find(avltree *avlt, void *data)\n{\n\tavlnode *p;\n\n\tp = AVL_FIRST(avlt);\n\n\twhile (p != AVL_NIL(avlt)) {\n\t\tint cmp;\n\t\tcmp = avlt->compare(data, p->data);\n\t\tif (cmp == 0)\n\t\t\treturn p; /* found */\n\t\tp = (cmp < 0) ? p->left : p->right;\n\t}\n\n\treturn NULL; /* not found */\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:tree_find",
+        "span": "avl_test.c:99:9:99:31",
+        "source": "return avl_find(avlt, &query);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:301:6:301:29",
+        "source": "if (avl_find(avlt, r->data) != r || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:302:3:302:26",
+        "source": "avl_find(avlt, e->data) != e || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:303:3:303:26",
+        "source": "avl_find(avlt, d->data) != d || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:304:3:304:26",
+        "source": "avl_find(avlt, s->data) != s || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:305:3:305:26",
+        "source": "avl_find(avlt, o->data) != o || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:306:3:306:26",
+        "source": "avl_find(avlt, x->data) != x || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:307:3:307:26",
+        "source": "avl_find(avlt, c->data) != c || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:308:3:308:26",
+        "source": "avl_find(avlt, u->data) != u || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:309:3:309:26",
+        "source": "avl_find(avlt, b->data) != b || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:310:3:310:26",
+        "source": "avl_find(avlt, t->data) != t) {"
+      },
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:41:14:41:36",
+        "source": "if ((node = avl_find(avlt, &query)) != NULL)"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_successor",
+    "span": "avl_bf.c:90:1:108:2",
+    "pieces": [
+      "avl_bf.c:90:1:108:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 19,
+    "source": "avlnode *avl_successor(avltree *avlt, avlnode *node)\n{\n\tavlnode *p;\n\n\tp = node->right;\n\n\tif (p != AVL_NIL(avlt)) {\n\t\t/* move down until we find it */\n\t\tfor ( ; p->left != AVL_NIL(avlt); p = p->left) ;\n\t} else {\n\t\t/* move up until we find it or hit the root */\n\t\tfor (p = node->parent; node == p->right; node = p, p = p->parent) ;\n\n\t\tif (p == AVL_ROOT(avlt))\n\t\t\tp = NULL; /* not found */\n\t}\n\n\treturn p;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:350:6:350:28",
+        "source": "if (avl_successor(avlt, b) != c || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:351:3:351:25",
+        "source": "avl_successor(avlt, c) != d || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:352:3:352:25",
+        "source": "avl_successor(avlt, d) != e || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:353:3:353:25",
+        "source": "avl_successor(avlt, e) != r || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:354:3:354:25",
+        "source": "avl_successor(avlt, r) != s || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:355:3:355:25",
+        "source": "avl_successor(avlt, s) != t || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:356:3:356:25",
+        "source": "avl_successor(avlt, t) != u || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:357:3:357:25",
+        "source": "avl_successor(avlt, u) != x || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:358:3:358:25",
+        "source": "avl_successor(avlt, x) != NULL) {"
+      },
+      {
+        "caller": "avl_bf.c:avl_delete",
+        "span": "avl_bf.c:295:16:295:43",
+        "source": "avlt->min = avl_successor(avlt, target); /* deleted, thus min = successor */"
+      },
+      {
+        "caller": "avl_bf.c:avl_delete",
+        "span": "avl_bf.c:298:12:298:37",
+        "source": "target = avl_successor(avlt, node); /* node->right must not be NIL, thus move down */"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_apply",
+    "span": "avl_bf.c:114:1:132:2",
+    "pieces": [
+      "avl_bf.c:114:1:132:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 19,
+    "source": "int avl_apply(avltree *avlt, avlnode *node, int (*func)(void *, void *), void *cookie, enum avltraversal order)\n{\n\tint err;\n\n\tif (node != AVL_NIL(avlt)) {\n\t\tif (order == PREORDER && (err = func(node->data, cookie)) != 0) /* preorder */\n\t\t\treturn err;\n\t\tif ((err = avl_apply(avlt, node->left, func, cookie, order)) != 0) /* left */\n\t\t\treturn err;\n\t\tif (order == INORDER && (err = func(node->data, cookie)) != 0) /* inorder */\n\t\t\treturn err;\n\t\tif ((err = avl_apply(avlt, node->right, func, cookie, order)) != 0) /* right */\n\t\t\treturn err;\n\t\tif (order == POSTORDER && (err = func(node->data, cookie)) != 0) /* postorder */\n\t\t\treturn err;\n\t}\n\n\treturn 0;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_apply",
+        "span": "avl_bf.c:121:14:121:62",
+        "source": "if ((err = avl_apply(avlt, node->left, func, cookie, order)) != 0) /* left */"
+      },
+      {
+        "caller": "avl_bf.c:avl_apply",
+        "span": "avl_bf.c:125:14:125:63",
+        "source": "if ((err = avl_apply(avlt, node->right, func, cookie, order)) != 0) /* right */"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_print",
+    "span": "avl_bf.c:137:1:142:2",
+    "pieces": [
+      "avl_bf.c:137:1:142:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 6,
+    "source": "void avl_print(avltree *avlt, void (*print_func)(void *))\n{\n\tprintf(\"\\n--\\n\");\n\tprint(avlt, AVL_FIRST(avlt), print_func, 0, \"T\");\n\tprintf(\"\\nheight = %d\\n\", check_height(avlt, AVL_FIRST(avlt)));\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:tree_print",
+        "span": "avl_test.c:104:2:104:29",
+        "source": "avl_print(avlt, print_func);"
+      },
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:32:3:32:35",
+        "source": "avl_print(avlt, print_char_func);"
+      },
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:43:2:43:34",
+        "source": "avl_print(avlt, print_char_func);"
+      },
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:50:3:50:35",
+        "source": "avl_print(avlt, print_char_func);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_check_order",
+    "span": "avl_bf.c:147:1:150:2",
+    "pieces": [
+      "avl_bf.c:147:1:150:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 4,
+    "source": "int avl_check_order(avltree *avlt, void *min, void *max)\n{\n\treturn check_order(avlt, AVL_FIRST(avlt), min, max);\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:tree_check",
+        "span": "avl_test.c:116:6:116:39",
+        "source": "if (avl_check_order(avlt, &min, &max) != 1) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_check_height",
+    "span": "avl_bf.c:155:1:161:2",
+    "pieces": [
+      "avl_bf.c:155:1:161:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 7,
+    "source": "int avl_check_height(avltree *avlt)\n{\n\tint height;\n\theight = check_height(avlt, AVL_FIRST(avlt));\n\n\treturn (height < 0) ? 0 : 1;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:tree_check",
+        "span": "avl_test.c:121:6:121:28",
+        "source": "if (avl_check_height(avlt) != 1) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_insert",
+    "span": "avl_bf.c:167:1:274:2",
+    "pieces": [
+      "avl_bf.c:167:1:274:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 108,
+    "source": "avlnode *avl_insert(avltree *avlt, void *data)\n{\n\tavlnode *current, *parent;\n\tavlnode *new_node;\n\n\t/* do a binary search to find where it should be */\n\n\tcurrent = AVL_FIRST(avlt);\n\tparent = AVL_ROOT(avlt);\n\n\twhile (current != AVL_NIL(avlt)) {\n\t\tint cmp;\n\t\tcmp = avlt->compare(data, current->data);\n\n\t\t#ifndef AVL_DUP\n\t\tif (cmp == 0) {\n\t\t\tavlt->destroy(current->data);\n\t\t\tcurrent->data = data;\n\t\t\treturn current; /* updated */\n\t\t}\n\t\t#endif\n\n\t\tparent = current;\n\t\tcurrent = (cmp < 0) ? current->left : current->right;\n\t}\n\t\n\t/* replace the termination NIL pointer with the new node pointer */\n\n\tcurrent = new_node = (avlnode *) malloc(sizeof(avlnode));\n\tif (current == NULL)\n\t\treturn NULL; /* out of memory */\n\n\tcurrent->left = current->right = AVL_NIL(avlt);\n\tcurrent->parent = parent;\n\tcurrent->bf = 0;\n\tcurrent->data = data;\n\n\tif (parent == AVL_ROOT(avlt) || avlt->compare(data, parent->data) < 0)\n\t\tparent->left = current;\n\telse\n\t\tparent->right = current;\n\n\t#ifdef AVL_MIN\n\tif (avlt->min == NULL || avlt->compare(current->data, avlt->min->data) < 0)\n\t\tavlt->min = current;\n\t#endif\n\n\t/*\n\t * After insertion it is necessary to update the balance factors of all nodes, \n\t * observe that all nodes requiring correction must be on the path from the root to the new node.\n\t * \n\t * Backtracking the top-down path from the root to the new node:\n\t * 1. update the balance factor of parent node; \n\t * 2. rebalance if the balance factor of parent node temporarily becomes +2 or -2 (parent subtree has the same height as before, thus backtracking terminate immediately); \n\t * 3. terminate if the height of that parent subtree remains unchanged.\n\t */\n\twhile (current != AVL_FIRST(avlt)) { /* Loop (possibly up to the root) */\n\t\tif (current == parent->left) { /* The height of left subtree of parent subtree increases */\n\t\t\tif (parent->bf == 1) { /* parent subtree is right-heavy */\n\t\t\t\t/*\n\t\t\t\t * height increase of left subtree is absorbed at parent node, \n\t\t\t\t * height of parent subtree remains unchanged, thus backtracking terminate.\n\t\t\t\t */\n\t\t\t\tparent->bf = 0; /* height unchanged, balanced, goto break */\n\t\t\t\tbreak;\n\t\t\t} else if (parent->bf == 0) { /* parent subtree is balanced */\n\t\t\t\t/*\n\t\t\t\t * height of parent subtree increases by one, thus backtracking continue.\n\t\t\t\t */\n\t\t\t\tparent->bf = -1; /* height increased, left-heavy, goto loop */\n\t\t\t} else if (parent->bf == -1) { /* parent subtree is left-heavy */\n\t\t\t\t/*\n\t\t\t\t * the balance factor becomes -2, this has to be repaired by an appropriate rotation\n\t\t\t\t * after which parent subtree has the same height as before.\n\t\t\t\t */\n\t\t\t\tfix_insert_leftimbalance(avlt, parent); /* height unchanged, balanced, goto break */\n\t\t\t\tbreak;\n\t\t\t}\n\t\t} else { /* The height of right subtree of parent subtree increases */\n\t\t\tif (parent->bf == -1) { /* parent subtree is left-heavy */\n\t\t\t\t/*\n\t\t\t\t * height increase of right subtree is absorbed at parent node, \n\t\t\t\t * height of parent subtree remains unchanged, thus backtracking terminate.\n\t\t\t\t */\n\t\t\t\tparent->bf = 0; /* height unchanged, balanced, goto break */\n\t\t\t\tbreak;\n\t\t\t} else if (parent->bf == 0) { /* parent subtree is balanced */\n\t\t\t\t/*\n\t\t\t\t * height of parent subtree increases by one, thus backtracking continue.\n\t\t\t\t */\n\t\t\t\tparent->bf = 1; /* height increased, right-heavy, goto loop */\n\t\t\t} else if (parent->bf == 1) {\n\t\t\t\t/*\n\t\t\t\t * the balance factor becomes 2, this has to be repaired by an appropriate rotation\n\t\t\t\t * after which parent subtree has the same height as before.\n\t\t\t\t */\n\t\t\t\tfix_insert_rightimbalance(avlt, parent); /* height unchanged, balanced, goto break */\n\t\t\t\tbreak;\n\t\t\t}\n\t\t}\n\n\t\t/* move up */\n\t\tcurrent = parent;\n\t\tparent = current->parent;\n\t}\n\n\treturn new_node;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:tree_insert",
+        "span": "avl_test.c:139:48:139:70",
+        "source": "if ((data = makedata(key)) == NULL || (node = avl_insert(avlt, data)) == NULL) {"
+      },
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:26:42:26:64",
+        "source": "if ((data = makedata(a[i])) == NULL || avl_insert(avlt, data) == NULL) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_delete",
+    "span": "avl_bf.c:280:1:401:2",
+    "pieces": [
+      "avl_bf.c:280:1:401:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 122,
+    "source": "void *avl_delete(avltree *avlt, avlnode *node, int keep)\n{\n\tavlnode *current, *parent;\n\tavlnode *target;\n\tvoid *data;\n\n\tdata = node->data;\n\n\t/* choose node's in-order successor if it has two children */\n\t\n\tif (node->left == AVL_NIL(avlt) || node->right == AVL_NIL(avlt)) {\n\t\ttarget = node;\n\n\t\t#ifdef AVL_MIN\n\t\tif (avlt->min == target)\n\t\t\tavlt->min = avl_successor(avlt, target); /* deleted, thus min = successor */\n\t\t#endif\n\t} else {\n\t\ttarget = avl_successor(avlt, node); /* node->right must not be NIL, thus move down */\n\n\t\tnode->data = target->data; /* data swapped */\n\n\t\t#ifdef AVL_MIN\n\t\t/* if min == node, then min = successor = node (swapped), thus idle */\n\t\t/* if min == target, then min = successor, which is not the minimal, thus impossible */\n\t\t#endif\n\t}\n\n\t/*\n\t * After deletion it is necessary to update the balance factors of all nodes, \n\t * observe that all nodes requiring correction must be on the path from the root to the target node,\n\t * which is either the subject node or the replacement node.\n\t * \n\t * Backtracking the top-down path from the root to the target node:\n\t * 1. update the balance factor of parent node;\n\t * 2. rebalance if the balance factor of parent node temporarily becomes +2 or -2;\n\t * 3. terminate if the height of that parent subtree remains unchanged.\n\t */\n\tcurrent = target;\n\tparent = current->parent;\n\n\twhile (current != AVL_FIRST(avlt)) { /* Loop (possibly up to the root) */\n\t\tif (current == parent->left) { /* The height of left subtree of parent subtree decreases */\n\t\t\tif (parent->bf == -1) { /* parent subtree is left-heavy */\n\t\t\t\t/*\n\t\t\t\t * height of parent subtree decreases by one, thus backtracking continue.\n\t\t\t\t */\n\t\t\t\tparent->bf = 0; /* height decreased, balanced, goto loop */\n\t\t\t} else if (parent->bf == 0) { /* parent subtree is balanced */\n\t\t\t\t/*\n\t\t\t\t * height decrease of left subtree is absorbed at parent node, \n\t\t\t\t * height of parent subtree remains unchanged, thus backtracking terminate.\n\t\t\t\t */\n\t\t\t\tparent->bf = 1;\n\t\t\t\tbreak; /* height unchanged, right-heavy, goto break */\n\t\t\t} else if (parent->bf == 1) { /* parent subtree is right-heavy */\n\t\t\t\t/*\n\t\t\t\t * the balance factor becomes 2, this has to be repaired by an appropriate rotation after which \n\t\t\t\t * height of parent subtree remains unchanged or\n\t\t\t\t * height of parent subtree decreases by one.\n\t\t\t\t */\n\t\t\t\tparent = fix_delete_rightimbalance(avlt, parent);\n\t\t\t\tif (parent->bf == -1)\n\t\t\t\t\tbreak; /* height unchanged, left-heavy, goto break */\n\t\t\t\t/* parent->bf == 0; height decreased, balanced, goto loop */\n\t\t\t}\n\t\t} else { /* The height of right subtree of parent subtree decreases */\n\t\t\tif (parent->bf == 1) { /* parent subtree is right-heavy */\n\t\t\t\t/*\n\t\t\t\t * height of parent subtree decreases by one, thus backtracking continue.\n\t\t\t\t */\n\t\t\t\tparent->bf = 0; /* height decreased, balanced, goto loop */\n\t\t\t} else if (parent->bf == 0) {\n\t\t\t\t/*\n\t\t\t\t * height decrease of right subtree is absorbed at parent node, \n\t\t\t\t * height of parent subtree remains unchanged, thus backtracking terminate.\n\t\t\t\t */\n\t\t\t\tparent->bf = -1;\n\t\t\t\tbreak; /* height unchanged, left-heavy, goto break */\n\t\t\t} else if (parent->bf == -1) { /* parent subtree is left-heavy */\n\t\t\t\t/*\n\t\t\t\t * the balance factor becomes -2, this has to be repaired by an appropriate rotation after which \n\t\t\t\t * height of parent subtree remains unchanged or\n\t\t\t\t * height of parent subtree decreases by one.\n\t\t\t\t */\n\t\t\t\tparent = fix_delete_leftimbalance(avlt, parent);\n\t\t\t\tif (parent->bf == 1)\n\t\t\t\t\tbreak; /* height unchanged, right-heavy, goto break */\n\t\t\t\t/* height decreased, balanced, goto loop */\n\t\t\t}\n\t\t}\n\n\t\t/* move up */\n\t\tcurrent = parent;\n\t\tparent = current->parent;\n\t}\n\n\t/* replace the target node with its child (may be NIL) */\n\n\tavlnode *child; /* child of target */\n\n\tchild = (target->left == AVL_NIL(avlt)) ? target->right : target->left; /* child may be NIL */\n\n\tif (child != AVL_NIL(avlt))\n\t\tchild->parent = target->parent;\n\n\tif (target == target->parent->left)\n\t\ttarget->parent->left = child;\n\telse\n\t\ttarget->parent->right = child;\n\n\tfree(target);\n\n\t/* keep or discard data */\n\n\tif (keep == 0) {\n\t\tavlt->destroy(data);\n\t\tdata = NULL; /* freed */\n\t}\n\n\treturn data;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:tree_delete",
+        "span": "avl_test.c:157:2:157:27",
+        "source": "avl_delete(avlt, node, 0);"
+      },
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:42:3:42:28",
+        "source": "avl_delete(avlt, node, 0);"
+      },
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:49:3:49:28",
+        "source": "avl_delete(avlt, node, 0);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:rotate_left",
+    "span": "avl_bf.c:407:1:430:2",
+    "pieces": [
+      "avl_bf.c:407:1:430:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 24,
+    "source": "avlnode *rotate_left(avltree *avlt, avlnode *x)\n{\n\tavlnode *y;\n\n\ty = x->right; /* child */\n\n\t/* tree x */\n\tx->right = y->left;\n\tif (x->right != AVL_NIL(avlt))\n\t\tx->right->parent = x;\n\n\t/* tree y */\n\ty->parent = x->parent;\n\tif (x == x->parent->left)\n\t\tx->parent->left = y;\n\telse\n\t\tx->parent->right = y;\n\n\t/* assemble tree x and tree y */\n\ty->left = x;\n\tx->parent = y;\n\n\treturn y;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:fix_insert_leftimbalance",
+        "span": "avl_bf.c:475:3:475:29",
+        "source": "rotate_left(avlt, p->left);"
+      },
+      {
+        "caller": "avl_bf.c:fix_insert_rightimbalance",
+        "span": "avl_bf.c:498:7:498:27",
+        "source": "p = rotate_left(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_insert_rightimbalance",
+        "span": "avl_bf.c:504:7:504:27",
+        "source": "p = rotate_left(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_leftimbalance",
+        "span": "avl_bf.c:535:3:535:29",
+        "source": "rotate_left(avlt, p->left);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_rightimbalance",
+        "span": "avl_bf.c:558:7:558:27",
+        "source": "p = rotate_left(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_rightimbalance",
+        "span": "avl_bf.c:561:7:561:27",
+        "source": "p = rotate_left(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_rightimbalance",
+        "span": "avl_bf.c:568:7:568:27",
+        "source": "p = rotate_left(avlt, p);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:rotate_right",
+    "span": "avl_bf.c:436:1:459:2",
+    "pieces": [
+      "avl_bf.c:436:1:459:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 24,
+    "source": "avlnode *rotate_right(avltree *avlt, avlnode *x)\n{\n\tavlnode *y;\n\n\ty = x->left; /* child */\n\n\t/* tree x */\n\tx->left = y->right;\n\tif (x->left != AVL_NIL(avlt))\n\t\tx->left->parent = x;\n\n\t/* tree y */\n\ty->parent = x->parent;\n\tif (x == x->parent->left)\n\t\tx->parent->left = y;\n\telse\n\t\tx->parent->right = y;\n\n\t/* assemble tree x and tree y */\n\ty->right = x;\n\tx->parent = y;\n\n\treturn y;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:fix_insert_leftimbalance",
+        "span": "avl_bf.c:470:7:470:28",
+        "source": "p = rotate_right(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_insert_leftimbalance",
+        "span": "avl_bf.c:476:7:476:28",
+        "source": "p = rotate_right(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_insert_rightimbalance",
+        "span": "avl_bf.c:503:3:503:31",
+        "source": "rotate_right(avlt, p->right);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_leftimbalance",
+        "span": "avl_bf.c:526:7:526:28",
+        "source": "p = rotate_right(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_leftimbalance",
+        "span": "avl_bf.c:529:7:529:28",
+        "source": "p = rotate_right(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_leftimbalance",
+        "span": "avl_bf.c:536:7:536:28",
+        "source": "p = rotate_right(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_rightimbalance",
+        "span": "avl_bf.c:567:3:567:31",
+        "source": "rotate_right(avlt, p->right);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:fix_insert_leftimbalance",
+    "span": "avl_bf.c:465:1:489:2",
+    "pieces": [
+      "avl_bf.c:465:1:489:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 25,
+    "source": "avlnode *fix_insert_leftimbalance(avltree *avlt, avlnode *p)\n{\n\t/* p->left->bf updated here */\n\n\tif (p->left->bf == p->bf) { /* -1, -1 */\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = p->right->bf = 0;\n\t} else { /* 1, -1 */\n\t\tint oldbf;\n\t\toldbf = p->left->right->bf;\n\t\trotate_left(avlt, p->left);\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = 0;\n\t\tif (oldbf == -1) {\n\t\t\tp->left->bf = 0;\n\t\t\tp->right->bf = 1;\n\t\t} else if (oldbf == 1) {\n\t\t\tp->left->bf = -1;\n\t\t\tp->right->bf = 0;\n\t\t} else if (oldbf == 0) {\n\t\t\tp->left->bf = p->right->bf = 0;\n\t\t}\n\t}\n\treturn p;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_insert",
+        "span": "avl_bf.c:242:5:242:43",
+        "source": "fix_insert_leftimbalance(avlt, parent); /* height unchanged, balanced, goto break */"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:fix_insert_rightimbalance",
+    "span": "avl_bf.c:495:1:517:2",
+    "pieces": [
+      "avl_bf.c:495:1:517:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 23,
+    "source": "avlnode *fix_insert_rightimbalance(avltree *avlt, avlnode *p)\n{\n\tif (p->right->bf == p->bf) { /* 1, 1 */\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = p->left->bf = 0;\n\t} else { /* -1, 1 */\n\t\tint oldbf;\n\t\toldbf = p->right->left->bf;\n\t\trotate_right(avlt, p->right);\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = 0;\n\t\tif (oldbf == -1) {\n\t\t\tp->left->bf = 0;\n\t\t\tp->right->bf = 1;\n\t\t} else if (oldbf == 1) {\n\t\t\tp->left->bf = -1;\n\t\t\tp->right->bf = 0;\n\t\t} else if (oldbf == 0) {\n\t\t\tp->left->bf = p->right->bf = 0;\n\t\t}\n\t}\n\treturn p;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_insert",
+        "span": "avl_bf.c:263:5:263:44",
+        "source": "fix_insert_rightimbalance(avlt, parent); /* height unchanged, balanced, goto break */"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:fix_delete_leftimbalance",
+    "span": "avl_bf.c:523:1:549:2",
+    "pieces": [
+      "avl_bf.c:523:1:549:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 27,
+    "source": "avlnode *fix_delete_leftimbalance(avltree *avlt, avlnode *p)\n{\n\tif (p->left->bf == -1) {\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = p->right->bf = 0;\n\t} else if (p->left->bf == 0) {\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = 1;\n\t\tp->right->bf = -1;\n\t} else if (p->left->bf == 1) {\n\t\tint oldbf;\n\t\toldbf = p->left->right->bf;\n\t\trotate_left(avlt, p->left);\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = 0;\n\t\tif (oldbf == -1) {\n\t\t\tp->left->bf = 0;\n\t\t\tp->right->bf = 1;\n\t\t} else if (oldbf == 1) {\n\t\t\tp->left->bf = -1;\n\t\t\tp->right->bf = 0;\n\t\t} else if (oldbf == 0) {\n\t\t\tp->left->bf = p->right->bf = 0;\n\t\t}\n\t}\n\treturn p;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_delete",
+        "span": "avl_bf.c:365:14:365:52",
+        "source": "parent = fix_delete_leftimbalance(avlt, parent);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:fix_delete_rightimbalance",
+    "span": "avl_bf.c:555:1:581:2",
+    "pieces": [
+      "avl_bf.c:555:1:581:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 27,
+    "source": "avlnode *fix_delete_rightimbalance(avltree *avlt, avlnode *p)\n{\n\tif (p->right->bf == 1) {\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = p->left->bf = 0;\n\t} else if (p->right->bf == 0) {\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = -1;\n\t\tp->left->bf = 1;\n\t} else if (p->right->bf == -1) {\n\t\tint oldbf;\n\t\toldbf = p->right->left->bf;\n\t\trotate_right(avlt, p->right);\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = 0;\n\t\tif (oldbf == -1) {\n\t\t\tp->left->bf = 0;\n\t\t\tp->right->bf = 1;\n\t\t} else if (oldbf == 1) {\n\t\t\tp->left->bf = -1;\n\t\t\tp->right->bf = 0;\n\t\t} else if (oldbf == 0) {\n\t\t\tp->left->bf = p->right->bf = 0;\n\t\t}\n\t}\n\treturn p;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_delete",
+        "span": "avl_bf.c:341:14:341:53",
+        "source": "parent = fix_delete_rightimbalance(avlt, parent);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:check_order",
+    "span": "avl_bf.c:586:1:599:2",
+    "pieces": [
+      "avl_bf.c:586:1:599:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 14,
+    "source": "int check_order(avltree *avlt, avlnode *n, void *min, void *max)\n{\n\tif (n == AVL_NIL(avlt))\n\t\treturn 1;\n\n\t#ifdef AVL_DUP\n\tif (avlt->compare(n->data, min) < 0 || avlt->compare(n->data, max) > 0)\n\t#else\n\tif (avlt->compare(n->data, min) <= 0 || avlt->compare(n->data, max) >= 0)\n\t#endif\n\t\treturn 0;\n\n\treturn check_order(avlt, n->left, min, n->data) && check_order(avlt, n->right, n->data, max);\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_check_order",
+        "span": "avl_bf.c:149:9:149:53",
+        "source": "return check_order(avlt, AVL_FIRST(avlt), min, max);"
+      },
+      {
+        "caller": "avl_bf.c:check_order",
+        "span": "avl_bf.c:598:9:598:49",
+        "source": "return check_order(avlt, n->left, min, n->data) && check_order(avlt, n->right, n->data, max);"
+      },
+      {
+        "caller": "avl_bf.c:check_order",
+        "span": "avl_bf.c:598:53:598:94",
+        "source": "return check_order(avlt, n->left, min, n->data) && check_order(avlt, n->right, n->data, max);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:check_height",
+    "span": "avl_bf.c:604:1:624:2",
+    "pieces": [
+      "avl_bf.c:604:1:624:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 21,
+    "source": "int check_height(avltree *avlt, avlnode *n)\n{\n\tint lh, rh, cmp;\n\n\tif (n == AVL_NIL(avlt))\n\t\treturn 0;\n\n\tlh = check_height(avlt, n->left);\n\tif (lh < 0)\n\t\treturn lh;\n\t\n\trh = check_height(avlt, n->right);\n\tif (rh < 0)\n\t\treturn rh;\n\t\n\tcmp = rh - lh;\n\tif (cmp < -1 || cmp > 1 || cmp != n->bf) /* check recomputed/cached balance factor */\n\t\treturn -1;\n\t\n\treturn 1 + ((lh > rh) ? lh : rh);\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_print",
+        "span": "avl_bf.c:141:28:141:63",
+        "source": "printf(\"\\nheight = %d\\n\", check_height(avlt, AVL_FIRST(avlt)));"
+      },
+      {
+        "caller": "avl_bf.c:avl_check_height",
+        "span": "avl_bf.c:158:11:158:46",
+        "source": "height = check_height(avlt, AVL_FIRST(avlt));"
+      },
+      {
+        "caller": "avl_bf.c:check_height",
+        "span": "avl_bf.c:611:7:611:34",
+        "source": "lh = check_height(avlt, n->left);"
+      },
+      {
+        "caller": "avl_bf.c:check_height",
+        "span": "avl_bf.c:615:7:615:35",
+        "source": "rh = check_height(avlt, n->right);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:print",
+    "span": "avl_bf.c:629:1:640:2",
+    "pieces": [
+      "avl_bf.c:629:1:640:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 12,
+    "source": "void print(avltree *avlt, avlnode *n, void (*print_func)(void *), int depth, char *label)\n{\n\tif (n != AVL_NIL(avlt)) {\n\t\tprint(avlt, n->right, print_func, depth + 1, \"R\");\n\t\tprintf(\"%*s\", 8 * depth, \"\");\n\t\tif (label)\n\t\t\tprintf(\"%s: \", label);\n\t\tprint_func(n->data);\n\t\tprintf(\" (%s%d)\\n\", (n->bf >= 0) ? \"+\" : \"\", n->bf);\n\t\tprint(avlt, n->left, print_func, depth + 1, \"L\");\n\t}\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_print",
+        "span": "avl_bf.c:140:2:140:50",
+        "source": "print(avlt, AVL_FIRST(avlt), print_func, 0, \"T\");"
+      },
+      {
+        "caller": "avl_bf.c:print",
+        "span": "avl_bf.c:632:3:632:52",
+        "source": "print(avlt, n->right, print_func, depth + 1, \"R\");"
+      },
+      {
+        "caller": "avl_bf.c:print",
+        "span": "avl_bf.c:638:3:638:51",
+        "source": "print(avlt, n->left, print_func, depth + 1, \"L\");"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:destroy",
+    "span": "avl_bf.c:645:1:653:2",
+    "pieces": [
+      "avl_bf.c:645:1:653:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "void destroy(avltree *avlt, avlnode *n)\n{\n\tif (n != AVL_NIL(avlt)) {\n\t\tdestroy(avlt, n->left);\n\t\tdestroy(avlt, n->right);\n\t\tavlt->destroy(n->data);\n\t\tfree(n);\n\t}\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_destroy",
+        "span": "avl_bf.c:61:2:61:32",
+        "source": "destroy(avlt, AVL_FIRST(avlt));"
+      },
+      {
+        "caller": "avl_bf.c:destroy",
+        "span": "avl_bf.c:648:3:648:25",
+        "source": "destroy(avlt, n->left);"
+      },
+      {
+        "caller": "avl_bf.c:destroy",
+        "span": "avl_bf.c:649:3:649:26",
+        "source": "destroy(avlt, n->right);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_example.c:main",
+    "span": "avl_example.c:11:1:56:2",
+    "pieces": [
+      "avl_example.c:11:1:56:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 46,
+    "source": "int main(int argc, char *argv[])\n{\n\tavltree *avlt;\n\n\t/* create a AVL tree */\n\tif ((avlt = avl_create(compare_func, destroy_func)) == NULL) {\n\t\tfprintf(stderr, \"create AVL tree failed\\n\");\n\t\treturn 1;\n\t}\n\n\t/* insert items */\n\tchar a[] = {'R', 'E', 'D', 'S', 'O', 'X', 'C', 'U', 'B', 'T'};\n\tint i;\n\tmydata *data;\n\tfor (i = 0; i < sizeof(a) / sizeof(a[0]); i++) {\n\t\tif ((data = makedata(a[i])) == NULL || avl_insert(avlt, data) == NULL) {\n\t\t\tfprintf(stderr, \"insert %c: out of memory\\n\", a[i]);\n\t\t\tfree(data);\n\t\t\tbreak;\n\t\t}\n\t\tprintf(\"insert %c\", a[i]);\n\t\tavl_print(avlt, print_char_func);\n\t\tprintf(\"\\n\");\n\t}\n\n\t/* delete item */\n\tavlnode *node;\n\tmydata query;\n\tquery.key = 'O';\n\tprintf(\"delete %c\", query.key);\n\tif ((node = avl_find(avlt, &query)) != NULL)\n\t\tavl_delete(avlt, node, 0);\n\tavl_print(avlt, print_char_func);\n\n\t#ifdef AVL_MIN\n\twhile ((node = AVL_MINIMAL(avlt))) {\n\t\tprintf(\"\\ndelete \");\n\t\tprint_char_func(node->data);\n\t\tavl_delete(avlt, node, 0);\n\t\tavl_print(avlt, print_char_func);\n\t}\n\t#endif\n\n\tavl_destroy(avlt);\n\treturn 0;\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  }
+]
