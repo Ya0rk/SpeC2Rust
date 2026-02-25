@@ -1,2 +1,3 @@
 datasets/*
 doc/prework/*
+__pycache__/

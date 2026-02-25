@@ -1,7 +1,7 @@
 import json
 import argparse
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import sys
 # 添加项目根目录到导入路径
 sys.path.append(str(Path(__file__).parent.parent))
@@ -30,6 +30,8 @@ class CCodeAnalyzer:
         # 存储分析结果
         self.functions = []
         self.global_vars = []
+        self.structs = []
+        self.macros = []
         self.file_path_map = {}  # 文件路径映射
         
     def analyze_directory(self, c_code_dir: str, output_file: str) -> None:
@@ -94,6 +96,12 @@ class CCodeAnalyzer:
             
             # 查找全局变量
             self._extract_global_variables(root_node, source_code, rel_path, root_dir)
+            
+            # 查找结构体定义
+            self._extract_structs(root_node, source_code, rel_path, root_dir)
+            
+            # 查找宏定义
+            self._extract_macros(source_code, rel_path, root_dir)
             
             # 专门处理内联函数（对于tree-sitter无法正确解析的情况）
             if str(file_path).endswith('.h'):
@@ -387,6 +395,101 @@ class CCodeAnalyzer:
                     
                     self.global_vars.append(var_info)
 
+    def _extract_structs(self, node, source_code: str, file_path: str, root_dir: Path, depth: int = 0) -> None:
+        """
+        提取结构体定义
+        
+        参数:
+            node: AST节点
+            source_code: 源代码
+            file_path: 文件相对路径
+            root_dir: 代码根目录
+            depth: 递归深度
+        """
+        # 检查是否是结构体定义节点
+        if node.type == 'struct_specifier':
+            # 提取结构体名
+            struct_name = None
+            for child in node.children:
+                if child.type == 'identifier':
+                    struct_name = child.text.decode('utf-8')
+                    break
+            
+            if not struct_name:
+                struct_name = 'anonymous'
+            
+            # 计算行号和列号
+            start_line = node.start_point[0] + 1
+            start_col = node.start_point[1] + 1
+            end_line = node.end_point[0] + 1
+            end_col = node.end_point[1] + 1
+            
+            # 提取结构体源代码
+            struct_source = source_code[node.start_byte:node.end_byte]
+            
+            # 创建结构体信息
+            struct_info = {
+                "name": struct_name,
+                "filename": file_path,
+                "startLine": start_line,
+                "startCol": start_col,
+                "endLine": end_line,
+                "endCol": end_col,
+                "span": f"{file_path}:{start_line}:{start_col}:{end_line}:{end_col}",
+                "source": struct_source
+            }
+            
+            self.structs.append(struct_info)
+        
+        # 递归处理子节点
+        for child in node.children:
+            self._extract_structs(child, source_code, file_path, root_dir, depth + 1)
+    
+    def _extract_macros(self, source_code: str, file_path: str, root_dir: Path) -> None:
+        """
+        提取宏定义
+        
+        参数:
+            source_code: 源代码
+            file_path: 文件相对路径
+            root_dir: 代码根目录
+        """
+        import re
+        
+        # 匹配宏定义，支持带参数的宏和多行宏
+        macro_pattern = r'#define\s+\w+(?:\s*\([^\)]*\))?\s+[^\n]*(?:\\\n[^\n]*)*'
+        
+        lines = source_code.split('\n')
+        for i, line in enumerate(lines):
+            if line.strip().startswith('#define'):
+                # 提取宏定义
+                macro_line = line
+                j = i + 1
+                # 处理多行宏
+                while j < len(lines) and lines[j-1].strip().endswith('\\'):
+                    macro_line += '\n' + lines[j]
+                    j += 1
+                
+                # 提取宏名
+                macro_match = re.search(r'#define\s+(\w+)', macro_line)
+                if macro_match:
+                    macro_name = macro_match.group(1)
+                    
+                    # 计算行号（从1开始）
+                    start_line = i + 1
+                    end_line = j
+                    
+                    # 创建宏信息
+                    macro_info = {
+                        "name": macro_name,
+                        "filename": file_path,
+                        "startLine": start_line,
+                        "endLine": end_line,
+                        "source": macro_line
+                    }
+                    
+                    self.macros.append(macro_info)
+    
     def _extract_inline_functions(self, source_code: str, file_path: str, root_dir: Path) -> None:
         """
         直接从源代码文本中提取内联函数（对于tree-sitter无法正确解析的情况）
@@ -540,6 +643,36 @@ class CCodeAnalyzer:
         # 写入JSON文件，只写入函数列表，格式与slice.json一致
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(output_functions, f, indent=2, ensure_ascii=False)
+    
+    def get_project_analysis(self) -> Dict[str, Any]:
+        """
+        获取完整的项目分析结果
+        
+        返回:
+            包含项目分析结果的字典
+        """
+        # 准备输出数据，移除内部使用的字段
+        output_functions = []
+        for func in self.functions:
+            # 创建一个副本，避免修改原始数据
+            output_func = func.copy()
+            
+            # 移除内部使用的字段
+            if "func_name" in output_func:
+                del output_func["func_name"]
+            
+            output_functions.append(output_func)
+        
+        # 构建项目分析结果
+        project_analysis = {
+            "functions": output_functions,
+            "global_vars": self.global_vars,
+            "structs": self.structs,
+            "macros": self.macros,
+            "file_path_map": self.file_path_map
+        }
+        
+        return project_analysis
 
 
 def draw_network(output_file: str):

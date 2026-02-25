@@ -30,10 +30,10 @@ class DocumentGenerator:
             f.write(project_doc)
         
         # 生成README文件
-        readme_content = self._generate_readme(project_name, module_analyses)
-        readme_path = os.path.join(project_doc_dir, "README.md")
-        with open(readme_path, 'w', encoding='utf-8') as f:
-            f.write(readme_content)
+        # readme_content = self._generate_readme(project_name, module_analyses)
+        # readme_path = os.path.join(project_doc_dir, "README.md")
+        # with open(readme_path, 'w', encoding='utf-8') as f:
+        #     f.write(readme_content)
         
         print(f"项目文档已生成，保存在: {project_doc_dir}")
     
@@ -95,25 +95,25 @@ class DocumentGenerator:
         
         return project_doc
     
-    def _generate_readme(self, project_name, module_analyses):
-        """生成README文件"""
-        # 构建README提示
-        prompt = f"请为以下C项目生成一个简洁的README文件，包括项目简介、功能特性、安装使用方法等。\n\n"
-        prompt += "项目名称: " + project_name + "\n\n"
-        prompt += "请生成一个标准的README文件，包括以下内容：\n"
-        prompt += "1. 项目简介\n"
-        prompt += "2. 功能特性\n"
-        prompt += "3. 安装与使用\n"
-        prompt += "4. 示例\n"
-        prompt += "5. 许可证\n"
+    # def _generate_readme(self, project_name, module_analyses):
+    #     """生成README文件"""
+    #     # 构建README提示
+    #     prompt = f"请为以下C项目生成一个简洁的README文件，包括项目简介、功能特性、安装使用方法等。\n\n"
+    #     prompt += "项目名称: " + project_name + "\n\n"
+    #     prompt += "请生成一个标准的README文件，包括以下内容：\n"
+    #     prompt += "1. 项目简介\n"
+    #     prompt += "2. 功能特性\n"
+    #     prompt += "3. 安装与使用\n"
+    #     prompt += "4. 示例\n"
+    #     prompt += "5. 许可证\n"
         
-        # 调用LLM生成README
-        messages = [
-            {'role': 'system', 'content': '你是一个C项目分析专家，擅长生成简洁明了的README文件。'},
-            {'role': 'user', 'content': prompt}
-        ]
+    #     # 调用LLM生成README
+    #     messages = [
+    #         {'role': 'system', 'content': '你是一个C项目分析专家，擅长生成简洁明了的README文件。'},
+    #         {'role': 'user', 'content': prompt}
+    #     ]
         
-        response = self.llm.get_response(messages)
-        readme_content = response[0]
+    #     response = self.llm.get_response(messages)
+    #     readme_content = response[0]
         
-        return readme_content
+    #     return readme_content
