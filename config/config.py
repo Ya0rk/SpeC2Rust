@@ -1,8 +1,8 @@
 class Config:
-    def __init__(self, config_path=None):
+    def __init__(self, config_path=None, model_name="Qwen2.5-Coder-7B-Instruct"):
         # 默认配置
         self.api_key = "tcode-12345"  # 与scripts/qwen.sh中的API key保持一致
-        self.model = "Qwen2.5-Coder-7B-Instruct"  # 默认使用7B模型
+        self.model = model_name
         
         # 如果提供了配置文件路径，则加载配置
         if config_path:
