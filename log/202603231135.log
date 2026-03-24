@@ -1,0 +1,311 @@
+/home/jfeng/miniconda3/envs/c2saferrust/lib/python3.12/site-packages/tree_sitter/__init__.py:36: FutureWarning: Language.build_library is deprecated. Use the new bindings instead.
+  warn("{} is deprecated. Use {} instead.".format(old, new), FutureWarning)
+初始化C代码分析器...
+/home/jfeng/miniconda3/envs/c2saferrust/lib/python3.12/site-packages/tree_sitter/__init__.py:36: FutureWarning: Language(path, name) is deprecated. Use Language(ptr, name) instead.
+  warn("{} is deprecated. Use {} instead.".format(old, new), FutureWarning)
+============================================================
+SpecAgent - C 项目 Spec 文档生成（分层聚类 + 语义细分）
+============================================================
+
+[步骤 0/9] 初始化 spec-kit 项目结构...
+  ✓ spec-kit 项目结构初始化完成
+
+[步骤 1/9] 收集项目基本信息...
+  项目名称：cat
+  C 文件数量：39
+  头文件数量：84
+  构建系统：Makefile
+
+[步骤 2/9] 解析 C 代码结构并构建依赖图...
+找到 123 个C文件，开始分析...
+找到的C文件列表：
+  /data1/jfeng/tcode/datasets/cat/hard-locale.c
+  /data1/jfeng/tcode/datasets/cat/fclose.c
+  /data1/jfeng/tcode/datasets/cat/xmalloc.c
+  /data1/jfeng/tcode/datasets/cat/stdbit.c
+  /data1/jfeng/tcode/datasets/cat/safe-write.c
+  /data1/jfeng/tcode/datasets/cat/version.c
+  /data1/jfeng/tcode/datasets/cat/propername-lite.c
+  /data1/jfeng/tcode/datasets/cat/setlocale_null-unlocked.c
+  /data1/jfeng/tcode/datasets/cat/quotearg.c
+  /data1/jfeng/tcode/datasets/cat/safe-read.c
+  /data1/jfeng/tcode/datasets/cat/xalignalloc.c
+  /data1/jfeng/tcode/datasets/cat/binary-io.c
+  /data1/jfeng/tcode/datasets/cat/localcharset.c
+  /data1/jfeng/tcode/datasets/cat/version-etc-fsf.c
+  /data1/jfeng/tcode/datasets/cat/version-etc.c
+  /data1/jfeng/tcode/datasets/cat/mbrtoc32.c
+  /data1/jfeng/tcode/datasets/cat/stdc_leading_zeros.c
+  /data1/jfeng/tcode/datasets/cat/full-write.c
+  /data1/jfeng/tcode/datasets/cat/closeout.c
+  /data1/jfeng/tcode/datasets/cat/c-ctype.c
+  /data1/jfeng/tcode/datasets/cat/fcntl.c
+  /data1/jfeng/tcode/datasets/cat/fflush.c
+  /data1/jfeng/tcode/datasets/cat/mbszero.c
+  /data1/jfeng/tcode/datasets/cat/fseeko.c
+  /data1/jfeng/tcode/datasets/cat/xalloc-die.c
+  /data1/jfeng/tcode/datasets/cat/progname.c
+  /data1/jfeng/tcode/datasets/cat/xbinary-io.c
+  /data1/jfeng/tcode/datasets/cat/fadvise.c
+  /data1/jfeng/tcode/datasets/cat/setlocale_null.c
+  /data1/jfeng/tcode/datasets/cat/alignalloc.c
+  /data1/jfeng/tcode/datasets/cat/c-strcasecmp.c
+  /data1/jfeng/tcode/datasets/cat/ialloc.c
+  /data1/jfeng/tcode/datasets/cat/cat.c
+  /data1/jfeng/tcode/datasets/cat/exitfail.c
+  /data1/jfeng/tcode/datasets/cat/c32isprint.c
+  /data1/jfeng/tcode/datasets/cat/fpurge.c
+  /data1/jfeng/tcode/datasets/cat/copy-file-range.c
+  /data1/jfeng/tcode/datasets/cat/close-stream.c
+  /data1/jfeng/tcode/datasets/cat/include/safe-read.c
+  /data1/jfeng/tcode/datasets/cat/include/ctype.h
+  /data1/jfeng/tcode/datasets/cat/include/full-write.h
+  /data1/jfeng/tcode/datasets/cat/include/alloca.h
+  /data1/jfeng/tcode/datasets/cat/include/configmake.h
+  /data1/jfeng/tcode/datasets/cat/include/attribute.h
+  /data1/jfeng/tcode/datasets/cat/include/xbinary-io.h
+  /data1/jfeng/tcode/datasets/cat/include/basename-lgpl.h
+  /data1/jfeng/tcode/datasets/cat/include/fadvise.h
+  /data1/jfeng/tcode/datasets/cat/include/alignalloc.h
+  /data1/jfeng/tcode/datasets/cat/include/locale.h
+  /data1/jfeng/tcode/datasets/cat/include/version-etc.h
+  /data1/jfeng/tcode/datasets/cat/include/stdckdint.h
+  /data1/jfeng/tcode/datasets/cat/include/pathmax.h
+  /data1/jfeng/tcode/datasets/cat/include/dirent.h
+  /data1/jfeng/tcode/datasets/cat/include/unlocked-io.h
+  /data1/jfeng/tcode/datasets/cat/include/safe-write.h
+  /data1/jfeng/tcode/datasets/cat/include/stat-size.h
+  /data1/jfeng/tcode/datasets/cat/include/idx.h
+  /data1/jfeng/tcode/datasets/cat/include/stddef.h
+  /data1/jfeng/tcode/datasets/cat/include/closein.h
+  /data1/jfeng/tcode/datasets/cat/include/propername.h
+  /data1/jfeng/tcode/datasets/cat/include/streq.h
+  /data1/jfeng/tcode/datasets/cat/include/binary-io.h
+  /data1/jfeng/tcode/datasets/cat/include/timespec.h
+  /data1/jfeng/tcode/datasets/cat/include/verify.h
+  /data1/jfeng/tcode/datasets/cat/include/filename.h
+  /data1/jfeng/tcode/datasets/cat/include/closeout.h
+  /data1/jfeng/tcode/datasets/cat/include/minmax.h
+  /data1/jfeng/tcode/datasets/cat/include/string.h
+  /data1/jfeng/tcode/datasets/cat/include/unistd.h
+  /data1/jfeng/tcode/datasets/cat/include/langinfo.h
+  /data1/jfeng/tcode/datasets/cat/include/uchar.h
+  /data1/jfeng/tcode/datasets/cat/include/freading.h
+  /data1/jfeng/tcode/datasets/cat/include/quote.h
+  /data1/jfeng/tcode/datasets/cat/include/system.h
+  /data1/jfeng/tcode/datasets/cat/include/inttostr.h
+  /data1/jfeng/tcode/datasets/cat/include/setlocale_null.h
+  /data1/jfeng/tcode/datasets/cat/include/ioblksize.h
+  /data1/jfeng/tcode/datasets/cat/include/stdbit.h
+  /data1/jfeng/tcode/datasets/cat/include/c32is-impl.h
+  /data1/jfeng/tcode/datasets/cat/include/fpending.h
+  /data1/jfeng/tcode/datasets/cat/include/fcntl.h
+  /data1/jfeng/tcode/datasets/cat/include/dirname.h
+  /data1/jfeng/tcode/datasets/cat/include/gettext.h
+  /data1/jfeng/tcode/datasets/cat/include/time.h
+  /data1/jfeng/tcode/datasets/cat/include/unitypes.h
+  /data1/jfeng/tcode/datasets/cat/include/signal.h
+  /data1/jfeng/tcode/datasets/cat/include/progname.h
+  /data1/jfeng/tcode/datasets/cat/include/wchar.h
+  /data1/jfeng/tcode/datasets/cat/include/quotearg.h
+  /data1/jfeng/tcode/datasets/cat/include/close-stream.h
+  /data1/jfeng/tcode/datasets/cat/include/hard-locale.h
+  /data1/jfeng/tcode/datasets/cat/include/stdio-impl.h
+  /data1/jfeng/tcode/datasets/cat/include/localcharset.h
+  /data1/jfeng/tcode/datasets/cat/include/exitfail.h
+  /data1/jfeng/tcode/datasets/cat/include/c-strcaseeq.h
+  /data1/jfeng/tcode/datasets/cat/include/version.h
+  /data1/jfeng/tcode/datasets/cat/include/c-ctype.h
+  /data1/jfeng/tcode/datasets/cat/include/arg-nonnull.h
+  /data1/jfeng/tcode/datasets/cat/include/config.h
+  /data1/jfeng/tcode/datasets/cat/include/error.h
+  /data1/jfeng/tcode/datasets/cat/include/stdio.h
+  /data1/jfeng/tcode/datasets/cat/include/inttypes.h
+  /data1/jfeng/tcode/datasets/cat/include/intprops.h
+  /data1/jfeng/tcode/datasets/cat/include/intprops-internal.h
+  /data1/jfeng/tcode/datasets/cat/include/same-inode.h
+  /data1/jfeng/tcode/datasets/cat/include/openat.h
+  /data1/jfeng/tcode/datasets/cat/include/stdlib.h
+  /data1/jfeng/tcode/datasets/cat/include/c-strcase.h
+  /data1/jfeng/tcode/datasets/cat/include/unictype.h
+  /data1/jfeng/tcode/datasets/cat/include/wctype.h
+  /data1/jfeng/tcode/datasets/cat/include/xalloc.h
+  /data1/jfeng/tcode/datasets/cat/include/limits.h
+  /data1/jfeng/tcode/datasets/cat/include/ignore-value.h
+  /data1/jfeng/tcode/datasets/cat/include/sys-limits.h
+  /data1/jfeng/tcode/datasets/cat/include/safe-read.h
+  /data1/jfeng/tcode/datasets/cat/include/ialloc.h
+  /data1/jfeng/tcode/datasets/cat/include/stat-macros.h
+  /data1/jfeng/tcode/datasets/cat/include/sys/utsname.h
+  /data1/jfeng/tcode/datasets/cat/include/sys/types.h
+  /data1/jfeng/tcode/datasets/cat/include/sys/time.h
+  /data1/jfeng/tcode/datasets/cat/include/sys/stat.h
+  /data1/jfeng/tcode/datasets/cat/include/sys/ioctl.h
+  /data1/jfeng/tcode/datasets/cat/include/sys/select.h
+正在分析: hard-locale.c
+正在分析: fclose.c
+正在分析: xmalloc.c
+正在分析: stdbit.c
+正在分析: safe-write.c
+正在分析: version.c
+正在分析: propername-lite.c
+正在分析: setlocale_null-unlocked.c
+正在分析: quotearg.c
+正在分析: safe-read.c
+正在分析: xalignalloc.c
+正在分析: binary-io.c
+正在分析: localcharset.c
+正在分析: version-etc-fsf.c
+正在分析: version-etc.c
+正在分析: mbrtoc32.c
+正在分析: stdc_leading_zeros.c
+正在分析: full-write.c
+正在分析: closeout.c
+正在分析: c-ctype.c
+正在分析: fcntl.c
+正在分析: fflush.c
+正在分析: mbszero.c
+正在分析: fseeko.c
+正在分析: xalloc-die.c
+正在分析: progname.c
+正在分析: xbinary-io.c
+正在分析: fadvise.c
+正在分析: setlocale_null.c
+正在分析: alignalloc.c
+正在分析: c-strcasecmp.c
+正在分析: ialloc.c
+正在分析: cat.c
+正在分析: exitfail.c
+正在分析: c32isprint.c
+正在分析: fpurge.c
+正在分析: copy-file-range.c
+正在分析: close-stream.c
+正在分析: include/safe-read.c
+正在分析: include/ctype.h
+正在分析: include/full-write.h
+正在分析: include/alloca.h
+正在分析: include/configmake.h
+正在分析: include/attribute.h
+正在分析: include/xbinary-io.h
+正在分析: include/basename-lgpl.h
+正在分析: include/fadvise.h
+正在分析: include/alignalloc.h
+正在分析: include/locale.h
+正在分析: include/version-etc.h
+正在分析: include/stdckdint.h
+正在分析: include/pathmax.h
+正在分析: include/dirent.h
+正在分析: include/unlocked-io.h
+正在分析: include/safe-write.h
+正在分析: include/stat-size.h
+正在分析: include/idx.h
+正在分析: include/stddef.h
+正在分析: include/closein.h
+正在分析: include/propername.h
+正在分析: include/streq.h
+正在分析: include/binary-io.h
+正在分析: include/timespec.h
+正在分析: include/verify.h
+正在分析: include/filename.h
+正在分析: include/closeout.h
+正在分析: include/minmax.h
+正在分析: include/string.h
+正在分析: include/unistd.h
+正在分析: include/langinfo.h
+正在分析: include/uchar.h
+正在分析: include/freading.h
+正在分析: include/quote.h
+正在分析: include/system.h
+正在分析: include/inttostr.h
+正在分析: include/setlocale_null.h
+正在分析: include/ioblksize.h
+正在分析: include/stdbit.h
+正在分析: include/c32is-impl.h
+正在分析: include/fpending.h
+正在分析: include/fcntl.h
+正在分析: include/dirname.h
+正在分析: include/gettext.h
+正在分析: include/time.h
+正在分析: include/unitypes.h
+正在分析: include/signal.h
+正在分析: include/progname.h
+正在分析: include/wchar.h
+正在分析: include/quotearg.h
+正在分析: include/close-stream.h
+正在分析: include/hard-locale.h
+正在分析: include/stdio-impl.h
+正在分析: include/localcharset.h
+正在分析: include/exitfail.h
+正在分析: include/c-strcaseeq.h
+正在分析: include/version.h
+正在分析: include/c-ctype.h
+正在分析: include/arg-nonnull.h
+正在分析: include/config.h
+正在分析: include/error.h
+正在分析: include/stdio.h
+正在分析: include/inttypes.h
+正在分析: include/intprops.h
+正在分析: include/intprops-internal.h
+正在分析: include/same-inode.h
+正在分析: include/openat.h
+正在分析: include/stdlib.h
+正在分析: include/c-strcase.h
+正在分析: include/unictype.h
+正在分析: include/wctype.h
+正在分析: include/xalloc.h
+正在分析: include/limits.h
+正在分析: include/ignore-value.h
+正在分析: include/sys-limits.h
+正在分析: include/safe-read.h
+正在分析: include/ialloc.h
+ialloc.h declaration节点内容: IALLOC_INLINE void * _GL_ATTRIBUTE_COLD...
+子节点类型: ['type_identifier', 'ERROR', 'pointer_declarator', ';']
+是否包含函数体: False
+ialloc.h declaration节点内容: IALLOC_INLINE
+_GL_ATTRIBUTE_MALLOC /*_GL_ATTRIBUTE_DEALLOC_FREE*/...
+子节点类型: ['type_identifier', 'identifier', 'comment', ';']
+是否包含函数体: False
+ialloc.h declaration节点内容: IALLOC_INLINE
+_GL_ATTRIBUTE_MALLOC /*_GL_ATTRIBUTE_DEALLOC_FREE*/...
+子节点类型: ['type_identifier', 'identifier', 'comment', ';']
+是否包含函数体: False
+ialloc.h declaration节点内容: size_t nx = n;...
+子节点类型: ['primitive_type', 'init_declarator', ';']
+是否包含函数体: False
+ialloc.h declaration节点内容: size_t sx = s;...
+子节点类型: ['primitive_type', 'init_declarator', ';']
+是否包含函数体: False
+正在分析: include/stat-macros.h
+正在分析: include/sys/utsname.h
+正在分析: include/sys/types.h
+正在分析: include/sys/time.h
+正在分析: include/sys/stat.h
+正在分析: include/sys/ioctl.h
+正在分析: include/sys/select.h
+构建函数调用关系...
+保存分析结果...
+分析完成，结果已保存到: /data1/jfeng/tcode_win/src/parse/res/cat.json
+共分析 385 个函数
+  构建依赖图...
+  ✓ 依赖图构建完成
+    - 文件依赖：94
+    - 函数调用：333
+    - 结构体使用：19
+  文件数量：123
+  函数数量：385
+  结构体数量：156
+
+[步骤 3/9] 使用 ModuleSplitter 进行模块划分...
+  使用 ModuleSplitter 进行模块划分...
+  识别候选子模块...
+  ✓ 识别到 2 个候选子模块
+  基于语义和依赖关系收敛模块...
+    拆分模块 main_root...
+      拆分为 1 个子模块
+  ✓ 收敛到 2 个子模块
+识别函数簇...
+✓ 识别到 0 个函数簇
+  ✓ 模块划分完成: 2 个模块, 0 个函数簇
+
+[步骤 4/9] 生成仓库地图...
+生成 00_repo_manifest.md - 仓库地图...

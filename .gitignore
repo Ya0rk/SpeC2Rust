@@ -1,3 +1,5 @@
-datasets/*
-doc/prework/*
+datasets/
+doc/prework/
 __pycache__/
+./src/utils/spec-kit/
+output/

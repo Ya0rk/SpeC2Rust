@@ -1,0 +1,41 @@
+/home/jfeng/miniconda3/envs/c2saferrust/lib/python3.12/site-packages/tree_sitter/__init__.py:36: FutureWarning: Language.build_library is deprecated. Use the new bindings instead.
+  warn("{} is deprecated. Use {} instead.".format(old, new), FutureWarning)
+[94m 
+================================================================================[00m
+[93m C 到 Rust 项目转换 Agent[00m
+[94m ================================================================================[00m
+[93m C 项目路径：datasets/avl-tree[00m
+[93m 输出目录：output/avl-tree[00m
+[93m Rust 项目名称：avl-tree-rust[00m
+[93m 使用模型：qwen32[00m
+[93m 最大修复迭代次数：5[00m
+[94m ================================================================================[00m
+[94m 
+================================================================================[00m
+[93m 步骤 1: 分析 C 项目并生成文档[00m
+[94m ================================================================================[00m
+初始化C代码分析器...
+/home/jfeng/miniconda3/envs/c2saferrust/lib/python3.12/site-packages/tree_sitter/__init__.py:36: FutureWarning: Language(path, name) is deprecated. Use Language(ptr, name) instead.
+  warn("{} is deprecated. Use {} instead.".format(old, new), FutureWarning)
+输入目录的最后一层文件夹名：avl-tree
+找到 7 个C文件，开始分析...
+找到的C文件列表：
+  datasets/avl-tree/avl_data.c
+  datasets/avl-tree/avl_test.c
+  datasets/avl-tree/avl_bf.c
+  datasets/avl-tree/avl_example.c
+  datasets/avl-tree/avl_data.h
+  datasets/avl-tree/minunit.h
+  datasets/avl-tree/avl_bf.h
+正在分析: avl_data.c
+正在分析: avl_test.c
+正在分析: avl_bf.c
+正在分析: avl_example.c
+正在分析: avl_data.h
+正在分析: minunit.h
+正在分析: avl_bf.h
+构建函数调用关系...
+保存分析结果...
+分析完成，结果已保存到: /data1/jfeng/tcode/src/parse/res/avl-tree.json
+共分析 49 个函数
+制定项目分析计划并生成文档骨架...
