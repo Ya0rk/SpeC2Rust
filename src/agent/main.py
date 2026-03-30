@@ -19,6 +19,7 @@ repo_root = project_root.parent
 sys.path.insert(0, str(project_root))
 
 from agent.c_doc_agent import CDocAgent
+from agent.pointer_agent import PointerAgent
 from agent.spec_agent import SpecAgent
 from agent.spec_json_agent import SpecJsonAgent
 from agent.rust_agent import RustAgent
@@ -60,6 +61,11 @@ def main():
         help="在 SpecAgent 之后增加 JSON 压缩中间层，生成机器友好的 spec_context.json"
     )
     parser.add_argument(
+        "--use-pointer-agent",
+        action="store_true",
+        help="可选开启指针分析中间层，生成 C 指针到 Rust 的翻译指导文档"
+    )
+    parser.add_argument(
         "--skip-code-fix",
         action="store_true",
         help="跳过代码修复步骤"
@@ -99,6 +105,7 @@ def main():
     prYellow(f"远程模型：{config.api_model or '(default)'}")
     prYellow(f"分析路径：{'SpecAgent' if args.use_spec_agent else 'CDocAgent'}")
     prYellow(f"Spec JSON 中间层：{'开启' if args.use_spec_json_agent else '关闭'}")
+    prYellow(f"PointerAgent：{'开启' if args.use_pointer_agent else '关闭'}")
     prYellow(f"最大修复迭代次数：{args.max_fix_iterations}")
     prBlue("=" * 80)
 
@@ -126,6 +133,7 @@ def main():
         prRed("\n⊘ 跳过 C 项目分析步骤")
 
     spec_json_path = os.path.join(c_doc_dir, "spec_json", "spec_context.json")
+    pointer_markdown_path = os.path.join(c_doc_dir, "pointer_guidance.md")
 
     # 可选步骤 1.5: 将 SpecAgent 产出的文档压缩为机器友好的 JSON
     if args.use_spec_agent and args.use_spec_json_agent:
@@ -138,6 +146,19 @@ def main():
 
         prGreen("\n✓ Spec JSON 中间层生成完成")
         prGreen(f"  JSON 路径：{spec_json_path}")
+
+    # 可选步骤 1.6: 分析 C 项目中的指针用法，生成 Rust 翻译指导
+    if args.use_pointer_agent:
+        prBlue("\n" + "=" * 80)
+        prYellow("步骤 1.6: 生成指针翻译指导文档")
+        prBlue("=" * 80)
+
+        pointer_agent = PointerAgent(config=config)
+        pointer_outputs = pointer_agent.analyze_project(args.c_project_path, c_doc_dir)
+        pointer_markdown_path = pointer_outputs["markdown_path"]
+
+        prGreen("\n✓ 指针翻译指导文档生成完成")
+        prGreen(f"  文档路径：{pointer_markdown_path}")
 
     # 收集生成的文档路径
     doc_paths = []
@@ -158,6 +179,9 @@ def main():
             doc_path = os.path.join(c_doc_dir, doc_file)
             if os.path.exists(doc_path):
                 doc_paths.append(doc_path)
+
+    if args.use_pointer_agent and os.path.exists(pointer_markdown_path):
+        doc_paths.append(pointer_markdown_path)
 
     if not doc_paths:
         prRed("\n✗ 错误：未找到 C 项目文档")

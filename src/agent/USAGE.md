@@ -51,6 +51,7 @@ conda run --no-capture-output -n tcode python src/agent/main.py --c_project_path
 | `--skip-c-analysis` | 跳过 C 项目分析步骤 |
 | `--use-spec-agent` | 使用 `SpecAgent` 作为分析路径 |
 | `--use-spec-json-agent` | 在 `SpecAgent` 后增加 JSON 压缩中间层 |
+| `--use-pointer-agent` | 可选开启 `PointerAgent`，分析 C 指针并生成 Rust 翻译指导文档 |
 | `--skip-code-fix` | 跳过编译修复步骤 |
 | `--skip-test-fix` | 跳过测试修复步骤 |
 | `--max-fix-iterations` | 编译修复和测试修复的最大迭代次数，默认 `5` |
@@ -86,6 +87,25 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 对应流程：
 
 `SpecAgent -> SpecJsonAgent -> RustAgent -> CodeFixer -> TestFixer`
+
+### 3.5 使用 PointerAgent 补充指针翻译指导
+
+```bash
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --use-pointer-agent
+```
+
+如果同时和 `SpecAgent` / `SpecJsonAgent` 一起使用：
+
+```bash
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --use-spec-agent --use-spec-json-agent --use-pointer-agent
+```
+
+`PointerAgent` 会额外扫描所有 `.c/.h` 文件中的指针声明与典型用法，并生成：
+
+- `output/c_docs/pointer_guidance.md`
+- `output/c_docs/pointer_guidance.json`
+
+其中 `pointer_guidance.md` 会自动追加到 `RustAgent` 的输入文档中，作为额外翻译指导。
 
 ### 4. 使用已有分析文档，跳过分析阶段
 

@@ -74,7 +74,11 @@ class Fixer:
         Returns:
             是否成功修复
         """
-        # 读取文件内容
+        # 对 Rust 文件优先尝试函数级修复；如果无法定位函数，再回退到整文件修复。
+        if file_path.endswith(".rs"):
+            if self._fix_rust_function(file_path, error_type, error_message):
+                return True
+
         file_content = self._read_file_content(file_path)
         if file_content is None:
             return False
@@ -121,6 +125,305 @@ class Fixer:
         except Exception as e:
             print(f"写入文件失败：{e}")
             return False
+
+    def _parse_error_location(self, error_message: str) -> Tuple[Optional[str], Optional[int], Optional[int]]:
+        """
+        从报错中提取文件、行号、列号。
+        """
+        match = re.search(r'--> ([^:\n]+):(\d+):(\d+)', error_message)
+        if not match:
+            return None, None, None
+
+        file_path = match.group(1).strip()
+        if not os.path.isabs(file_path):
+            file_path = os.path.join(self.project_path, file_path)
+
+        return file_path, int(match.group(2)), int(match.group(3))
+
+    def _locate_rust_function_bounds(self, file_content: str, line_number: int) -> Optional[Tuple[int, int, str]]:
+        """
+        根据报错行号，在 Rust 文件中定位最相关的函数文本范围。
+
+        返回：(起始字符索引, 结束字符索引, 函数代码)
+        """
+        lines = file_content.splitlines(keepends=True)
+        if not lines:
+            return None
+
+        target_index = max(0, min(line_number - 1, len(lines) - 1))
+        func_pattern = re.compile(
+            r'^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+"[^"]+"\s+)?fn\s+[A-Za-z_][A-Za-z0-9_]*'
+        )
+
+        start_line = None
+        for index in range(target_index, -1, -1):
+            if func_pattern.search(lines[index]):
+                start_line = index
+                break
+
+        if start_line is None:
+            return None
+
+        start_offset = sum(len(line) for line in lines[:start_line])
+        search_text = "".join(lines[start_line:])
+        open_brace_index = search_text.find("{")
+        if open_brace_index == -1:
+            return None
+
+        absolute_open_brace = start_offset + open_brace_index
+        brace_depth = 0
+        end_offset = None
+        for index in range(absolute_open_brace, len(file_content)):
+            char = file_content[index]
+            if char == "{":
+                brace_depth += 1
+            elif char == "}":
+                brace_depth -= 1
+                if brace_depth == 0:
+                    end_offset = index + 1
+                    break
+
+        if end_offset is None:
+            return None
+
+        function_code = file_content[start_offset:end_offset]
+        return start_offset, end_offset, function_code
+
+    def _build_function_fix_prompt(
+        self,
+        file_path: str,
+        error_type: str,
+        error_message: str,
+        file_context: str,
+        function_code: str,
+    ) -> str:
+        """
+        生成函数级修复提示。
+        """
+        relative_path = os.path.relpath(file_path, self.project_path).replace("\\", "/")
+        return f"""你是一个 Rust 代码修复专家。请只修复下面这个文件中的一个函数。
+
+错误类型：
+{error_type}
+
+错误信息：
+{error_message}
+
+文件路径：
+{relative_path}
+
+目标函数代码：
+```rust
+{function_code}
+```
+
+相关文件上下文：
+```rust
+{file_context}
+```
+
+要求：
+1. 只返回修复后的“目标函数完整代码”，不要返回整个文件
+2. 不要输出解释
+3. 保持函数签名与周边结构尽量稳定，优先修复报错本身
+4. 如果函数依赖同文件中的结构体、类型别名或辅助函数，请以当前文件上下文为准
+
+请把结果放在 ```rust 代码块中返回。
+"""
+
+    def _extract_rust_supporting_context(
+        self,
+        file_content: str,
+        function_start: int,
+        function_end: int,
+        error_message: str = "",
+    ) -> str:
+        """
+        为函数级修复提取轻量上下文，避免把整文件全文都发给 LLM。
+
+        当前策略：
+        1. 提取顶部 use / extern crate / type 定义
+        2. 优先提取与目标函数更相关的 struct / enum / trait / impl / type 头部行
+        3. 提取目标函数附近少量前后文
+        """
+        lines = file_content.splitlines()
+        if not lines:
+            return ""
+
+        start_line = file_content[:function_start].count("\n")
+        end_line = file_content[:function_end].count("\n")
+
+        function_code = file_content[function_start:function_end]
+        related_identifiers = self._extract_related_identifiers(function_code)
+        error_identifiers = self._extract_identifiers_from_error(error_message)
+        related_identifiers = list(dict.fromkeys(related_identifiers + error_identifiers))
+
+        import_lines = []
+        definition_lines = []
+        prioritized_definition_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("use ") or stripped.startswith("pub use ") or stripped.startswith("extern crate "):
+                import_lines.append(line)
+                continue
+            if re.match(r'^\s*(?:pub\s+)?(?:struct|enum|trait)\s+\w+', line):
+                definition_lines.append(line)
+                if any(identifier in line for identifier in related_identifiers):
+                    prioritized_definition_lines.append(line)
+                continue
+            if re.match(r'^\s*impl(?:<[^>]+>)?\s+', line):
+                definition_lines.append(line)
+                if any(identifier in line for identifier in related_identifiers):
+                    prioritized_definition_lines.append(line)
+                continue
+            if re.match(r'^\s*(?:pub\s+)?type\s+\w+\s*=', line):
+                definition_lines.append(line)
+                if any(identifier in line for identifier in related_identifiers):
+                    prioritized_definition_lines.append(line)
+
+        context_start = max(0, start_line - 12)
+        context_end = min(len(lines), end_line + 13)
+        local_context = "\n".join(lines[context_start:context_end])
+
+        parts = []
+        if import_lines:
+            parts.append("// 顶部导入\n" + "\n".join(import_lines[:40]))
+        selected_definition_lines = prioritized_definition_lines or definition_lines
+        if selected_definition_lines:
+            parts.append("// 相关类型与实现头部\n" + "\n".join(selected_definition_lines[:30]))
+        if local_context:
+            parts.append("// 目标函数邻近上下文\n" + local_context)
+
+        return "\n\n".join(parts)
+
+    def _extract_related_identifiers(self, function_code: str) -> List[str]:
+        """
+        从目标函数中提取一批可能相关的标识符，用于筛选上下文。
+        """
+        candidates = re.findall(r'\b[A-Z][A-Za-z0-9_]*\b', function_code)
+        seen = set()
+        results = []
+        for token in candidates:
+            if token not in seen:
+                seen.add(token)
+                results.append(token)
+        return results[:20]
+
+    def _extract_identifiers_from_error(self, error_message: str) -> List[str]:
+        """
+        从报错文本中提取可能相关的符号名，用于辅助筛选上下文。
+        """
+        patterns = [
+            r'`([A-Za-z_][A-Za-z0-9_]*)`',
+            r"'([A-Za-z_][A-Za-z0-9_]*)'",
+            r'\b[A-Z][A-Za-z0-9_]*\b',
+        ]
+
+        seen = set()
+        results = []
+        for pattern in patterns:
+            for token in re.findall(pattern, error_message):
+                if token not in seen:
+                    seen.add(token)
+                    results.append(token)
+
+        return results[:20]
+
+    def _extract_function_signature(self, function_code: str) -> Optional[str]:
+        """
+        提取函数签名的近似文本，用于替换前后的稳定性校验。
+        """
+        match = re.search(
+            r'^\s*((?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+"[^"]+"\s+)?fn\s+[A-Za-z_][A-Za-z0-9_]*)',
+            function_code,
+            re.MULTILINE,
+        )
+        if not match:
+            return None
+        return match.group(1).strip()
+
+    def _looks_like_complete_rust_function(self, function_code: str) -> bool:
+        """
+        轻量判断返回内容是否像一个完整的 Rust 函数。
+        """
+        if not function_code or "fn " not in function_code or "{" not in function_code or "}" not in function_code:
+            return False
+
+        brace_depth = 0
+        for char in function_code:
+            if char == "{":
+                brace_depth += 1
+            elif char == "}":
+                brace_depth -= 1
+                if brace_depth < 0:
+                    return False
+
+        return brace_depth == 0
+
+    def _validate_fixed_function(self, original_function: str, fixed_function: str) -> bool:
+        """
+        对函数级修复结果做轻量校验，避免明显破坏结构。
+        """
+        if not self._looks_like_complete_rust_function(fixed_function):
+            return False
+
+        original_signature = self._extract_function_signature(original_function)
+        fixed_signature = self._extract_function_signature(fixed_function)
+
+        # 默认要求签名主干保持不变，避免模型把目标函数替换成完全不同的函数。
+        if original_signature and fixed_signature and original_signature != fixed_signature:
+            return False
+
+        return True
+
+    def _fix_rust_function(self, file_path: str, error_type: str, error_message: str) -> bool:
+        """
+        优先按函数粒度修复 Rust 文件。
+        """
+        file_content = self._read_file_content(file_path)
+        if file_content is None:
+            return False
+
+        error_file, line_number, _ = self._parse_error_location(error_message)
+        if error_file is not None and os.path.normpath(error_file) != os.path.normpath(file_path):
+            return False
+        if line_number is None:
+            return False
+
+        located = self._locate_rust_function_bounds(file_content, line_number)
+        if located is None:
+            return False
+
+        start_offset, end_offset, function_code = located
+        file_context = self._extract_rust_supporting_context(
+            file_content=file_content,
+            function_start=start_offset,
+            function_end=end_offset,
+            error_message=error_message,
+        )
+        prompt = self._build_function_fix_prompt(
+            file_path=file_path,
+            error_type=error_type,
+            error_message=error_message,
+            file_context=file_context,
+            function_code=function_code,
+        )
+
+        messages = [
+            {'role': 'system', 'content': self._get_system_prompt()},
+            {'role': 'user', 'content': prompt}
+        ]
+
+        response = self.llm.generate(messages)
+        fixed_function = self._extract_code(response[0])
+        if not fixed_function:
+            return False
+        if not self._validate_fixed_function(function_code, fixed_function):
+            print("函数级修复结果未通过基本校验，回退到文件级修复。")
+            return False
+
+        new_file_content = file_content[:start_offset] + fixed_function + file_content[end_offset:]
+        return self._write_file_content(file_path, new_file_content)
     
     def _generate_fix_prompt(self, error_type: str, error_message: str, file_content: str = "") -> str:
         """
@@ -257,23 +560,11 @@ class CodeFixer(Fixer):
             return None
         return match.group(1).strip()
 
-    def _extract_fixed_content(self, response_text: str) -> str:
-        """
-        从 LLM 返回中提取修复后的代码或配置内容。
-        """
-        if '```rust' in response_text:
-            return response_text.split('```rust', 1)[1].split('```', 1)[0].strip()
-        if '```toml' in response_text:
-            return response_text.split('```toml', 1)[1].split('```', 1)[0].strip()
-        if '```' in response_text:
-            return response_text.split('```', 1)[1].split('```', 1)[0].strip()
-        return response_text.strip()
-
     def _fix_from_candidates(self, error_type: str, error_message: str, candidate_files: List[str]) -> bool:
         """
         基于报错中的候选文件集合，让 LLM 决定优先修改哪个文件。
 
-        这里仍然保持最小改动：一次只回写一个文件。
+        这里仍然保持最小改动：一次只修改一个文件。
         但相比旧逻辑，LLM 至少可以在多个候选文件之间做判断，而不是完全依赖本地单文件解析。
         """
         existing_candidates = [path for path in candidate_files if os.path.exists(path)]
@@ -304,21 +595,14 @@ class CodeFixer(Fixer):
 候选文件内容：
 {chr(10).join(candidate_blocks)}
 
-请你完成两件事：
-1. 判断最应该优先修改哪个文件
-2. 直接输出该文件修复后的完整内容
+请你判断最应该优先修改哪个文件。
 
 输出格式必须严格如下：
 <target_file>相对路径</target_file>
-```language
-完整修复后的文件内容
-```
 
 要求：
 1. 只能选择上面给出的候选文件之一
 2. 不要输出解释
-3. 如果是 Rust 文件请输出 rust 代码块
-4. 如果是 Cargo.toml 请输出 toml 代码块
 """
 
         messages = [
@@ -329,10 +613,6 @@ class CodeFixer(Fixer):
         response = self.llm.generate(messages)
         response_text = response[0]
         target_file = self._extract_target_file(response_text)
-        fixed_content = self._extract_fixed_content(response_text)
-
-        if not fixed_content:
-            return False
 
         resolved_target: Optional[str] = None
         if target_file:
@@ -346,7 +626,7 @@ class CodeFixer(Fixer):
         if resolved_target is None:
             resolved_target = existing_candidates[0]
 
-        return self._write_file_content(resolved_target, fixed_content)
+        return self._fix_file(resolved_target, error_type, error_message)
     
     def fix(self) -> bool:
         """
