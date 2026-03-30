@@ -2,298 +2,300 @@
 
 ## 概述
 
-这个工具可以自动将 C 项目转换为 Rust 实现，完整流程包括：
+当前框架用于把一个 C 项目转换为 Rust 项目，主流程包括：
 
-1. **分析 C 项目** - 使用多轮迭代方式分析 C 项目并生成详细文档
-2. **生成 Rust 代码** - 基于 C 项目文档生成地道的 Rust 实现
-3. **编译修复** - 自动修复 Rust 代码的编译错误
-4. **测试修复** - 自动修复 Rust 代码的测试失败
+1. 分析 C 项目并生成中间文档
+2. 根据中间文档生成 Rust 项目代码
+3. 对生成结果执行编译修复
+4. 对生成结果执行测试修复
 
-## 快速开始
+当前代码支持两类分析路径：
 
-### 基本用法
+- `CDocAgent` 路径：`CDocAgent -> RustAgent -> CodeFixer -> TestFixer`
+- `SpecAgent` 路径：`SpecAgent -> RustAgent -> CodeFixer -> TestFixer`
+
+同时也支持一个可选的 JSON 中间层：
+
+- `SpecAgent -> SpecJsonAgent -> RustAgent -> CodeFixer -> TestFixer`
+
+## 入口命令
+
+当前入口脚本是：
 
 ```bash
-python agent/main.py /path/to/c/project /path/to/output
+python src/agent/main.py --c_project_path <C项目路径> --output_dir <输出目录>
 ```
 
-这会：
-- 分析 `/path/to/c/project` 目录下的 C 项目
-- 在 `/path/to/output` 目录生成文档和 Rust 项目
-- Rust 项目默认名为 `rust_implementation`
-
-### 完整示例
+例如：
 
 ```bash
-# 分析 avl-tree 项目并转换为 Rust
-python agent/main.py datasets/avl-tree output/avl-tree-rust
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/
+```
 
-# 指定 Rust 项目名称
-python agent/main.py datasets/avl-tree output/avl-tree-rust --rust-project-name avl_tree_rs
+如果使用 `conda` 环境，可以这样运行：
 
-# 使用更大的模型（更准确但更慢）
-python agent/main.py datasets/avl-tree output/avl-tree-rust --model-size 32
-
-# 增加修复迭代次数（处理复杂项目）
-python agent/main.py datasets/avl-tree output/avl-tree-rust --max-fix-iterations 10
+```bash
+conda run --no-capture-output -n tcode python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/
 ```
 
 ## 命令行参数
 
-### 必需参数
+当前主入口支持以下参数：
 
 | 参数 | 说明 |
 |------|------|
-| `c_project_path` | C 项目路径 |
-| `output_dir` | 输出目录（文档和 Rust 项目保存位置） |
+| `--c_project_path` | C 项目路径 |
+| `--output_dir` | 输出目录 |
+| `--rust-project-name` | 生成的 Rust 项目名称，默认 `rust_implementation` |
+| `--config-file` | 配置文件路径，默认读取仓库根目录的 `local_config.json` |
+| `--skip-c-analysis` | 跳过 C 项目分析步骤 |
+| `--use-spec-agent` | 使用 `SpecAgent` 作为分析路径 |
+| `--use-spec-json-agent` | 在 `SpecAgent` 后增加 JSON 压缩中间层 |
+| `--skip-code-fix` | 跳过编译修复步骤 |
+| `--skip-test-fix` | 跳过测试修复步骤 |
+| `--max-fix-iterations` | 编译修复和测试修复的最大迭代次数，默认 `5` |
 
-### 可选参数
+## 常见启动方式
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--rust-project-name` | `rust_implementation` | Rust 项目名称 |
-| `--model-size` | `14` | 模型大小（7/14/32/72） |
-| `--max-fix-iterations` | `5` | 最大修复迭代次数 |
-| `--skip-c-analysis` | `False` | 跳过 C 项目分析步骤 |
-| `--skip-code-fix` | `False` | 跳过代码修复步骤 |
-| `--skip-test-fix` | `False` | 跳过测试修复步骤 |
-
-## 使用场景
-
-### 场景 1：完整转换（默认）
+### 1. 默认路径
 
 ```bash
-python agent/main.py datasets/avl-tree output/avl-tree-rust
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/
 ```
 
-执行所有步骤：
-1. ✓ 分析 C 项目
-2. ✓ 生成 Rust 代码
-3. ✓ 编译修复
-4. ✓ 测试修复
+对应流程：
 
-### 场景 2：已有 C 项目文档
+`CDocAgent -> RustAgent -> CodeFixer -> TestFixer`
 
-如果已经有 C 项目的分析文档：
+### 2. 使用 SpecAgent
 
 ```bash
-python agent/main.py datasets/avl-tree output/avl-tree-rust --skip-c-analysis
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --use-spec-agent
 ```
 
-将文档放在 `output/avl-tree-rust/c_docs/` 目录下。
+对应流程：
 
-### 场景 3：只生成代码，不修复
+`SpecAgent -> RustAgent -> CodeFixer -> TestFixer`
+
+### 3. 使用 SpecAgent + JSON 中间层
 
 ```bash
-python agent/main.py datasets/avl-tree output/avl-tree-rust --skip-code-fix --skip-test-fix
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --use-spec-agent --use-spec-json-agent
 ```
 
-适用于快速查看生成的代码，不关心编译和测试。
+对应流程：
 
-### 场景 4：处理复杂项目
+`SpecAgent -> SpecJsonAgent -> RustAgent -> CodeFixer -> TestFixer`
 
-对于复杂项目，可能需要更多迭代次数：
+### 4. 使用已有分析文档，跳过分析阶段
 
 ```bash
-python agent/main.py datasets/complex-project output/complex-rust --max-fix-iterations 15
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --skip-c-analysis
 ```
 
-### 场景 5：使用更大模型
+说明：
 
-对于重要项目，使用更大的模型提高质量：
+- 如果走默认路径，程序会读取 `output/c_docs/final_project_overview.md`
+- 如果走 `SpecAgent` 路径，程序会读取 `output/c_docs/docs/rewrite-context/` 和 `output/c_docs/.specify/memory/`
+- 如果同时开启 `--use-spec-json-agent`，程序会优先读取 `output/c_docs/spec_json/spec_context.json`
+
+### 5. 只生成代码，不做修复
 
 ```bash
-python agent/main.py datasets/avl-tree output/avl-tree-rust --model-size 72
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --skip-code-fix --skip-test-fix
 ```
 
-## 输出结构
+## 配置文件
 
+当前版本优先通过配置文件管理模型和 API 参数。
+
+默认配置文件：
+
+- `local_config.json`：本地使用，不提交到 git
+- `config.example.json`：示例模板
+
+默认会读取仓库根目录的 `local_config.json`。如果需要，也可以手动指定：
+
+```bash
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --config-file ./my_config.json
 ```
+
+## 常用配置项
+
+当前常用配置项如下：
+
+```json
+{
+  "model_name": "custom_api",
+  "api_key": "xxx",
+  "api_base_url": "https://your-api/v1",
+  "api_model": "your-model",
+  "api_max_tokens": 2048,
+  "api_min_interval_seconds": 8,
+  "api_retry_base_delay_seconds": 12,
+  "api_max_retries": 6,
+  "api_rate_limit_cooldown_seconds": 90,
+  "rag_enabled": false,
+  "rag_top_k": 4,
+  "generate_tests": false,
+  "generate_examples": false,
+  "generate_benches": false,
+  "skeleton_first": true
+}
+```
+
+各字段含义：
+
+- `model_name`：模型后端名称，例如 `custom_api`、`qwen32`、`oai`
+- `api_key`：远程 API 密钥
+- `api_base_url`：兼容 OpenAI 接口的基础地址
+- `api_model`：远程模型名
+- `api_max_tokens`：单次生成允许的最大输出 token 数
+- `api_min_interval_seconds`：两次请求之间的最小间隔，避免短时间频繁访问
+- `api_retry_base_delay_seconds`：重试基础等待时间
+- `api_max_retries`：最大重试次数
+- `api_rate_limit_cooldown_seconds`：命中限流后的冷却时间
+- `rag_enabled`：是否启用 RAG，默认关闭
+- `rag_top_k`：RAG 检索数量
+- `generate_tests`：是否生成测试
+- `generate_examples`：是否生成示例
+- `generate_benches`：是否生成 benchmark
+- `skeleton_first`：是否启用骨架优先生成
+
+## 当前 Rust 生成策略
+
+`RustAgent` 当前支持骨架优先生成：
+
+1. 先生成文件骨架
+2. 再在骨架上补全实现
+
+对于命中 `node/type/data/error` 的文件，骨架阶段会额外强调：
+
+- 优先输出结构体、类型别名、错误枚举
+- 优先把字段、类型定义和公开接口写完整
+- 优先写类型定义，再写函数签名和实现占位
+- 实现阶段尽量保留骨架里已经写出的类型信息，不回退成更空的版本
+
+## Spec JSON 中间层
+
+如果使用：
+
+```bash
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --use-spec-agent --use-spec-json-agent
+```
+
+程序会额外执行一个中间步骤：
+
+`SpecAgent -> SpecJsonAgent`
+
+该步骤会把 `SpecAgent` 产出的 markdown 文档压缩成一个机器友好的 JSON 文件：
+
+- `output/c_docs/spec_json/spec_context.json`
+
+这个 JSON 会被直接提供给 `RustAgent`，用于减少冗长自然语言文档对后续生成的干扰。
+
+## 输出目录结构
+
+典型输出结构如下：
+
+```text
 output/
-├── c_docs/                     # C 项目文档
-│   ├── doc_skeleton.md        # 文档骨架
-│   ├── iteration_1.md         # 第 1 轮迭代分析
-│   ├── iteration_2.md         # 第 2 轮迭代分析
-│   ├── iteration_3.md         # 第 3 轮迭代分析
-│   ├── final_project_overview.md  # 最终项目文档
-│   └── analysis_history.json  # 分析历史
-│
-└── rust_implementation/        # Rust 项目
-    ├── Cargo.toml             # Cargo 配置
+├── c_docs/
+│   ├── final_project_overview.md
+│   ├── docs/
+│   │   └── rewrite-context/
+│   ├── .specify/
+│   │   └── memory/
+│   └── spec_json/
+│       └── spec_context.json
+└── rust_implementation/
+    ├── Cargo.toml
     ├── src/
-    │   └── lib.rs             # 主库文件
-    ├── tests/                 # 测试文件
+    ├── tests/
     └── ...
 ```
 
-## 流程详解
+说明：
 
-### 步骤 1: C 项目分析
+- 默认路径主要依赖 `final_project_overview.md`
+- `SpecAgent` 路径主要依赖 `docs/rewrite-context/` 和 `.specify/memory/`
+- `SpecJsonAgent` 路径会额外产出 `spec_context.json`
 
-- 使用 `CDocAgent` 分析 C 项目
-- 生成多轮迭代分析文档
-- 输出到 `c_docs/` 目录
-- 包含：
-  - 项目架构分析
-  - 函数和数据结构分析
-  - 核心算法分析
-  - 源代码位置引用
+## 修复阶段
 
-### 步骤 2: Rust 代码生成
+### 编译修复
 
-- 使用 `RustAgent` 根据 C 项目文档生成 Rust 代码
-- 创建新的 Rust 项目
-- 生成符合 Rust 惯用法的代码
-- 包含单元测试
+编译修复由 `CodeFixer` 执行，默认会进行多轮尝试，直到：
 
-### 步骤 3: 编译修复
+- 编译通过
+- 或达到 `--max-fix-iterations`
 
-- 使用 `CodeFixer` 自动修复编译错误
-- 执行流程：
-  1. `cargo fmt` - 格式化代码
-  2. `cargo check` - 检查代码
-  3. `cargo build` - 编译代码
-- 多轮迭代直到编译通过或达到最大迭代次数
+### 测试修复
 
-### 步骤 4: 测试修复
+测试修复由 `TestFixer` 执行，默认会进行多轮尝试，直到：
 
-- 使用 `TestFixer` 自动修复测试失败
-- 执行流程：
-  1. `cargo test` - 运行测试
-  2. 分析失败原因
-  3. 修复代码逻辑错误
-- 多轮迭代直到所有测试通过或达到最大迭代次数
+- 测试通过
+- 或达到 `--max-fix-iterations`
 
-## 配置建议
+如果当前只关注代码生成，可以先跳过：
 
-### 模型大小选择
+```bash
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --skip-code-fix --skip-test-fix
+```
 
-| 模型大小 | 适用场景 | 速度 | 质量 |
-|---------|---------|------|------|
-| 7B | 快速原型、简单项目 | 快 | 一般 |
-| 14B | 默认推荐、中等项目 | 中等 | 好 |
-| 32B | 重要项目、复杂逻辑 | 较慢 | 很好 |
-| 72B | 关键项目、最高质量 | 慢 | 最好 |
+## 限流型 API 的建议
 
-### 迭代次数建议
+如果远程 API 不能短时间频繁访问，建议优先调整这些配置：
 
-| 项目复杂度 | 推荐迭代次数 |
-|-----------|------------|
-| 简单（<500 行） | 3-5 |
-| 中等（500-2000 行） | 5-8 |
-| 复杂（>2000 行） | 8-15 |
+- `api_max_tokens`：先控制在 `1024 ~ 2048`
+- `api_min_interval_seconds`：建议 `8 ~ 15`
+- `api_retry_base_delay_seconds`：建议 `10 ~ 20`
+- `api_rate_limit_cooldown_seconds`：建议 `60 ~ 120`
+
+当前 `custom_api` 已支持：
+
+- 请求前最小间隔控制
+- 指数退避重试
+- 命中 `429 / rate limit / too many requests / max retries exceeded` 时的额外冷却
+- 响应中断时自动降低 `max_tokens`
 
 ## 常见问题
 
-### Q: 编译修复一直失败怎么办？
+### 1. 为什么我看到 `Max retries exceeded`？
 
-A: 尝试以下方法：
-1. 增加迭代次数：`--max-fix-iterations 15`
-2. 使用更大的模型：`--model-size 32`
-3. 检查 C 项目文档是否准确
-4. 手动检查生成的代码
+通常说明：
 
-### Q: 测试修复失败但代码能编译？
+- API 在短时间内被访问过于频繁
+- 网络层或代理层不稳定
+- 单次请求输出过长，服务端或网关容易中断
 
-A: 这是正常情况。测试修复失败可能是因为：
-- 测试逻辑本身有问题
-- 测试用例过于严格
-- 实现与测试不匹配
+建议优先：
 
-可以：
-1. 查看生成的测试代码
-2. 手动调整测试用例
-3. 使用 `--skip-test-fix` 跳过测试修复
+- 降低 `api_max_tokens`
+- 增大 `api_min_interval_seconds`
+- 启用 `SpecJsonAgent`，减少冗长文档输入
+- 先关闭测试生成和其他非必要步骤
 
-### Q: 如何查看中间结果？
+### 2. 为什么生成过程中经常截断？
 
-A: 所有中间结果都保存在输出目录：
-- C 项目分析：`output/c_docs/`
-- 迭代分析：`output/c_docs/iteration_*.md`
-- 修复历史：Rust 项目目录中的日志
+常见原因：
 
-### Q: 可以只运行部分流程吗？
+- 远程接口对长响应不稳定
+- 上下文过长
+- 单文件生成任务过大
 
-A: 可以，使用跳过参数：
-```bash
-# 跳过 C 分析
-python agent/main.py ... --skip-c-analysis
+当前框架已经通过骨架优先策略减少了这类问题，但如果远程服务较脆，仍建议减少单次输出长度。
 
-# 跳过编译修复
-python agent/main.py ... --skip-code-fix
+### 3. 如何查看中间产物？
 
-# 跳过测试修复
-python agent/main.py ... --skip-test-fix
-```
+主要看：
 
-## 性能优化
+- `output/c_docs/`
+- `output/c_docs/docs/rewrite-context/`
+- `output/c_docs/.specify/memory/`
+- `output/c_docs/spec_json/spec_context.json`
+- `output/rust_implementation/`
 
-### 加速建议
+## 说明
 
-1. **使用较小的模型**：`--model-size 7`
-2. **减少迭代次数**：`--max-fix-iterations 3`
-3. **跳过不必要的步骤**：`--skip-test-fix`
-
-### 提高质量建议
-
-1. **使用更大的模型**：`--model-size 32` 或 `72`
-2. **增加迭代次数**：`--max-fix-iterations 10`
-3. **保留所有修复步骤**（默认）
-
-## 示例命令
-
-### 示例 1：快速转换小项目
-
-```bash
-python agent/main.py datasets/small-project output/small-rust \
-  --model-size 7 \
-  --max-fix-iterations 3
-```
-
-### 示例 2：完整转换中等项目
-
-```bash
-python agent/main.py datasets/medium-project output/medium-rust \
-  --rust-project-name medium_rs \
-  --model-size 14 \
-  --max-fix-iterations 5
-```
-
-### 示例 3：高质量转换大项目
-
-```bash
-python agent/main.py datasets/large-project output/large-rust \
-  --rust-project-name large_rs \
-  --model-size 32 \
-  --max-fix-iterations 15
-```
-
-### 示例 4：仅生成代码（不修复）
-
-```bash
-python agent/main.py datasets/project output/project-rust \
-  --skip-code-fix \
-  --skip-test-fix
-```
-
-## 依赖要求
-
-- Python 3.8+
-- Rust toolchain (cargo, rustc)
-- Qwen Local API 服务
-- 必要的 Python 依赖包
-
-## 注意事项
-
-1. **备份原项目**：转换过程不会修改原 C 项目
-2. **检查生成结果**：自动生成的代码可能需要人工审查
-3. **测试覆盖率**：生成的测试可能不完整，建议补充
-4. **性能考虑**：大项目和大模型会消耗较多时间
-
-## 技术支持
-
-如有问题，请检查：
-1. 输出目录中的日志文件
-2. C 项目分析文档是否准确
-3. Rust 编译错误信息
-4. 测试失败详情
+这份文档以当前仓库代码为准，已经去掉了旧版位置参数和 `--model-size` 等过时说明。

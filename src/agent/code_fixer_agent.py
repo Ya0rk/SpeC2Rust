@@ -75,12 +75,8 @@ class Fixer:
             是否成功修复
         """
         # 读取文件内容
-        # TODO: 使用函数级代码读取
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                file_content = f.read()
-        except Exception as e:
-            print(f"读取文件失败：{e}")
+        file_content = self._read_file_content(file_path)
+        if file_content is None:
             return False
         
         prompt = self._generate_fix_prompt(error_type, error_message, file_content)
@@ -95,10 +91,32 @@ class Fixer:
         
         fixed_code = self._extract_code(fixed_code)
         
-        # TODO: 使用函数级代码写入
+        return self._write_file_content(file_path, fixed_code)
+
+    def _read_file_content(self, file_path: str) -> Optional[str]:
+        """
+        统一读取文件内容。
+
+        这里先保留文件级读取接口，后续如果要升级到函数级、符号级或 AST 级读取，
+        只需要在这一层替换，不必改动上层修复流程。
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            print(f"读取文件失败：{e}")
+            return None
+
+    def _write_file_content(self, file_path: str, content: str) -> bool:
+        """
+        统一写入文件内容。
+
+        这里先保留文件级写入接口，后续如果要升级到函数级回写、最小补丁回写，
+        也可以集中在这一层演进。
+        """
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(fixed_code)
+                f.write(content)
             return True
         except Exception as e:
             print(f"写入文件失败：{e}")
@@ -205,6 +223,130 @@ class CodeFixer(Fixer):
                 file_path = os.path.join(self.project_path, file_path)
             return file_path
         return None
+
+    def _parse_error_to_files(self, error_message: str) -> List[str]:
+        """
+        从报错信息中收集候选文件列表。
+
+        相比只解析单个文件，这里会把报错中出现的多个文件都保留下来，
+        供后续 LLM 在候选文件之间做判断。
+        """
+        candidates: List[str] = []
+
+        for match in re.finditer(r'--> ([^:\n]+):(\d+):(\d+)', error_message):
+            file_path = match.group(1).strip()
+            if not os.path.isabs(file_path):
+                file_path = os.path.join(self.project_path, file_path)
+            if os.path.exists(file_path) and file_path not in candidates:
+                candidates.append(file_path)
+
+        # 某些 Cargo.toml 报错不会带 --> 行号，这里额外兜底。
+        if "Cargo.toml" in error_message:
+            cargo_toml = os.path.join(self.project_path, "Cargo.toml")
+            if os.path.exists(cargo_toml) and cargo_toml not in candidates:
+                candidates.append(cargo_toml)
+
+        return candidates
+
+    def _extract_target_file(self, response_text: str) -> Optional[str]:
+        """
+        从 LLM 返回中提取目标文件路径。
+        """
+        match = re.search(r'<target_file>\s*(.*?)\s*</target_file>', response_text, re.DOTALL)
+        if not match:
+            return None
+        return match.group(1).strip()
+
+    def _extract_fixed_content(self, response_text: str) -> str:
+        """
+        从 LLM 返回中提取修复后的代码或配置内容。
+        """
+        if '```rust' in response_text:
+            return response_text.split('```rust', 1)[1].split('```', 1)[0].strip()
+        if '```toml' in response_text:
+            return response_text.split('```toml', 1)[1].split('```', 1)[0].strip()
+        if '```' in response_text:
+            return response_text.split('```', 1)[1].split('```', 1)[0].strip()
+        return response_text.strip()
+
+    def _fix_from_candidates(self, error_type: str, error_message: str, candidate_files: List[str]) -> bool:
+        """
+        基于报错中的候选文件集合，让 LLM 决定优先修改哪个文件。
+
+        这里仍然保持最小改动：一次只回写一个文件。
+        但相比旧逻辑，LLM 至少可以在多个候选文件之间做判断，而不是完全依赖本地单文件解析。
+        """
+        existing_candidates = [path for path in candidate_files if os.path.exists(path)]
+        if not existing_candidates:
+            return False
+
+        candidate_blocks = []
+        for path in existing_candidates[:5]:
+            content = self._read_file_content(path)
+            if content is None:
+                continue
+            rel_path = os.path.relpath(path, self.project_path).replace("\\", "/")
+            candidate_blocks.append(
+                f"=== 候选文件：{rel_path} ===\n{content}\n"
+            )
+
+        if not candidate_blocks:
+            return False
+
+        prompt = f"""下面是一次 Rust 项目修复任务。
+
+错误类型：
+{error_type}
+
+编译器/格式化器报错：
+{error_message}
+
+候选文件内容：
+{chr(10).join(candidate_blocks)}
+
+请你完成两件事：
+1. 判断最应该优先修改哪个文件
+2. 直接输出该文件修复后的完整内容
+
+输出格式必须严格如下：
+<target_file>相对路径</target_file>
+```language
+完整修复后的文件内容
+```
+
+要求：
+1. 只能选择上面给出的候选文件之一
+2. 不要输出解释
+3. 如果是 Rust 文件请输出 rust 代码块
+4. 如果是 Cargo.toml 请输出 toml 代码块
+"""
+
+        messages = [
+            {'role': 'system', 'content': self._get_system_prompt()},
+            {'role': 'user', 'content': prompt}
+        ]
+
+        response = self.llm.generate(messages)
+        response_text = response[0]
+        target_file = self._extract_target_file(response_text)
+        fixed_content = self._extract_fixed_content(response_text)
+
+        if not fixed_content:
+            return False
+
+        resolved_target: Optional[str] = None
+        if target_file:
+            normalized_target = target_file.replace("\\", "/").strip()
+            for candidate in existing_candidates:
+                rel_candidate = os.path.relpath(candidate, self.project_path).replace("\\", "/")
+                if normalized_target == rel_candidate or normalized_target == candidate.replace("\\", "/"):
+                    resolved_target = candidate
+                    break
+
+        if resolved_target is None:
+            resolved_target = existing_candidates[0]
+
+        return self._write_file_content(resolved_target, fixed_content)
     
     def fix(self) -> bool:
         """
@@ -230,11 +372,13 @@ class CodeFixer(Fixer):
                 break
             else :
                 print(f"格式化失败：{format_output}")
-                file_path = self._parse_error_to_file(format_output)
-                # print(f"解析到的文件路径：{file_path}")
-                # pause = input("按任意键继续...")
-                if file_path and os.path.exists(file_path):
-                    if self._fix_file(file_path, "format", format_output):
+                candidate_files = self._parse_error_to_files(format_output)
+                if not candidate_files:
+                    file_path = self._parse_error_to_file(format_output)
+                    if file_path and os.path.exists(file_path):
+                        candidate_files = [file_path]
+                if candidate_files:
+                    if self._fix_from_candidates("format", format_output, candidate_files):
                         continue  # 修复后继续下一轮
                 else:
                     print("无法定位需要格式化修复的文件")
@@ -264,13 +408,15 @@ class CodeFixer(Fixer):
                 break
             else:
                 print(f"代码检查失败：{check_output}")
-                # TODO: 修复逻辑有问题，不应该自己解析文件路径，而是将编译器报错信息传递给llm
-                # TODO: llm思考后决定需要读取和修改哪些文件
-                file_path = self._parse_error_to_file(check_output)
-                print(f"解析到的文件路径：{file_path}")
+                candidate_files = self._parse_error_to_files(check_output)
+                if not candidate_files:
+                    file_path = self._parse_error_to_file(check_output)
+                    if file_path and os.path.exists(file_path):
+                        candidate_files = [file_path]
+                print(f"解析到的候选文件路径：{candidate_files}")
                 pause = input("按任意键继续...")
-                if file_path and os.path.exists(file_path):
-                    if self._fix_file(file_path, "check", check_output):
+                if candidate_files:
+                    if self._fix_from_candidates("check", check_output, candidate_files):
                         continue  # 修复后继续下一轮
                 else:
                     print("无法定位需要check修复的文件")
@@ -296,9 +442,13 @@ class CodeFixer(Fixer):
                 return True
             else:
                 print(f"编译失败：{build_output}")
-                file_path = self._parse_error_to_file(build_output)
-                if file_path and os.path.exists(file_path):
-                    if self._fix_file(file_path, "build", build_output):
+                candidate_files = self._parse_error_to_files(build_output)
+                if not candidate_files:
+                    file_path = self._parse_error_to_file(build_output)
+                    if file_path and os.path.exists(file_path):
+                        candidate_files = [file_path]
+                if candidate_files:
+                    if self._fix_from_candidates("build", build_output, candidate_files):
                         continue  # 修复后继续下一轮
                 else:
                     print("无法定位需要build修复的文件")

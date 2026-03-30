@@ -1,28 +1,49 @@
 import sys
 from pathlib import Path
-from .qianwen.qianwen_gen import QwenLocalGen
+
+from .custom_api import CustomApiGen
 from .openai.oai import OpenAiGen
+from .qianwen.qianwen_gen import QwenLocalGen
 
 sys.path.append(str(Path(__file__).parent.parent))
 from config.config import Config
+
 
 class Model:
     def __init__(self, config: Config):
         self.config = config
         self.model_name = config.model_name
-        self.llm = self._get_model(config.model_name, config.api_key)    
+        self.llm = self._get_model(config)
 
     def generate(self, prompt: str):
         return self.llm.get_response(prompt)
-        
-    def _get_model(self, model_name: str, api_key: str):
+
+    def _get_model(self, config: Config):
+        model_name = config.model_name
+        api_key = config.api_key
+
         if model_name == "qwen7":
             return QwenLocalGen(api_key=api_key, model="Qwen2.5-Coder-7B-Instruct")
-        elif model_name == "qianwen14":
-            return QwenLocalGen(api_key=api_key, model = "Qwen2.5-Coder-14B-Instruct")
-        elif model_name == "qwen32":
-            return QwenLocalGen(api_key=api_key, model = "Qwen2.5-Coder-32B-Instruct")
-        elif model_name == "oai":
-            return OpenAiGen(api_key=api_key, model="gpt-3.5-turbo")
-        else:
-            raise ValueError(f"Unknown model name: {model_name}")
+        if model_name in ("qwen14", "qianwen14"):
+            return QwenLocalGen(api_key=api_key, model="Qwen2.5-Coder-14B-Instruct")
+        if model_name == "qwen32":
+            return QwenLocalGen(api_key=api_key, model="Qwen2.5-Coder-32B-Instruct")
+        if model_name == "oai":
+            return OpenAiGen(
+                api_key=api_key,
+                model=config.api_model or "gpt-3.5-turbo",
+                api_base_url=config.api_base_url or "https://api.openai.com/v1",
+                max_tokens=config.api_max_tokens,
+            )
+        if model_name == "custom_api":
+            return CustomApiGen(
+                api_key=api_key,
+                model=config.api_model or "gpt-4o-mini",
+                api_base_url=config.api_base_url,
+                max_tokens=config.api_max_tokens,
+                min_interval_seconds=config.api_min_interval_seconds,
+                retry_base_delay_seconds=config.api_retry_base_delay_seconds,
+                max_retries=config.api_max_retries,
+                rate_limit_cooldown_seconds=config.api_rate_limit_cooldown_seconds,
+            )
+        raise ValueError(f"Unknown model name: {model_name}")

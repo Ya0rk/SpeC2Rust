@@ -22,7 +22,8 @@ class RustAgent:
         Args:
             config: 配置对象
         """
-        self.llm = Model(config)
+        self.config = config or Config()
+        self.llm = Model(self.config)
         
         # 存储项目信息
         self.project_name: str = ""
@@ -227,6 +228,192 @@ class RustAgent:
             code = code_result
         
         return code
+
+    def _generate_skeleton(self, file_path: str, context: str, implementation_plan: str) -> str:
+        """
+        先生成文件骨架，尽量只保留模块结构、类型定义和函数签名。
+        
+        Args:
+            file_path: 文件路径
+            context: 上下文信息
+            implementation_plan: 实现计划
+            
+        Returns:
+            生成的骨架代码
+        """
+        extra_requirements = self._get_skeleton_extra_requirements(file_path)
+        prompt = f"""请先为下面的 Rust 文件生成“代码骨架”，用于后续逐步补全实现。
+
+要求：
+1. 只输出最终代码，不要输出解释
+2. 保留模块结构、use、struct、enum、trait、type alias、函数签名
+3. 函数体可以先使用 todo!()、unimplemented!() 或最小占位实现
+4. 尽量优先把结构体、类型定义、公开接口写完整
+5. 不要省略必要的 mod/pub/use 声明
+6. 输出必须是完整的单文件 Rust 代码
+7. 对数据结构类文件，优先输出 struct/enum/type 等类型定义，再输出函数签名和实现占位
+
+附加要求：
+{extra_requirements}
+
+文件路径：
+{file_path}
+
+项目上下文：
+{context}
+
+实现计划：
+{implementation_plan}
+"""
+
+        messages = [
+            {'role': 'system', 'content': '你是一个擅长生成 Rust 工程骨架的代码助手。请只输出代码，不要输出解释。'},
+            {'role': 'user', 'content': prompt}
+        ]
+
+        response = self.llm.generate(messages)
+        skeleton_result = response[0]
+
+        if '```rust' in skeleton_result:
+            parts = skeleton_result.split('```rust')
+            skeleton = parts[1].split('```')[0].strip()
+        elif '```' in skeleton_result:
+            parts = skeleton_result.split('```')
+            skeleton = parts[1].strip()
+        else:
+            skeleton = skeleton_result
+
+        return skeleton
+
+    def _get_skeleton_extra_requirements(self, file_path: str) -> str:
+        """
+        根据文件路径生成骨架阶段的附加要求。
+        对 node/type/data/error 等文件额外强调类型定义要尽量完整。
+        """
+        normalized = file_path.replace("\\", "/").lower()
+        file_name = os.path.basename(normalized)
+        hints = ["- 优先保证代码骨架完整、稳定、可继续补全。"]
+
+        # 这几类文件通常承载核心数据结构和公共类型，骨架阶段尽量不要只留下空壳。
+        if any(token in normalized for token in ["node", "type", "data", "error"]):
+            hints.extend([
+                "- 该文件优先补全结构体、类型别名、错误枚举和公开字段，不要只给空壳。",
+                "- 生成顺序上，优先写类型定义，再写关联方法、辅助函数和实现占位。",
+                "- 如果包含 struct，请尽量把字段写全；字段名、字段类型和可见性尽量一次写完整。",
+                "- 如果包含 type alias，请尽量把类型别名写全，不要只保留占位名字。",
+                "- 如果包含错误类型，请尽量把错误枚举分支写全，至少先把主要错误变体列完整。",
+                "- 如果暂时无法确定具体实现，也优先把数据结构定义完整，再把函数体留作后续补全。",
+            ])
+
+        if "error" in normalized:
+            hints.extend([
+                "- 如果这是错误定义文件，优先给出统一的错误枚举、错误消息和必要的 From/Result 类型约定。",
+                "- 错误类型骨架应尽量覆盖参数错误、状态错误、边界错误等主要失败场景。",
+            ])
+
+        if any(token in normalized for token in ["node", "data"]):
+            hints.extend([
+                "- 如果这是节点或数据文件，优先写清核心字段、所有权关系以及必要的构造接口。",
+                "- 对树节点、链表节点或容器数据结构，先保证字段定义完整，再补辅助方法。",
+            ])
+
+        if "type" in normalized:
+            hints.extend([
+                "- 如果这是类型定义文件，优先给出公共类型别名、关键枚举和对外暴露的数据模型。",
+                "- 类型定义尽量与后续模块共享，避免只生成临时占位类型。",
+            ])
+
+        return "\n".join(hints)
+
+    def _implement_from_skeleton(self, file_path: str, skeleton_code: str, context: str, implementation_plan: str) -> str:
+        """
+        基于已有骨架继续补全具体实现。
+        
+        Args:
+            file_path: 文件路径
+            skeleton_code: 骨架代码
+            context: 上下文信息
+            implementation_plan: 实现计划
+            
+        Returns:
+            补全后的代码
+        """
+        prompt = f"""下面已经有一个 Rust 文件骨架，请在保持整体结构稳定的前提下，继续补全其中的实现内容。
+
+要求：
+1. 只输出最终完整代码，不要输出解释
+2. 尽量保留已有结构体、类型定义、函数签名和模块结构
+3. 在此基础上逐步补全函数实现
+4. 如果某些内容暂时无法确定，可以保留少量占位实现，但应优先补全核心逻辑
+5. 输出必须是完整的单文件 Rust 代码
+6. 不要把骨架里已经写出的 struct 字段、type alias、enum 分支和公开接口回退成更空的版本
+7. 如果骨架里已经有较完整的数据结构定义，补全实现时应尽量保持这些定义不变
+8. 优先在现有骨架上增补实现，不要为了改写实现而删除已有类型信息
+
+文件路径：
+{file_path}
+
+当前骨架代码：
+{skeleton_code}
+
+项目上下文：
+{context}
+
+实现计划：
+{implementation_plan}
+"""
+
+        messages = [
+            {'role': 'system', 'content': '你是一个擅长在既有 Rust 骨架上逐步补全实现的代码助手。请只输出代码，不要输出解释。'},
+            {'role': 'user', 'content': prompt}
+        ]
+
+        response = self.llm.generate(messages)
+        code_result = response[0]
+
+        if '```rust' in code_result:
+            parts = code_result.split('```rust')
+            code = parts[1].split('```')[0].strip()
+        elif '```' in code_result:
+            parts = code_result.split('```')
+            code = parts[1].strip()
+        else:
+            code = code_result
+
+        return code
+
+    def _sort_files_for_generation(self, file_paths: List[str]) -> List[str]:
+        """
+        对文件生成顺序做轻量排序：
+        优先生成类型、结构体、节点和错误定义，再生成其他实现文件。
+        
+        Args:
+            file_paths: 文件路径列表
+            
+        Returns:
+            排序后的文件路径列表
+        """
+        def sort_key(file_path: str):
+            normalized = file_path.replace("\\", "/").lower()
+            file_name = os.path.basename(normalized)
+
+            if file_name == "Cargo.toml":
+                return (0, file_name)
+            if file_name in {".gitignore", "README.md"}:
+                return (1, file_name)
+            # 优先生成核心数据结构和公共类型定义文件。
+            if any(token in normalized for token in ["node", "type", "data", "error"]):
+                return (2, normalized)
+            if any(token in normalized for token in ["model", "struct"]):
+                return (3, normalized)
+            if file_name.endswith("mod.rs"):
+                return (4, normalized)
+            # lib.rs 往往依赖前面的模块、类型和导出关系，尽量靠后生成。
+            if file_name == "lib.rs":
+                return (6, normalized)
+            return (5, normalized)
+
+        return sorted(file_paths, key=sort_key)
     
     def _write_file(self, file_path: str, content: str):
         """
@@ -354,6 +541,8 @@ class RustAgent:
         new_files_to_generate = new_files_to_generate[1:-1].split(', ')
         # 去掉每个元素多余的''
         new_files_to_generate = [file[1:-1] for file in new_files_to_generate]
+        # 对生成顺序做轻量调整：优先结构体、类型和错误定义
+        new_files_to_generate = self._sort_files_for_generation(new_files_to_generate)
         print(f"new_files_to_generate: {new_files_to_generate}")
 
         # pause = input("按任意键继续...")
@@ -370,7 +559,13 @@ class RustAgent:
             
             # 生成代码
             file_context = context
-            code = self._generate_code(file_path, file_context, implementation_plan)
+            if getattr(self.config, "skeleton_first", False):
+                print(f"先生成骨架：{file_path}")
+                skeleton_code = self._generate_skeleton(file_path, file_context, implementation_plan)
+                print(f"再基于骨架补全实现：{file_path}")
+                code = self._implement_from_skeleton(file_path, skeleton_code, file_context, implementation_plan)
+            else:
+                code = self._generate_code(file_path, file_context, implementation_plan)
             
             # 检测依赖，更新 Cargo.toml
             deps = self._detect_dependencies(code)

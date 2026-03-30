@@ -1,0 +1,18 @@
+{
+  "model_name": "custom_api",
+  "api_key": "sk-9487a926de2c4238b06aeb052cbdee83",
+  "api_base_url": "http://127.0.0.1:8000/v1",
+  "api_model": "your-model-name",
+  "api_max_tokens": 896,
+  "api_min_interval_seconds": 5,
+  "api_retry_base_delay_seconds": 8,
+  "api_max_retries": 6,
+  "api_rate_limit_cooldown_seconds": 60,
+  "rag_enabled": false,
+  "rag_top_k": 4,
+  "generate_tests": false,
+  "generate_examples": false,
+  "generate_benches": false,
+  "skeleton_first": true,
+  "提示": "本文件需要改为local_config.json使用，并需要删了本行"
+}

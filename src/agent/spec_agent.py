@@ -22,13 +22,14 @@ class SpecAgent:
     """C 项目 Spec 文档生成 Agent - 使用分层聚类 + 语义细分方法"""
     # 以下常量主要用于控制 prompt 尺寸，避免本地模型在单次生成时吃到过长上下文。
     # 这些值不是业务语义的一部分，而是服务于“文档可生成、可汇总、可继续喂给下游模型”。
-    MAX_CONTEXT_CHARS = 12000
-    MAX_BATCH_CHARS = 9000
-    MAX_MODULE_ANALYSIS_CHARS = 1600
-    MAX_CONSTITUTION_DOC_CHARS = 2000
-    MAX_INTERFACE_HEADERS = 12
-    MAX_INTERFACE_FUNCTIONS = 20
-    MAX_INTERFACE_STRUCTS = 20
+    TEMP = 9999999
+    MAX_CONTEXT_CHARS = TEMP # 12000
+    MAX_BATCH_CHARS = TEMP # 9000
+    MAX_MODULE_ANALYSIS_CHARS =  TEMP # 1600
+    MAX_CONSTITUTION_DOC_CHARS = TEMP # 2000
+    MAX_INTERFACE_HEADERS = TEMP # 12
+    MAX_INTERFACE_FUNCTIONS = TEMP # 20
+    MAX_INTERFACE_STRUCTS = TEMP # 20
     
     def __init__(self, config: Config = None):
         """
@@ -58,6 +59,8 @@ class SpecAgent:
 
     def _truncate_text(self, text: str, max_chars: int) -> str:
         # 简单的字符级裁剪器。这里不用 tokenizer，是为了保持依赖轻量且实现简单。
+        # 可优化点：如果后续要更精细地控制上下文预算，可以改成 token 级裁剪，
+        # 并按标题、列表、代码块边界截断，减少把语义片段从中间截开的情况。
         if not text or len(text) <= max_chars:
             return text or ""
         return text[:max_chars].rstrip() + "\n...[truncated]"
@@ -333,6 +336,9 @@ class SpecAgent:
         all_files = project_info.get("c_files", []) + project_info.get("h_files", []) + project_info.get("other_files", [])
         directory_summary = self._build_directory_summary(all_files)
         header_summary = self._build_directory_summary(project_info.get("h_files", []))
+        # 可优化点：这里目前更偏“人类可读的仓库清单”。
+        # 如果后续要增强给 Rust 生成端的消费能力，可以把入口文件、公共头文件、
+        # 关键模块边界和构建目标额外沉淀为结构化字段，而不只是一份 markdown 概览。
 
         lines = [
             f"# {project_name} 仓库清单",
@@ -983,6 +989,8 @@ class SpecAgent:
         rewrite_context_dir.mkdir(parents=True, exist_ok=True)
         
         # module_analyses 是后续行为文档 / 风险文档的上游输入，因此这里不仅要写文件，还要保留内存态结果。
+        # 可优化点：这里可以补模块质量指标，例如模块内调用密度、跨模块耦合度、
+        # 以及文档长度与后续生成成功率的关联，方便做实验分析和自动调参。
         module_analyses = []
         
         for module in module_units:
@@ -1045,6 +1053,8 @@ class SpecAgent:
 
         # 当前实现是“按模块生成接口文档”，不是“按文件逐个生成”。
         # 这样更贴近后续 Rust 模块迁移的消费方式，也更有利于控制 prompt 大小。
+        # 可优化点：后续可以同时产出一份机器可读的接口清单，
+        # 例如把函数签名、输入输出、错误返回、所属头文件单独整理成 JSON。
         for index, module in enumerate(self.module_units, start=2):
             header_records = self._collect_module_header_records(module, project_analysis)
             headers = [item["path"] for item in header_records]
@@ -1114,6 +1124,9 @@ class SpecAgent:
         rewrite_context_dir.mkdir(parents=True, exist_ok=True)
         project_name = Path(project_path).name
         behavior_blocks = self._build_behavior_blocks(module_analyses)
+        # 可优化点：行为归纳现在仍然偏摘要式。
+        # 如果后续要增强修复器或测试生成器，可以把 precondition / postcondition /
+        # invariant / error_case 明确拆成稳定字段，而不是主要保留在自然语言段落里。
         behavior_chunks = self._chunk_blocks(behavior_blocks, self.MAX_BATCH_CHARS)
 
         if not behavior_chunks:
@@ -1218,6 +1231,8 @@ class SpecAgent:
         project_context = self._build_constitution_context(project_info, interfaces_doc, behaviors_doc)
         
         # constitution 更像“迁移工程治理规则”，不应该重新阅读原始源码，而应该消费精炼后的上游文档。
+        # 可优化点：这里后续可以区分“强约束”和“软建议”两层，
+        # 让后续 Rust 生成与修复阶段更清楚哪些规则必须满足，哪些只是优先遵守。
         prompt = prompt_manager.get('spec_agent', 'generate_constitution',
                                    project_name=project_name,
                                    project_context=project_context,
@@ -1267,6 +1282,8 @@ class SpecAgent:
         
         # 这里把模块元数据重新压缩成 prompt 可用的文本块，
         # 目的是为 spec-kit 的 spec.md 提供足够明确但不过载的上下文。
+        # 可优化点：这里可以进一步拆成“类型事实 / 接口事实 / 行为事实 / 风险事实”四段，
+        # 减少自然语言混排，提高下游 agent 对上下文的稳定消费能力。
         functions_info = ""
         for func in module.get('functions', [])[:30]:
             if isinstance(func, dict):
@@ -1461,6 +1478,8 @@ class SpecAgent:
         # 1. 静态分析层：收集项目信息、AST、依赖图
         # 2. 认知压缩层：模块划分、子系统摘要、接口/行为/constitution
         # 3. 执行规划层：为每个模块生成 spec / plan / tasks
+        # 可优化点：如果后续要支持更大项目，可以把这三层做成可缓存流水线，
+        # 例如拆成“静态分析缓存 / 文档缓存 / spec 缓存”，避免每次实验都从头全量生成。
 
         # 确保输出目录存在
         os.makedirs(output_dir, exist_ok=True)

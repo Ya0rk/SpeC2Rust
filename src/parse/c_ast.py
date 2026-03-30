@@ -10,12 +10,15 @@ import networkx as nx
 from utils.fmtpr import prRed
 from utils.cmd import run
 
+import tree_sitter_c
+from tree_sitter import Language, Parser
+
 pre_path = Path(__file__).parent.parent
 
-Language.build_library(
-    str(pre_path / "utils/tree-sitter/build/c-language.so"),
-    [str(pre_path / "utils/tree-sitter/tree-sitter-c")]
-)
+# Language.build_library(
+#     str(pre_path / "utils/tree-sitter/build/c-language.so"),
+#     [str(pre_path / "utils/tree-sitter/tree-sitter-c")]
+# )
 
 class CCodeAnalyzer:
     """C代码分析器类，使用tree-sitter解析C代码并提取函数信息"""
@@ -25,8 +28,13 @@ class CCodeAnalyzer:
         print("初始化C代码分析器...")
                      
         self.parser = Parser()
-        c_language = Language(str(pre_path / "utils/tree-sitter/build/c-language.so"), "c")
-        self.parser.set_language(c_language)
+        try:
+            c_language = Language(tree_sitter_c.language(), "c")
+        except TypeError:
+            # 如果你的 tree-sitter 版本非常新，可能只需要一个参数
+            c_language = Language(tree_sitter_c.language())
+
+        self.parser.language = c_language
 
         
         # 存储分析结果

@@ -3,3 +3,6 @@ doc/prework/
 __pycache__/
 ./src/utils/spec-kit/
 output/
+local_config.json
+local_config.*.json
+think.md
