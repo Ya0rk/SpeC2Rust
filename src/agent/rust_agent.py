@@ -532,19 +532,34 @@ class RustAgent:
         print(f"implementation_plan: {implementation_plan}")
         # pause = input("按任意键继续...")
 
-        # 4. 生成新的文件列表顺序，根据依赖关系确定的文件生成顺序
-        parts = implementation_plan.split('<new_files_to_generate>')
-        new_files_to_generate = parts[1].split('</new_files_to_generate>')[0].strip()
-        print(f"new_files_to_generate: {new_files_to_generate}")
-        # ['Cargo.toml', 'src/avl_data.rs', 'src/avl_bf.rs', 'src/lib.rs', 'src/example.rs', 'src/tests/avl_test.rs', 'README.md']
-        # 字符串转化为列表，去掉开头结尾的[]
-        new_files_to_generate = new_files_to_generate[1:-1].split(', ')
-        # 去掉每个元素多余的''
-        new_files_to_generate = [file[1:-1] for file in new_files_to_generate]
+        # 4. 提取新的文件列表顺序 (增加容错逻辑)
+        if '<new_files_to_generate>' in implementation_plan and '</new_files_to_generate>' in implementation_plan:
+            try:
+                parts = implementation_plan.split('<new_files_to_generate>')
+                tag_content = parts[1].split('</new_files_to_generate>')[0].strip()
+                
+                # 尝试更鲁棒的解析方式
+                # 如果模型输出的是 ['a', 'b'] 这种格式
+                import re
+                # 使用正则提取引号内的文件名
+                found_files = re.findall(r"['\"](.*?)['\"]", tag_content)
+                if found_files:
+                    new_files_to_generate = found_files
+                else:
+                    # 如果正则没抓到，尝试原来的暴力分割法
+                    new_files_to_generate = tag_content.strip('[]').replace("'", "").replace('"', "").split(', ')
+                
+                print(f"成功从计划中提取新顺序: {new_files_to_generate}")
+            except Exception as e:
+                print(f"解析新文件列表失败，使用原始顺序。错误: {e}")
+                new_files_to_generate = files_to_generate
+        else:
+            print("模型未提供 <new_files_to_generate> 标签，使用原始文件顺序。")
+            new_files_to_generate = files_to_generate
+
         # 对生成顺序做轻量调整：优先结构体、类型和错误定义
         new_files_to_generate = self._sort_files_for_generation(new_files_to_generate)
-        print(f"new_files_to_generate: {new_files_to_generate}")
-
+        print(f"最终生成顺序: {new_files_to_generate}")
         # pause = input("按任意键继续...")
         
         # 4. 逐个生成文件
