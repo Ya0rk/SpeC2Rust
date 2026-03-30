@@ -62,7 +62,7 @@ class Fixer:
             code = code.split('```')[1].split('```')[0].strip()
         return code
     
-    def _fix_file(self, file_path: str, error_type: str, error_message: str) -> bool:
+    def _fix_file(self, file_path: str, error_type: str, error_message: str, prefer_local: bool = True) -> bool:
         """
         修复单个文件
         
@@ -74,10 +74,21 @@ class Fixer:
         Returns:
             是否成功修复
         """
-        # 对 Rust 文件优先尝试函数级修复；如果无法定位函数，再回退到整文件修复。
-        if file_path.endswith(".rs"):
+        # 对 Rust 文件优先尝试局部修复；如果无法定位局部问题，再回退到整文件修复。
+        if prefer_local and file_path.endswith(".rs"):
             if self._fix_rust_function(file_path, error_type, error_message):
                 return True
+
+        return self._fix_entire_file(file_path, error_type, error_message)
+
+    def _fix_entire_file(self, file_path: str, error_type: str, error_message: str) -> bool:
+        """
+        整文件修复。
+
+        用于：
+        1. 局部修复失败后的兜底
+        2. 后几轮主动切换到全局修复
+        """
 
         file_content = self._read_file_content(file_path)
         if file_content is None:
@@ -125,6 +136,29 @@ class Fixer:
         except Exception as e:
             print(f"写入文件失败：{e}")
             return False
+
+    def _strip_ansi(self, text: str) -> str:
+        """
+        移除命令行输出中的 ANSI 转义序列，便于后续做稳定解析。
+        """
+        return re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', text or '')
+
+    def _extract_local_context_by_line(self, file_content: str, line_number: int, radius: int = 10) -> str:
+        """
+        按行号抽取局部上下文。
+        """
+        lines = file_content.splitlines()
+        if not lines:
+            return ""
+
+        center = max(0, min(line_number - 1, len(lines) - 1))
+        start = max(0, center - radius)
+        end = min(len(lines), center + radius + 1)
+
+        numbered_lines = []
+        for index in range(start, end):
+            numbered_lines.append(f"{index + 1}: {lines[index]}")
+        return "\n".join(numbered_lines)
 
     def _parse_error_location(self, error_message: str) -> Tuple[Optional[str], Optional[int], Optional[int]]:
         """
@@ -551,6 +585,81 @@ class CodeFixer(Fixer):
 
         return candidates
 
+    def _normalize_error_message(self, error_message: str) -> str:
+        """
+        统一化错误输出，减少格式噪声对后续解析的影响。
+        """
+        cleaned = self._strip_ansi(error_message).replace('\r\n', '\n').replace('\r', '\n')
+        lines = [line.rstrip() for line in cleaned.splitlines()]
+        normalized_lines = []
+        previous_blank = False
+        for line in lines:
+            is_blank = not line.strip()
+            if is_blank and previous_blank:
+                continue
+            normalized_lines.append(line)
+            previous_blank = is_blank
+        return "\n".join(normalized_lines).strip()
+
+    def _group_errors_by_file(self, error_message: str) -> List[Dict]:
+        """
+        将错误按文件归类，并尽量保留行号信息。
+        """
+        normalized = self._normalize_error_message(error_message)
+        grouped: Dict[str, Dict] = {}
+
+        for match in re.finditer(r'--> ([^:\n]+):(\d+):(\d+)', normalized):
+            file_path = match.group(1).strip()
+            if not os.path.isabs(file_path):
+                file_path = os.path.join(self.project_path, file_path)
+
+            if file_path not in grouped:
+                grouped[file_path] = {
+                    "file_path": file_path,
+                    "locations": [],
+                    "normalized_error": normalized,
+                }
+
+            location = (int(match.group(2)), int(match.group(3)))
+            if location not in grouped[file_path]["locations"]:
+                grouped[file_path]["locations"].append(location)
+
+        if not grouped:
+            for file_path in self._parse_error_to_files(normalized):
+                grouped[file_path] = {
+                    "file_path": file_path,
+                    "locations": [],
+                    "normalized_error": normalized,
+                }
+
+        return list(grouped.values())
+
+    def _build_grouped_error_message(self, file_group: Dict) -> str:
+        """
+        给某个目标文件生成更聚焦的错误描述。
+        """
+        file_path = file_group["file_path"]
+        rel_path = os.path.relpath(file_path, self.project_path).replace("\\", "/")
+        locations = file_group.get("locations", [])
+        normalized_error = file_group.get("normalized_error", "")
+
+        if not locations:
+            return f"目标文件：{rel_path}\n\n{normalized_error}"
+
+        location_text = ", ".join(f"{line}:{col}" for line, col in locations[:8])
+        return (
+            f"目标文件：{rel_path}\n"
+            f"重点错误位置：{location_text}\n\n"
+            f"{normalized_error}"
+        )
+
+    def _should_prefer_local_fix(self, iteration: int) -> bool:
+        """
+        前几轮优先局部修复，后几轮切换到整体修复。
+        """
+        local_rounds = max(2, self.max_iterations // 2)
+        return iteration <= local_rounds
+
     def _extract_target_file(self, response_text: str) -> Optional[str]:
         """
         从 LLM 返回中提取目标文件路径。
@@ -560,7 +669,13 @@ class CodeFixer(Fixer):
             return None
         return match.group(1).strip()
 
-    def _fix_from_candidates(self, error_type: str, error_message: str, candidate_files: List[str]) -> bool:
+    def _fix_from_candidates(
+        self,
+        error_type: str,
+        error_message: str,
+        candidate_files: List[str],
+        prefer_local: bool = True,
+    ) -> bool:
         """
         基于报错中的候选文件集合，让 LLM 决定优先修改哪个文件。
 
@@ -626,7 +741,40 @@ class CodeFixer(Fixer):
         if resolved_target is None:
             resolved_target = existing_candidates[0]
 
-        return self._fix_file(resolved_target, error_type, error_message)
+        return self._fix_file(resolved_target, error_type, error_message, prefer_local=prefer_local)
+
+    def _attempt_grouped_fix(self, error_type: str, error_message: str, iteration: int) -> bool:
+        """
+        统一处理一次报错修复尝试：
+        1. 规范化错误
+        2. 按文件归类
+        3. 结合轮次选择局部修复或整体修复
+        """
+        grouped_errors = self._group_errors_by_file(error_message)
+        prefer_local = self._should_prefer_local_fix(iteration)
+
+        if not grouped_errors:
+            return False
+
+        print(f"当前修复策略：{'局部优先' if prefer_local else '整体优先'}")
+
+        # 逐个尝试目标文件，优先修复有定位信息的文件。
+        grouped_errors.sort(key=lambda item: (0 if item.get("locations") else 1, item["file_path"]))
+        for file_group in grouped_errors:
+            file_path = file_group["file_path"]
+            if not os.path.exists(file_path):
+                continue
+
+            focused_error = self._build_grouped_error_message(file_group)
+            if self._fix_from_candidates(
+                error_type=error_type,
+                error_message=focused_error,
+                candidate_files=[file_path],
+                prefer_local=prefer_local,
+            ):
+                return True
+
+        return False
     
     def fix(self) -> bool:
         """
@@ -646,20 +794,13 @@ class CodeFixer(Fixer):
             
             format_success, format_output = self._format_code()
             print(f"格式化输出：{format_output}")
-            pause = input("按任意键继续...")
             if format_success:
                 print("代码格式化通过")
                 break
-            else :
+            else:
                 print(f"格式化失败：{format_output}")
-                candidate_files = self._parse_error_to_files(format_output)
-                if not candidate_files:
-                    file_path = self._parse_error_to_file(format_output)
-                    if file_path and os.path.exists(file_path):
-                        candidate_files = [file_path]
-                if candidate_files:
-                    if self._fix_from_candidates("format", format_output, candidate_files):
-                        continue  # 修复后继续下一轮
+                if self._attempt_grouped_fix("format", format_output, iteration):
+                    continue
                 else:
                     print("无法定位需要格式化修复的文件")
                     self.fix_history.append({
@@ -670,8 +811,6 @@ class CodeFixer(Fixer):
                     })
                     continue
         
-        pause = input("格式化修复完成，按任意键继续...")
-
         if not format_success:
             print("格式化代码失败，无法进行后续修复")
             return False
@@ -682,30 +821,26 @@ class CodeFixer(Fixer):
             # 2. 检查代码
             check_success, check_output = self._check_code()
             print(f"检查输出：{check_output}")
-            pause = input("按任意键继续...")
             if check_success:
                 print("代码检查通过")
                 break
             else:
                 print(f"代码检查失败：{check_output}")
-                candidate_files = self._parse_error_to_files(check_output)
-                if not candidate_files:
-                    file_path = self._parse_error_to_file(check_output)
-                    if file_path and os.path.exists(file_path):
-                        candidate_files = [file_path]
-                print(f"解析到的候选文件路径：{candidate_files}")
-                pause = input("按任意键继续...")
-                if candidate_files:
-                    if self._fix_from_candidates("check", check_output, candidate_files):
-                        continue  # 修复后继续下一轮
+                if self._attempt_grouped_fix("check", check_output, iteration):
+                    continue
                 else:
                     print("无法定位需要check修复的文件")
+                    self.fix_history.append({
+                        'iteration': iteration,
+                        'type': 'check',
+                        'error': check_output,
+                        'success': False
+                    })
+                    continue
         
         if not check_success:
             print("检查代码失败，无法进行后续修复")
             return False
-        
-        pause = input("check修复完成，按任意键继续...")
 
 
         print("3. 编译代码...")
@@ -722,14 +857,8 @@ class CodeFixer(Fixer):
                 return True
             else:
                 print(f"编译失败：{build_output}")
-                candidate_files = self._parse_error_to_files(build_output)
-                if not candidate_files:
-                    file_path = self._parse_error_to_file(build_output)
-                    if file_path and os.path.exists(file_path):
-                        candidate_files = [file_path]
-                if candidate_files:
-                    if self._fix_from_candidates("build", build_output, candidate_files):
-                        continue  # 修复后继续下一轮
+                if self._attempt_grouped_fix("build", build_output, iteration):
+                    continue
                 else:
                     print("无法定位需要build修复的文件")
                     self.fix_history.append({

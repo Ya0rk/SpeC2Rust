@@ -31,6 +31,71 @@ class RustAgent:
         self.doc_paths: List[str] = []
         self.doc_contents: Dict[str, str] = {}
         self.generated_files: List[str] = []
+
+    def _is_cargo_toml(self, file_path: str) -> bool:
+        """判断是否为 Cargo.toml。"""
+        normalized = file_path.replace("\\", "/")
+        return os.path.basename(normalized).lower() == "cargo.toml"
+
+    def _extract_generated_content(self, content: str, code_lang: str = "rust") -> str:
+        """
+        提取模型返回的最终内容。
+        Rust 文件优先提取 ```rust 代码块，TOML 文件优先提取 ```toml 代码块。
+        """
+        if code_lang:
+            fenced = f"```{code_lang}"
+            if fenced in content:
+                parts = content.split(fenced)
+                return parts[1].split("```")[0].strip()
+
+        if "```" in content:
+            parts = content.split("```")
+            if len(parts) >= 3:
+                return parts[1].strip()
+
+        return content
+
+    def _looks_like_invalid_cargo_toml(self, content: str) -> bool:
+        """
+        对 Cargo.toml 做轻量校验。
+        如果明显混入 Rust 源码，或缺少最基本的 TOML 结构，则认为不可靠。
+        """
+        text = (content or "").strip()
+        lower = text.lower()
+
+        rust_markers = [
+            "pub mod ",
+            "pub struct ",
+            "pub enum ",
+            "pub fn ",
+            "\nfn ",
+            "\nimpl ",
+            "\ntrait ",
+            "use crate::",
+            "mod ",
+        ]
+        if any(marker in lower for marker in rust_markers):
+            return True
+
+        if "[package]" not in lower:
+            return True
+
+        if "name =" not in lower or "version =" not in lower or "edition =" not in lower:
+            return True
+
+        return False
+
+    def _build_fallback_cargo_toml(self) -> str:
+        """
+        当模型生成的 Cargo.toml 明显失真时，回退到最小可用配置。
+        """
+        return f"""[package]
+name = "{self.project_name}"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+"""
     
     def create_rust_project(self, project_name: str, output_dir: str) -> str:
         """
@@ -202,12 +267,35 @@ class RustAgent:
         Returns:
             生成的代码
         """
-        prompt = prompt_manager.get('rust_agent', 'generate_code_prompt',
-                                   file_path=file_path,
-                                   context=context,
-                                   implementation_plan=implementation_plan)
+        if self._is_cargo_toml(file_path):
+            prompt = f"""请为当前 Rust 项目生成 Cargo.toml 文件内容。
 
-        sys_prompt = prompt_manager.get('rust_agent', 'generate_code_system_prompt')
+要求：
+1. 只输出最终的 Cargo.toml 内容，不要输出解释
+2. 输出必须是合法的 TOML，而不是 Rust 代码
+3. 必须包含 [package]、[dependencies]，按需要可包含 [features]、[dev-dependencies]
+4. package.name 应与当前项目名称一致：{self.project_name}
+5. edition 默认使用 2021
+6. 不要生成 pub mod、fn、struct、impl 等 Rust 源码
+7. 如果暂时不确定某些依赖，优先保持 dependencies 简洁、可编译
+
+文件路径：
+{file_path}
+
+项目上下文：
+{context}
+
+实现计划：
+{implementation_plan}
+"""
+            sys_prompt = "你是一个擅长生成 Rust 工程配置文件的助手。请只输出合法的 Cargo.toml 内容，不要输出解释。"
+        else:
+            prompt = prompt_manager.get('rust_agent', 'generate_code_prompt',
+                                       file_path=file_path,
+                                       context=context,
+                                       implementation_plan=implementation_plan)
+
+            sys_prompt = prompt_manager.get('rust_agent', 'generate_code_system_prompt')
 
         messages = [
             {'role': 'system', 'content': sys_prompt},
@@ -218,14 +306,10 @@ class RustAgent:
         code_result = response[0]
         
         # 提取代码块
-        if '```rust' in code_result:
-            parts = code_result.split('```rust')
-            code = parts[1].split('```')[0].strip()
-        elif '```' in code_result:
-            parts = code_result.split('```')
-            code = parts[1].strip()
-        else:
-            code = code_result
+        code = self._extract_generated_content(
+            code_result,
+            code_lang="toml" if self._is_cargo_toml(file_path) else "rust"
+        )
         
         return code
 
@@ -241,6 +325,36 @@ class RustAgent:
         Returns:
             生成的骨架代码
         """
+        if self._is_cargo_toml(file_path):
+            prompt = f"""请先为下面的 Cargo.toml 生成“配置骨架”，用于后续逐步补全依赖和特性。
+
+要求：
+1. 只输出最终的 Cargo.toml 内容，不要输出解释
+2. 输出必须是合法的 TOML，而不是 Rust 代码
+3. 至少包含 [package]、[dependencies]
+4. package.name 应与当前项目名称一致：{self.project_name}
+5. edition 默认使用 2021
+6. 如果暂时不确定依赖版本，可以先保持 [dependencies] 为空表，但结构要完整
+7. 不要生成 pub mod、fn、struct、impl 等 Rust 源码
+
+文件路径：
+{file_path}
+
+项目上下文：
+{context}
+
+实现计划：
+{implementation_plan}
+"""
+            messages = [
+                {'role': 'system', 'content': '你是一个擅长生成 Cargo.toml 骨架的助手。请只输出合法的 TOML 配置，不要输出解释。'},
+                {'role': 'user', 'content': prompt}
+            ]
+
+            response = self.llm.generate(messages)
+            skeleton_result = response[0]
+            return self._extract_generated_content(skeleton_result, code_lang="toml")
+
         extra_requirements = self._get_skeleton_extra_requirements(file_path)
         prompt = f"""请先为下面的 Rust 文件生成“代码骨架”，用于后续逐步补全实现。
 
@@ -274,14 +388,7 @@ class RustAgent:
         response = self.llm.generate(messages)
         skeleton_result = response[0]
 
-        if '```rust' in skeleton_result:
-            parts = skeleton_result.split('```rust')
-            skeleton = parts[1].split('```')[0].strip()
-        elif '```' in skeleton_result:
-            parts = skeleton_result.split('```')
-            skeleton = parts[1].strip()
-        else:
-            skeleton = skeleton_result
+        skeleton = self._extract_generated_content(skeleton_result, code_lang="rust")
 
         return skeleton
 
@@ -338,6 +445,38 @@ class RustAgent:
         Returns:
             补全后的代码
         """
+        if self._is_cargo_toml(file_path):
+            prompt = f"""下面已经有一个 Cargo.toml 配置骨架，请在保持整体结构稳定的前提下，继续补全其中的依赖和配置内容。
+
+要求：
+1. 只输出最终的 Cargo.toml 内容，不要输出解释
+2. 输出必须是合法的 TOML，而不是 Rust 代码
+3. 保留已有的 [package]、[dependencies] 等配置结构
+4. 在此基础上补全缺失的依赖、features 或 dev-dependencies
+5. 不要生成 pub mod、fn、struct、impl 等 Rust 源码
+6. 如果上下文不足，优先保持配置简洁和可解析
+
+文件路径：
+{file_path}
+
+当前配置骨架：
+{skeleton_code}
+
+项目上下文：
+{context}
+
+实现计划：
+{implementation_plan}
+"""
+            messages = [
+                {'role': 'system', 'content': '你是一个擅长补全 Cargo.toml 的助手。请只输出合法的 TOML 配置，不要输出解释。'},
+                {'role': 'user', 'content': prompt}
+            ]
+
+            response = self.llm.generate(messages)
+            code_result = response[0]
+            return self._extract_generated_content(code_result, code_lang="toml")
+
         prompt = f"""下面已经有一个 Rust 文件骨架，请在保持整体结构稳定的前提下，继续补全其中的实现内容。
 
 要求：
@@ -371,14 +510,7 @@ class RustAgent:
         response = self.llm.generate(messages)
         code_result = response[0]
 
-        if '```rust' in code_result:
-            parts = code_result.split('```rust')
-            code = parts[1].split('```')[0].strip()
-        elif '```' in code_result:
-            parts = code_result.split('```')
-            code = parts[1].strip()
-        else:
-            code = code_result
+        code = self._extract_generated_content(code_result, code_lang="rust")
 
         return code
 
@@ -581,6 +713,11 @@ class RustAgent:
                 code = self._implement_from_skeleton(file_path, skeleton_code, file_context, implementation_plan)
             else:
                 code = self._generate_code(file_path, file_context, implementation_plan)
+
+            # 对 Cargo.toml 做写入前保护，避免把 Rust 源码误写成配置文件。
+            if self._is_cargo_toml(file_path) and self._looks_like_invalid_cargo_toml(code):
+                print("检测到生成的 Cargo.toml 内容异常，回退到最小可用配置")
+                code = self._build_fallback_cargo_toml()
             
             # 检测依赖，更新 Cargo.toml
             deps = self._detect_dependencies(code)
