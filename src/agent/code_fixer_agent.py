@@ -16,7 +16,7 @@ from llm.model import Model
 class Fixer:
     """代码修复父类 - 提供通用的修复功能"""
     
-    def __init__(self, config: Config, project_path: str, max_iterations: int = 5):
+    def __init__(self, config: Config, project_path: str, max_iterations: int = 5, error_organizer_agent=None):
         """
         初始化修复器
         
@@ -30,6 +30,7 @@ class Fixer:
         self.project_path = project_path
         self.max_iterations = max_iterations
         self.fix_history = []
+        self.error_organizer_agent = error_organizer_agent
     
     def _run_command(self, cmd: str) -> Tuple[bool, str]:
         """
@@ -498,7 +499,7 @@ class Fixer:
 class CodeFixer(Fixer):
     """代码修复模块 - 根据格式化、检查、编译错误进行多轮代码修复"""
     
-    def __init__(self, config: Config, project_path: str, max_iterations: int = 5):
+    def __init__(self, config: Config, project_path: str, max_iterations: int = 5, error_organizer_agent=None):
         """
         初始化代码修复器
         
@@ -507,7 +508,7 @@ class CodeFixer(Fixer):
             project_path: 项目路径
             max_iterations: 最大迭代次数
         """
-        super().__init__(config, project_path, max_iterations)
+        super().__init__(config, project_path, max_iterations, error_organizer_agent=error_organizer_agent)
     
     def _format_code(self) -> Tuple[bool, str]:
         """
@@ -750,6 +751,10 @@ class CodeFixer(Fixer):
         2. 按文件归类
         3. 结合轮次选择局部修复或整体修复
         """
+        if self.error_organizer_agent is not None:
+            if self._attempt_organized_fix(error_type, error_message, iteration):
+                return True
+
         grouped_errors = self._group_errors_by_file(error_message)
         prefer_local = self._should_prefer_local_fix(iteration)
 
@@ -770,6 +775,43 @@ class CodeFixer(Fixer):
                 error_type=error_type,
                 error_message=focused_error,
                 candidate_files=[file_path],
+                prefer_local=prefer_local,
+            ):
+                return True
+
+        return False
+
+    def _attempt_organized_fix(self, error_type: str, error_message: str, iteration: int) -> bool:
+        """
+        可选的错误梳理路径：
+        1. 先把长错误切成较小批次
+        2. 每次只处理一批，降低单次喂给模型的错误密度
+        3. 每批内仍沿用局部优先 / 整体优先的既有修复策略
+        """
+        batches = self.error_organizer_agent.organize_errors(error_message, self.project_path)
+        prefer_local = self._should_prefer_local_fix(iteration)
+
+        if not batches:
+            return False
+
+        print(f"错误已梳理为 {len(batches)} 个批次，当前修复策略：{'局部优先' if prefer_local else '整体优先'}")
+
+        for batch in batches:
+            diagnostics = batch.get("diagnostics", [])
+            candidate_files = batch.get("candidate_files", [])
+            if not diagnostics or not candidate_files:
+                continue
+
+            batch_error_message = "\n\n".join(diagnostics)
+            print(
+                f"处理错误批次 {batch['batch_index']}/{len(batches)}："
+                f"{len(diagnostics)} 条诊断，{len(candidate_files)} 个候选文件"
+            )
+
+            if self._fix_from_candidates(
+                error_type=error_type,
+                error_message=batch_error_message,
+                candidate_files=candidate_files[:10],
                 prefer_local=prefer_local,
             ):
                 return True
@@ -883,7 +925,7 @@ class CodeFixer(Fixer):
 class TestFixer(Fixer):
     """代码测试修复模块 - 根据测试失败信息进行多轮修复"""
     
-    def __init__(self, config: Config, project_path: str, max_iterations: int = 5):
+    def __init__(self, config: Config, project_path: str, max_iterations: int = 5, error_organizer_agent=None):
         """
         初始化测试修复器
         
@@ -892,7 +934,7 @@ class TestFixer(Fixer):
             project_path: 项目路径
             max_iterations: 最大迭代次数
         """
-        super().__init__(config, project_path, max_iterations)
+        super().__init__(config, project_path, max_iterations, error_organizer_agent=error_organizer_agent)
     
     def _run_tests(self) -> Tuple[bool, str]:
         """运行测试"""
@@ -933,6 +975,15 @@ class TestFixer(Fixer):
         # 匹配测试名称
         test_name_match = re.search(r'test (\S+) \.\.\. FAILED', error_message)
         test_name = test_name_match.group(1) if test_name_match else "unknown"
+
+        # 对 cargo test 期间出现的编译错误，优先沿用通用编译错误归类逻辑，
+        # 避免被某个无关文件或默认路径误导。
+        grouped_errors = self._group_errors_by_file(error_message)
+        if grouped_errors:
+            grouped_errors.sort(key=lambda item: (0 if item.get("locations") else 1, item["file_path"]))
+            file_path = grouped_errors[0]["file_path"]
+            if os.path.exists(file_path):
+                return file_path, test_name
         
         # 匹配文件路径
         match = re.search(r'--> ([^:]+):(\d+):(\d+)', error_message)
@@ -953,6 +1004,20 @@ class TestFixer(Fixer):
                 return path, test_name
         
         return None, test_name
+
+    def _looks_like_test_compile_error(self, error_message: str) -> bool:
+        """
+        判断 cargo test 失败是否本质上是编译错误，而不是测试断言失败。
+        """
+        normalized = self._normalize_error_message(error_message)
+        compile_markers = [
+            "error[E",
+            "error:",
+            "could not compile",
+            "--> ",
+            "warning: build failed",
+        ]
+        return any(marker in normalized for marker in compile_markers)
     
     def _extract_test_code(self, file_content: str, test_name: str) -> str:
         """
@@ -1042,6 +1107,19 @@ class TestFixer(Fixer):
                 return True
             
             print(f"测试失败：\n{test_output}")
+
+            # cargo test 期间经常先暴露编译错误，此时不应按“测试函数修复”处理，
+            # 而应复用代码修复器的按文件归类 + 局部/整体切换策略。
+            if self._looks_like_test_compile_error(test_output):
+                print("检测到测试阶段本质上是编译错误，切换到按文件归类的代码修复模式")
+                if self._attempt_grouped_fix("test_compile", test_output, iteration):
+                    self.fix_history.append({
+                        'iteration': iteration,
+                        'error': test_output,
+                        'fixed': True,
+                        'mode': 'test_compile'
+                    })
+                    continue
             
             # 解析测试错误
             file_path, test_name = self._parse_test_error(test_output)

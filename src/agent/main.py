@@ -19,6 +19,7 @@ repo_root = project_root.parent
 sys.path.insert(0, str(project_root))
 
 from agent.c_doc_agent import CDocAgent
+from agent.error_organizer_agent import ErrorOrganizerAgent
 from agent.pointer_agent import PointerAgent
 from agent.spec_agent import SpecAgent
 from agent.spec_json_agent import SpecJsonAgent
@@ -66,6 +67,17 @@ def main():
         help="可选开启指针分析中间层，生成 C 指针到 Rust 的翻译指导文档"
     )
     parser.add_argument(
+        "--use-error-organizer-agent",
+        action="store_true",
+        help="可选开启错误梳理中间层，先归类并分批整理错误，再交给修复器处理"
+    )
+    parser.add_argument(
+        "--error-batch-size",
+        type=int,
+        default=10,
+        help="错误梳理分批大小（默认：10）"
+    )
+    parser.add_argument(
         "--skip-code-fix",
         action="store_true",
         help="跳过代码修复步骤"
@@ -96,7 +108,13 @@ def main():
 
     prBlue("\n" + "=" * 80)
     prYellow("C 到 Rust 项目转换 Agent")
+    prYellow(f"ErrorOrganizerAgent：{'开启' if args.use_error_organizer_agent else '关闭'}")
+    prYellow(f"错误分批大小：{args.error_batch_size}")
     prBlue("=" * 80)
+
+    error_organizer_agent = None
+    if args.use_error_organizer_agent:
+        error_organizer_agent = ErrorOrganizerAgent(batch_size=args.error_batch_size)
     prYellow(f"C 项目路径：{args.c_project_path}")
     prYellow(f"输出目录：{args.output_dir}")
     prYellow(f"Rust 项目名称：{args.rust_project_name}")
@@ -222,7 +240,8 @@ def main():
         code_fixer = CodeFixer(
             config=config,
             project_path=rust_project_path,
-            max_iterations=args.max_fix_iterations
+            max_iterations=args.max_fix_iterations,
+            error_organizer_agent=error_organizer_agent
         )
 
         success = code_fixer.fix()
@@ -245,7 +264,8 @@ def main():
         test_fixer = TestFixer(
             config=config,
             project_path=rust_project_path,
-            max_iterations=args.max_fix_iterations
+            max_iterations=args.max_fix_iterations,
+            error_organizer_agent=error_organizer_agent
         )
 
         success = test_fixer.fix()
