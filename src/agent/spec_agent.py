@@ -1494,7 +1494,7 @@ class SpecAgent:
             lines.append("- 当前模块未发现需要特别关注的相关条目。")
             return "\n".join(lines) + "\n"
 
-        summary = self._summarize_findings(findings)
+        summary = self._summarize_auxiliary_findings(findings)
         lines.append("## 概览")
         lines.append(f"- 条目总数：{len(findings)}")
         if summary:
@@ -1514,6 +1514,16 @@ class SpecAgent:
             lines.append(f"- 其余 {len(findings) - max_items} 条相近条目已省略。")
 
         return "\n".join(lines) + "\n"
+
+    def _summarize_auxiliary_findings(self, findings: List[Dict]) -> Dict[str, int]:
+        """
+        对 pointer/macro 条目做轻量分类统计。
+        """
+        summary: Dict[str, int] = {}
+        for item in findings:
+            kind = item.get("kind", "unknown")
+            summary[kind] = summary.get(kind, 0) + 1
+        return dict(sorted(summary.items(), key=lambda kv: (-kv[1], kv[0])))
 
     def _write_module_auxiliary_notes(self, module: Dict, output_dir: str, module_index: int) -> None:
         """
