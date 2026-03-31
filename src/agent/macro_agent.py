@@ -26,9 +26,38 @@ class MacroAgent:
     CONDITIONAL_RE = re.compile(
         r'^\s*#\s*(?P<directive>ifdef|ifndef|if|elif|else|endif)\b(?P<body>.*)$'
     )
+    MAX_MARKDOWN_FINDINGS = 120
+    MAX_JSON_FINDINGS = 300
+    HIGH_VALUE_KIND_LIMITS = {
+        "function_like_macro": 20,
+        "statement_macro": 20,
+        "conditional_block": 20,
+        "preprocessor_magic_macro": 20,
+        "bit_flag_macro": 20,
+        "conditional_macro": 15,
+        "generic_macro": 15,
+        "constant_macro": 10,
+        "include_guard": 0,
+    }
 
     def __init__(self, config: Config = None):
         self.config = config or Config()
+
+    def collect_findings(self, project_path: str) -> tuple:
+        """
+        只采集宏分析结果，不直接写文件。
+        供 SpecAgent 复用，把结果拆分写入 spec 风格目录。
+        """
+        project_root = Path(project_path)
+        findings: List[Dict] = []
+        for file_path in sorted(project_root.rglob("*")):
+            if file_path.suffix.lower() not in {".c", ".h"}:
+                continue
+            findings.extend(self._analyze_file(file_path))
+
+        findings = self._deduplicate_findings(findings)
+        summary = self._summarize_findings(findings)
+        return findings, summary
 
     def analyze_project(self, project_path: str, output_dir: str) -> Dict[str, str]:
         """
@@ -38,16 +67,11 @@ class MacroAgent:
         output_root = Path(output_dir)
         output_root.mkdir(parents=True, exist_ok=True)
 
-        findings: List[Dict] = []
-        for file_path in sorted(project_root.rglob("*")):
-            if file_path.suffix.lower() not in {".c", ".h"}:
-                continue
-            findings.extend(self._analyze_file(file_path))
-
-        findings = self._deduplicate_findings(findings)
-        summary = self._summarize_findings(findings)
-        markdown = self._build_markdown(project_root.name, findings, summary)
-        json_data = self._build_json(project_root.name, findings, summary)
+        findings, summary = self.collect_findings(project_path)
+        selected_markdown_findings = self._select_important_findings(findings, self.MAX_MARKDOWN_FINDINGS)
+        selected_json_findings = self._select_important_findings(findings, self.MAX_JSON_FINDINGS)
+        markdown = self._build_markdown(project_root.name, findings, selected_markdown_findings, summary)
+        json_data = self._build_json(project_root.name, findings, selected_json_findings, summary)
 
         md_path = output_root / "macro_guidance.md"
         json_path = output_root / "macro_guidance.json"
@@ -285,6 +309,71 @@ class MacroAgent:
             summary[item["kind"]] = summary.get(item["kind"], 0) + 1
         return dict(sorted(summary.items(), key=lambda kv: (-kv[1], kv[0])))
 
+    def _score_finding(self, item: Dict) -> int:
+        """
+        给宏发现做启发式打分，只保留更值得进入 LLM 上下文的部分。
+        """
+        score = 0
+        kind = item.get("kind", "")
+        name = item.get("name", "")
+        declaration = item.get("declaration", "")
+        args = item.get("args", "")
+        body = item.get("body", "")
+        file_path = item.get("file", "")
+
+        kind_weights = {
+            "statement_macro": 100,
+            "preprocessor_magic_macro": 95,
+            "function_like_macro": 90,
+            "conditional_block": 85,
+            "bit_flag_macro": 75,
+            "conditional_macro": 65,
+            "generic_macro": 55,
+            "constant_macro": 20,
+            "include_guard": -1000,
+        }
+        score += kind_weights.get(kind, 0)
+
+        if args:
+            score += 15
+        if "\n" in declaration:
+            score += 20
+        if any(token in body for token in ["do {", "while (0)", "sizeof", "offsetof", "##", "#", "..."]):
+            score += 25
+        if any(token in name.upper() for token in ["ASSERT", "LOG", "DEBUG", "MIN", "MAX", "CONFIG", "ENABLE", "FLAG", "BIT"]):
+            score += 10
+        if file_path.endswith(".h"):
+            score += 8
+        if len(body) > 60:
+            score += 8
+
+        return score
+
+    def _select_important_findings(self, findings: List[Dict], max_items: int) -> List[Dict]:
+        """
+        按类型限额和重要性排序，筛选进入文档/JSON 的高价值宏发现。
+        """
+        grouped: Dict[str, List[Dict]] = {}
+        for item in findings:
+            grouped.setdefault(item["kind"], []).append(item)
+
+        selected: List[Dict] = []
+        for kind, items in grouped.items():
+            limit = self.HIGH_VALUE_KIND_LIMITS.get(kind, 10)
+            if limit <= 0:
+                continue
+            sorted_items = sorted(
+                items,
+                key=lambda item: (-self._score_finding(item), item["file"], item["line"], item["name"]),
+            )
+            selected.extend(sorted_items[:limit])
+
+        selected = sorted(
+            selected,
+            key=lambda item: (-self._score_finding(item), item["kind"], item["file"], item["line"]),
+        )
+        return selected[:max_items]
+
     def _build_guidance_templates(self) -> Dict[str, Dict]:
         return {
             "constant_macro": {
@@ -353,7 +442,9 @@ class MacroAgent:
             },
         }
 
-    def _build_markdown(self, project_name: str, findings: List[Dict], summary: Dict[str, int]) -> str:
+    def _build_markdown(self, project_name: str, findings: List[Dict], displayed_findings: List[Dict], summary: Dict[str, int]) -> str:
+        omitted_count = max(0, len(findings) - len(displayed_findings))
+
         lines = [
             f"# {project_name} 宏迁移指导",
             "",
@@ -392,11 +483,11 @@ class MacroAgent:
 
         lines.extend([
             "",
-            "## 文件级发现",
+            "## 高价值宏发现",
         ])
 
-        if findings:
-            for item in findings:
+        if displayed_findings:
+            for item in displayed_findings:
                 lines.extend([
                     f"### {item['name']} ({item['kind']})",
                     f"- 位置：`{item['file']}:{item['line']}`",
@@ -405,15 +496,22 @@ class MacroAgent:
                     f"- 迁移建议：{item['rust_hint']}",
                     "",
                 ])
+            if omitted_count > 0:
+                lines.extend([
+                    f"- 其余 {omitted_count} 条宏发现已省略，以控制文档长度。",
+                    "- 如需完整结果，请查看 `macro_guidance.json`。",
+                    "",
+                ])
         else:
             lines.append("- 未发现需要特别关注的宏定义。")
 
         return "\n".join(lines)
 
-    def _build_json(self, project_name: str, findings: List[Dict], summary: Dict[str, int]) -> Dict:
+    def _build_json(self, project_name: str, findings: List[Dict], selected_findings: List[Dict], summary: Dict[str, int]) -> Dict:
         return {
             "project_name": project_name,
             "summary": summary,
             "guidance_templates": self._build_guidance_templates(),
-            "findings": findings,
+            "findings": selected_findings,
+            "total_findings": len(findings),
         }

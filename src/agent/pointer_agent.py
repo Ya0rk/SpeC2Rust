@@ -31,9 +31,10 @@ class PointerAgent:
     def __init__(self, config: Config = None):
         self.config = config or Config()
 
-    def analyze_project(self, project_path: str, output_dir: str) -> Dict[str, str]:
+    def collect_findings(self, project_path: str, output_dir: str) -> tuple:
         """
-        分析项目中的指针用法，并输出指导文档。
+        只采集分析结果，不直接写文件。
+        供 SpecAgent 复用，把结果拆分写入 spec 风格目录。
         """
         project_root = Path(project_path)
         output_root = Path(output_dir)
@@ -41,8 +42,6 @@ class PointerAgent:
 
         findings = []
 
-        # 优先利用现有的结构化分析结果，拿到函数源码、结构体源码和文件映射。
-        # 这样比纯正则扫描更容易识别 malloc/free、函数指针和节点指针等模式。
         project_analysis = self._load_project_analysis(project_root, output_root)
         if project_analysis:
             findings.extend(self._analyze_project_analysis(project_analysis))
@@ -52,7 +51,19 @@ class PointerAgent:
                 continue
             findings.extend(self._analyze_file(file_path))
 
+        findings = self._deduplicate_findings(findings)
         summary = self._summarize_findings(findings)
+        return findings, summary
+
+    def analyze_project(self, project_path: str, output_dir: str) -> Dict[str, str]:
+        """
+        分析项目中的指针用法，并输出指导文档。
+        """
+        project_root = Path(project_path)
+        output_root = Path(output_dir)
+        output_root.mkdir(parents=True, exist_ok=True)
+
+        findings, summary = self.collect_findings(project_path, output_dir)
         markdown = self._build_markdown(project_root.name, findings, summary)
         json_data = self._build_json(project_root.name, findings, summary)
 

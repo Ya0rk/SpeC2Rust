@@ -147,7 +147,12 @@ def main():
 
         if args.use_spec_agent:
             c_agent = SpecAgent(config=config)
-            c_agent.analyze_and_generate_spec(args.c_project_path, c_doc_dir)
+            c_agent.analyze_and_generate_spec(
+                args.c_project_path,
+                c_doc_dir,
+                use_pointer_agent=args.use_pointer_agent,
+                use_macro_agent=args.use_macro_agent,
+            )
         else:
             c_agent = CDocAgent(config=config)
             c_agent.analyze_project(args.c_project_path, c_doc_dir)
@@ -174,7 +179,7 @@ def main():
         prGreen(f"  JSON 路径：{spec_json_path}")
 
     # 可选步骤 1.6: 分析 C 项目中的指针用法，生成 Rust 翻译指导
-    if args.use_pointer_agent:
+    if args.use_pointer_agent and not args.use_spec_agent:
         prBlue("\n" + "=" * 80)
         prYellow("步骤 1.6: 生成指针翻译指导文档")
         prBlue("=" * 80)
@@ -188,7 +193,7 @@ def main():
 
     # 收集生成的文档路径
     # 可选步骤 1.7: 分析 C 项目中的宏定义，生成 Rust 迁移指导
-    if args.use_macro_agent:
+    if args.use_macro_agent and not args.use_spec_agent:
         prBlue("\n" + "=" * 80)
         prYellow("步骤 1.7: 生成宏迁移指导文档")
         prBlue("=" * 80)
@@ -212,6 +217,16 @@ def main():
             for doc_path in candidate_paths:
                 if os.path.exists(doc_path):
                     doc_paths.append(doc_path)
+
+        # SpecAgent 路径下，PointerAgent / MacroAgent 的结果会落到各个 specs/<module>/ 目录里。
+        # 这里只把简短的 pointer.md / macro.md 加入上下文，避免把整个 specs 树都喂给 RustAgent。
+        specs_root = os.path.join(c_doc_dir, "specs")
+        if os.path.exists(specs_root):
+            for root, _, files in os.walk(specs_root):
+                if args.use_pointer_agent and "pointer.md" in files:
+                    doc_paths.append(os.path.join(root, "pointer.md"))
+                if args.use_macro_agent and "macro.md" in files:
+                    doc_paths.append(os.path.join(root, "macro.md"))
     else:
         target_doc_name = ["final_project_overview.md"]
         for doc_file in target_doc_name:
@@ -219,9 +234,9 @@ def main():
             if os.path.exists(doc_path):
                 doc_paths.append(doc_path)
 
-    if args.use_pointer_agent and os.path.exists(pointer_markdown_path):
+    if args.use_pointer_agent and not args.use_spec_agent and os.path.exists(pointer_markdown_path):
         doc_paths.append(pointer_markdown_path)
-    if args.use_macro_agent and os.path.exists(macro_markdown_path):
+    if args.use_macro_agent and not args.use_spec_agent and os.path.exists(macro_markdown_path):
         doc_paths.append(macro_markdown_path)
 
     if not doc_paths:

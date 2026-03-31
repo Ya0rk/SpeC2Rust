@@ -14,6 +14,8 @@ from utils.document_generator import DocumentGenerator
 from config.config import Config
 from config.prompt import prompt_manager
 from llm.model import Model
+from agent.pointer_agent import PointerAgent
+from agent.macro_agent import MacroAgent
 from agent.split import ModuleSplitter
 from utils.spec import specify_init
 
@@ -56,6 +58,10 @@ class SpecAgent:
         self.file_units = []
         self.cluster_units = []
         self.dependency_graph = {}
+        self.pointer_findings = []
+        self.macro_findings = []
+        self.pointer_notes_enabled = False
+        self.macro_notes_enabled = False
 
     def _truncate_text(self, text: str, max_chars: int) -> str:
         # 简单的字符级裁剪器。这里不用 tokenizer，是为了保持依赖轻量且实现简单。
@@ -1461,8 +1467,174 @@ class SpecAgent:
         
         print(f"✓ 04_gaps_and_risks.md 已生成：{gaps_path}")
         return content
+
+    def _filter_findings_for_module(self, module: Dict, findings: List[Dict]) -> List[Dict]:
+        """
+        只保留与当前模块直接相关的条目，避免补充文档过长。
+        """
+        relevant_files = {self._normalize_path(path) for path in module.get("files", [])}
+        header_records = self._collect_module_header_records(module, self.project_analysis or {})
+        relevant_files.update(self._normalize_path(item.get("path", "")) for item in header_records)
+
+        module_findings = []
+        for item in findings:
+            file_path = self._normalize_path(item.get("file", ""))
+            if file_path in relevant_files:
+                module_findings.append(item)
+
+        return module_findings
+
+    def _build_module_auxiliary_note(self, title: str, findings: List[Dict], max_items: int = 8) -> str:
+        """
+        生成简短的 pointer.md / macro.md。
+        """
+        lines = [f"# {title}", ""]
+
+        if not findings:
+            lines.append("- 当前模块未发现需要特别关注的相关条目。")
+            return "\n".join(lines) + "\n"
+
+        summary = self._summarize_findings(findings)
+        lines.append("## 概览")
+        lines.append(f"- 条目总数：{len(findings)}")
+        if summary:
+            top_kinds = list(summary.items())[:4]
+            lines.append("- 类型分布：" + "，".join(f"{kind}={count}" for kind, count in top_kinds))
+
+        lines.extend(["", "## 关键条目"])
+        for item in findings[:max_items]:
+            location = f"{item.get('file', 'unknown')}:{item.get('line', 0)}"
+            declaration = self._trim_inline(item.get("declaration", ""), 120)
+            hint = self._trim_inline(item.get("rust_hint", ""), 100)
+            lines.append(
+                f"- `{item.get('kind', 'unknown')}` `{location}`: `{declaration}` -> {hint}"
+            )
+
+        if len(findings) > max_items:
+            lines.append(f"- 其余 {len(findings) - max_items} 条相近条目已省略。")
+
+        return "\n".join(lines) + "\n"
+
+    def _write_module_auxiliary_notes(self, module: Dict, output_dir: str, module_index: int) -> None:
+        """
+        在每个模块的 specs 目录下补充精简的 pointer.md / macro.md。
+        """
+        feature_name = module['name'].replace('-', '_').replace(' ', '_')
+        branch_name = f"{module_index:03d}-{feature_name}-rust-port"
+        specs_dir = Path(output_dir) / "specs" / branch_name
+        specs_dir.mkdir(parents=True, exist_ok=True)
+
+        if self.pointer_notes_enabled:
+            pointer_items = self._filter_findings_for_module(module, self.pointer_findings)
+            with open(specs_dir / "pointer.md", "w", encoding="utf-8") as f:
+                f.write(self._build_module_auxiliary_note("Pointer Notes", pointer_items))
+
+        if self.macro_notes_enabled:
+            macro_items = self._filter_findings_for_module(module, self.macro_findings)
+            with open(specs_dir / "macro.md", "w", encoding="utf-8") as f:
+                f.write(self._build_module_auxiliary_note("Macro Notes", macro_items))
+
+    def _write_auxiliary_guide_files(self, guide_root: Path, guide_title: str, findings: List[Dict], summary: Dict[str, int], templates: Dict[str, Dict]) -> None:
+        """
+        将 PointerAgent / MacroAgent 的结果按 spec 风格拆成多文件写入。
+        这里不追求全量细节，而是保留摘要、模板和按类别分组后的代表性发现。
+        """
+        guide_root.mkdir(parents=True, exist_ok=True)
+
+        summary_lines = [
+            f"# {guide_title}",
+            "",
+            "## 分类统计",
+        ]
+        if summary:
+            for kind, count in summary.items():
+                summary_lines.append(f"- `{kind}`: {count}")
+        else:
+            summary_lines.append("- 未发现需要特别关注的条目")
+
+        summary_lines.extend([
+            "",
+            "## 指导模板",
+        ])
+        for kind, template in templates.items():
+            summary_lines.append(f"### {kind}")
+            summary_lines.append(f"- 场景说明：{template.get('scenario', '')}")
+            summary_lines.append(f"- Rust 候选：{', '.join(template.get('rust_candidates', []))}")
+            for note in template.get("notes", []):
+                summary_lines.append(f"- {note}")
+            summary_lines.append("")
+
+        with open(guide_root / "000_summary.md", "w", encoding="utf-8") as f:
+            f.write("\n".join(summary_lines))
+
+        by_kind_dir = guide_root / "by_kind"
+        by_kind_dir.mkdir(parents=True, exist_ok=True)
+        grouped: Dict[str, List[Dict]] = {}
+        for item in findings:
+            grouped.setdefault(item.get("kind", "unknown"), []).append(item)
+
+        for kind, items in sorted(grouped.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+            lines = [
+                f"# {guide_title} - {kind}",
+                "",
+                f"- 条目数量：{len(items)}",
+                "",
+            ]
+            for item in items[:30]:
+                lines.extend([
+                    f"## {item.get('name', 'unknown')}",
+                    f"- 位置：`{item.get('file', 'unknown')}:{item.get('line', 0)}`",
+                    f"- 原始定义：`{self._trim_inline(item.get('declaration', ''), 240)}`",
+                    f"- Rust 候选：{', '.join(item.get('rust_candidates', []))}",
+                    f"- 迁移建议：{item.get('rust_hint', '')}",
+                    "",
+                ])
+            if len(items) > 30:
+                lines.append(f"- 其余 {len(items) - 30} 条同类发现已省略。")
+                lines.append("")
+
+            safe_name = re.sub(r'[^A-Za-z0-9_\-]+', '_', kind)
+            with open(by_kind_dir / f"{safe_name}.md", "w", encoding="utf-8") as f:
+                f.write("\n".join(lines))
+
+        with open(guide_root / "index.json", "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "title": guide_title,
+                    "summary": summary,
+                    "total_findings": len(findings),
+                    "kinds": sorted(grouped.keys()),
+                },
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
+
+    def _generate_optional_translation_guides(self, project_path: str, output_dir: str, use_pointer_agent: bool = False, use_macro_agent: bool = False) -> None:
+        """
+        可选地把指针/宏分析接入 SpecAgent。
+        这里先只收集结果，后面在每个模块的 specs 目录下写入精简的 pointer.md / macro.md。
+        """
+        self.pointer_findings = []
+        self.macro_findings = []
+        self.pointer_notes_enabled = use_pointer_agent
+        self.macro_notes_enabled = use_macro_agent
+
+        if use_pointer_agent:
+            print("\n[可选] 生成指针迁移指导文档集...")
+            pointer_agent = PointerAgent()
+            findings, _ = pointer_agent.collect_findings(project_path, str(Path(output_dir) / "_pointer_tmp"))
+            self.pointer_findings = findings
+            print(f"  ✓ 已收集指针条目：{len(findings)}")
+
+        if use_macro_agent:
+            print("\n[可选] 生成宏迁移指导文档集...")
+            macro_agent = MacroAgent()
+            findings, _ = macro_agent.collect_findings(project_path)
+            self.macro_findings = macro_agent._select_important_findings(findings, 120)
+            print(f"  ✓ 已收集宏条目：{len(self.macro_findings)}")
     
-    def analyze_and_generate_spec(self, project_path: str, output_dir: str) -> None:
+    def analyze_and_generate_spec(self, project_path: str, output_dir: str, use_pointer_agent: bool = False, use_macro_agent: bool = False) -> None:
         """
         分析 C 项目并生成完整的 spec 文档集（分层聚类方法）
         
@@ -1540,6 +1712,12 @@ class SpecAgent:
         behaviors_doc = self._generate_behaviors_docs(project_path, module_analyses, output_dir)
         # self._generate_gaps_and_risks(project_path, module_analyses, output_dir)
         self._generate_constitution(project_path, project_info, interfaces_doc, behaviors_doc, output_dir)
+        self._generate_optional_translation_guides(
+            project_path=project_path,
+            output_dir=output_dir,
+            use_pointer_agent=use_pointer_agent,
+            use_macro_agent=use_macro_agent,
+        )
         
         # 步骤 7: 为每个模块生成 spec-kit 文档集。
         # 这是把“理解结果”转成“执行文档”的过程。
@@ -1549,6 +1727,7 @@ class SpecAgent:
             self._generate_spec_per_module(project_path, module, output_dir, i)
             self._generate_plan_per_module(project_path, module, output_dir, i)
             self._generate_tasks_per_module(project_path, module, output_dir, i)
+            self._write_module_auxiliary_notes(module, output_dir, i)
         
         print("\n" + "=" * 60)
         print("✓ SpecAgent 完成！")
@@ -1568,3 +1747,7 @@ class SpecAgent:
         print("    ├── spec.md")
         print("    ├── plan.md")
         print("    └── tasks.md")
+        if self.pointer_notes_enabled:
+            print("    ├── pointer.md")
+        if self.macro_notes_enabled:
+            print("    └── macro.md")

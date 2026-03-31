@@ -101,12 +101,18 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --use-spec-agent --use-spec-json-agent --use-pointer-agent
 ```
 
-`PointerAgent` 会额外扫描所有 `.c/.h` 文件中的指针声明与典型用法，并生成：
+如果不使用 `SpecAgent`，`PointerAgent` 会额外扫描所有 `.c/.h` 文件中的指针声明与典型用法，并生成：
 
 - `output/c_docs/pointer_guidance.md`
 - `output/c_docs/pointer_guidance.json`
 
 其中 `pointer_guidance.md` 会自动追加到 `RustAgent` 的输入文档中，作为额外翻译指导。
+
+如果同时使用 `SpecAgent`，则指针分析结果会被插入到 `SpecAgent` 内部流程，并为每个模块生成一份简短说明：
+
+- `output/c_docs/specs/<index>-<module>-rust-port/pointer.md`
+
+这些 `.md` 文件会被 `RustAgent` 递归读取，作为额外上下文。
 
 ### 3.6 使用 MacroAgent 补充宏迁移指导
 
@@ -120,12 +126,18 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --use-spec-agent --use-spec-json-agent --use-macro-agent
 ```
 
-`MacroAgent` 会额外扫描所有 `.c/.h` 文件中的 `#define` 宏定义，并生成：
+如果不使用 `SpecAgent`，`MacroAgent` 会额外扫描所有 `.c/.h` 文件中的 `#define` 宏定义，并生成：
 
 - `output/c_docs/macro_guidance.md`
 - `output/c_docs/macro_guidance.json`
 
 其中 `macro_guidance.md` 会自动追加到 `RustAgent` 的输入文档中，作为额外的宏迁移指导。
+
+如果同时使用 `SpecAgent`，则宏分析结果会被插入到 `SpecAgent` 内部流程，并为每个模块生成一份简短说明：
+
+- `output/c_docs/specs/<index>-<module>-rust-port/macro.md`
+
+这些 `.md` 文件会被 `RustAgent` 递归读取，作为额外上下文。
 
 ### 4. 使用已有分析文档，跳过分析阶段
 
@@ -138,6 +150,7 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 - 如果走默认路径，程序会读取 `output/c_docs/final_project_overview.md`
 - 如果走 `SpecAgent` 路径，程序会读取 `output/c_docs/docs/rewrite-context/` 和 `output/c_docs/.specify/memory/`
 - 如果同时开启 `--use-spec-json-agent`，程序会优先读取 `output/c_docs/spec_json/spec_context.json`
+- 如果同时开启 `SpecAgent + PointerAgent/MacroAgent`，程序还会额外读取各个 `output/c_docs/specs/<index>-<module>-rust-port/` 下的 `pointer.md` / `macro.md`
 
 ### 5. 只生成代码，不做修复
 

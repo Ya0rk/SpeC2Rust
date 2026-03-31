@@ -32,6 +32,32 @@ class RustAgent:
         self.doc_contents: Dict[str, str] = {}
         self.generated_files: List[str] = []
 
+    def _clip_document_content(self, doc_path: str, content: str) -> str:
+        """
+        对输入文档做长度裁剪，避免超长中间文档直接压垮后续生成。
+        不同类型的文档使用不同上限；宏/指针指导文档默认更严格。
+        """
+        normalized = doc_path.replace("\\", "/").lower()
+        max_chars = 20000
+
+        if normalized.endswith("macro_guidance.md"):
+            max_chars = 12000
+        elif normalized.endswith("pointer_guidance.md"):
+            max_chars = 12000
+        elif normalized.endswith("spec_context.json"):
+            max_chars = 16000
+        elif normalized.endswith(".md"):
+            max_chars = 20000
+
+        if len(content) <= max_chars:
+            return content
+
+        clipped = content[:max_chars]
+        return (
+            clipped
+            + "\n\n[文档过长，后续内容已截断；如需完整内容，请回到源文档查看。]\n"
+        )
+
     def _is_cargo_toml(self, file_path: str) -> bool:
         """判断是否为 Cargo.toml。"""
         normalized = file_path.replace("\\", "/")
@@ -154,6 +180,7 @@ edition = "2021"
                 try:
                     with open(doc_path, 'r', encoding='utf-8', errors='ignore') as f:
                         content = f.read()
+                    content = self._clip_document_content(doc_path, content)
                     self.doc_contents[doc_path] = content
                     print(f"加载文件：{doc_path} ({len(content)} 字符)")
                 except Exception as e:
@@ -167,6 +194,7 @@ edition = "2021"
                             try:
                                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                                     content = f.read()
+                                content = self._clip_document_content(file_path, content)
                                 self.doc_contents[file_path] = content
                                 print(f"加载文件：{file_path} ({len(content)} 字符)")
                             except Exception as e:
