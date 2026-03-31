@@ -161,6 +161,76 @@ class Fixer:
             numbered_lines.append(f"{index + 1}: {lines[index]}")
         return "\n".join(numbered_lines)
 
+    def _normalize_error_message(self, error_message: str) -> str:
+        """
+        统一化错误输出，减少格式噪声对后续解析的影响。
+        这个能力属于通用错误处理逻辑，CodeFixer 和 TestFixer 都会用到。
+        """
+        cleaned = self._strip_ansi(error_message).replace('\r\n', '\n').replace('\r', '\n')
+        lines = [line.rstrip() for line in cleaned.splitlines()]
+        normalized_lines = []
+        previous_blank = False
+        for line in lines:
+            is_blank = not line.strip()
+            if is_blank and previous_blank:
+                continue
+            normalized_lines.append(line)
+            previous_blank = is_blank
+        return "\n".join(normalized_lines).strip()
+
+    def _group_errors_by_file(self, error_message: str) -> List[Dict]:
+        """
+        将错误按文件归类，并尽量保留行号信息。
+        这个能力也下沉到父类，便于测试修复阶段复用。
+        """
+        normalized = self._normalize_error_message(error_message)
+        grouped: Dict[str, Dict] = {}
+
+        for match in re.finditer(r'--> ([^:\n]+):(\d+):(\d+)', normalized):
+            file_path = match.group(1).strip()
+            if not os.path.isabs(file_path):
+                file_path = os.path.join(self.project_path, file_path)
+
+            if file_path not in grouped:
+                grouped[file_path] = {
+                    "file_path": file_path,
+                    "locations": [],
+                    "normalized_error": normalized,
+                }
+
+            location = (int(match.group(2)), int(match.group(3)))
+            if location not in grouped[file_path]["locations"]:
+                grouped[file_path]["locations"].append(location)
+
+        if not grouped:
+            for file_path in self._parse_error_to_files(normalized):
+                grouped[file_path] = {
+                    "file_path": file_path,
+                    "locations": [],
+                    "normalized_error": normalized,
+                }
+
+        return list(grouped.values())
+
+    def _build_grouped_error_message(self, file_group: Dict) -> str:
+        """
+        给某个目标文件生成更聚焦的错误描述。
+        """
+        file_path = file_group["file_path"]
+        rel_path = os.path.relpath(file_path, self.project_path).replace("\\", "/")
+        locations = file_group.get("locations", [])
+        normalized_error = file_group.get("normalized_error", "")
+
+        if not locations:
+            return f"目标文件：{rel_path}\n\n{normalized_error}"
+
+        location_text = ", ".join(f"{line}:{col}" for line, col in locations[:8])
+        return (
+            f"目标文件：{rel_path}\n"
+            f"重点错误位置：{location_text}\n\n"
+            f"{normalized_error}"
+        )
+
     def _parse_error_location(self, error_message: str) -> Tuple[Optional[str], Optional[int], Optional[int]]:
         """
         从报错中提取文件、行号、列号。

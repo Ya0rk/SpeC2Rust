@@ -52,6 +52,7 @@ conda run --no-capture-output -n tcode python src/agent/main.py --c_project_path
 | `--use-spec-agent` | 使用 `SpecAgent` 作为分析路径 |
 | `--use-spec-json-agent` | 在 `SpecAgent` 后增加 JSON 压缩中间层 |
 | `--use-pointer-agent` | 可选开启 `PointerAgent`，分析 C 指针并生成 Rust 翻译指导文档 |
+| `--use-macro-agent` | 可选开启 `MacroAgent`，分析 C 宏并生成 Rust 迁移指导文档 |
 | `--skip-code-fix` | 跳过编译修复步骤 |
 | `--skip-test-fix` | 跳过测试修复步骤 |
 | `--max-fix-iterations` | 编译修复和测试修复的最大迭代次数，默认 `5` |
@@ -106,6 +107,25 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 - `output/c_docs/pointer_guidance.json`
 
 其中 `pointer_guidance.md` 会自动追加到 `RustAgent` 的输入文档中，作为额外翻译指导。
+
+### 3.6 使用 MacroAgent 补充宏迁移指导
+
+```bash
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --use-macro-agent
+```
+
+如果同时和 `SpecAgent` / `SpecJsonAgent` 一起使用：
+
+```bash
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --use-spec-agent --use-spec-json-agent --use-macro-agent
+```
+
+`MacroAgent` 会额外扫描所有 `.c/.h` 文件中的 `#define` 宏定义，并生成：
+
+- `output/c_docs/macro_guidance.md`
+- `output/c_docs/macro_guidance.json`
+
+其中 `macro_guidance.md` 会自动追加到 `RustAgent` 的输入文档中，作为额外的宏迁移指导。
 
 ### 4. 使用已有分析文档，跳过分析阶段
 

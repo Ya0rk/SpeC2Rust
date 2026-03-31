@@ -20,6 +20,7 @@ sys.path.insert(0, str(project_root))
 
 from agent.c_doc_agent import CDocAgent
 from agent.error_organizer_agent import ErrorOrganizerAgent
+from agent.macro_agent import MacroAgent
 from agent.pointer_agent import PointerAgent
 from agent.spec_agent import SpecAgent
 from agent.spec_json_agent import SpecJsonAgent
@@ -67,6 +68,11 @@ def main():
         help="可选开启指针分析中间层，生成 C 指针到 Rust 的翻译指导文档"
     )
     parser.add_argument(
+        "--use-macro-agent",
+        action="store_true",
+        help="可选开启宏分析中间层，生成 C 宏到 Rust 的迁移指导文档"
+    )
+    parser.add_argument(
         "--use-error-organizer-agent",
         action="store_true",
         help="可选开启错误梳理中间层，先归类并分批整理错误，再交给修复器处理"
@@ -110,6 +116,7 @@ def main():
     prYellow("C 到 Rust 项目转换 Agent")
     prYellow(f"ErrorOrganizerAgent：{'开启' if args.use_error_organizer_agent else '关闭'}")
     prYellow(f"错误分批大小：{args.error_batch_size}")
+    prYellow(f"MacroAgent：{'开启' if args.use_macro_agent else '关闭'}")
     prBlue("=" * 80)
 
     error_organizer_agent = None
@@ -152,6 +159,7 @@ def main():
 
     spec_json_path = os.path.join(c_doc_dir, "spec_json", "spec_context.json")
     pointer_markdown_path = os.path.join(c_doc_dir, "pointer_guidance.md")
+    macro_markdown_path = os.path.join(c_doc_dir, "macro_guidance.md")
 
     # 可选步骤 1.5: 将 SpecAgent 产出的文档压缩为机器友好的 JSON
     if args.use_spec_agent and args.use_spec_json_agent:
@@ -179,6 +187,19 @@ def main():
         prGreen(f"  文档路径：{pointer_markdown_path}")
 
     # 收集生成的文档路径
+    # 可选步骤 1.7: 分析 C 项目中的宏定义，生成 Rust 迁移指导
+    if args.use_macro_agent:
+        prBlue("\n" + "=" * 80)
+        prYellow("步骤 1.7: 生成宏迁移指导文档")
+        prBlue("=" * 80)
+
+        macro_agent = MacroAgent(config=config)
+        macro_outputs = macro_agent.analyze_project(args.c_project_path, c_doc_dir)
+        macro_markdown_path = macro_outputs["markdown_path"]
+
+        prGreen("\n✓ 宏迁移指导文档生成完成")
+        prGreen(f"  文档路径：{macro_markdown_path}")
+
     doc_paths = []
     if args.use_spec_agent:
         if args.use_spec_json_agent and os.path.exists(spec_json_path):
@@ -200,6 +221,8 @@ def main():
 
     if args.use_pointer_agent and os.path.exists(pointer_markdown_path):
         doc_paths.append(pointer_markdown_path)
+    if args.use_macro_agent and os.path.exists(macro_markdown_path):
+        doc_paths.append(macro_markdown_path)
 
     if not doc_paths:
         prRed("\n✗ 错误：未找到 C 项目文档")
