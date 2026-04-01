@@ -7,3 +7,5 @@ local_config.json
 local_config.*.json
 think.md
 src/utils/tree-sitter/tree-sitter-c
+report.md
+spec_agent.md
