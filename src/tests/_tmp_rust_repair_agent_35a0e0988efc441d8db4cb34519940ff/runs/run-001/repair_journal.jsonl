@@ -1,0 +1,3 @@
+{"iteration": 1, "stage": "clone", "baseline_dir": "E:\\Code\\C2R-Auto\\cGrcode\\src\\tests\\_tmp_rust_repair_agent_35a0e0988efc441d8db4cb34519940ff\\source", "run_dir": "E:\\Code\\C2R-Auto\\cGrcode\\src\\tests\\_tmp_rust_repair_agent_35a0e0988efc441d8db4cb34519940ff\\runs\\run-001"}
+{"iteration": 1, "stage": "local_sanitize"}
+{"iteration": 1, "stage": "local_rules", "error_count": 1, "error_signature": "8568420485867842679", "error_excerpt": "error[E0001]: first\n --> src/lib.rs:1:1"}

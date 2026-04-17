@@ -51,6 +51,8 @@ conda run --no-capture-output -n tcode python src/agent/main.py --c_project_path
 | `--skip-c-analysis` | 跳过 C 项目分析步骤 |
 | `--use-spec-agent` | 使用 `SpecAgent` 作为分析路径 |
 | `--use-spec-json-agent` | 在 `SpecAgent` 后增加 JSON 压缩中间层 |
+| `--use-stable-rust-agent` | 使用 `alternatives/stable_rust_agent.py` 作为可选 Rust 生成器 |
+| `--use-growth-rust-agent` | 使用 `alternatives/growth_rust_agent.py` 作为可选 Rust 生成器 |
 | `--use-pointer-agent` | 可选开启 `PointerAgent`，分析 C 指针并生成 Rust 翻译指导文档 |
 | `--use-macro-agent` | 可选开启 `MacroAgent`，分析 C 宏并生成 Rust 迁移指导文档 |
 | `--skip-code-fix` | 跳过编译修复步骤 |
@@ -68,6 +70,11 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 对应流程：
 
 `CDocAgent -> RustAgent -> CodeFixer -> TestFixer`
+
+说明：
+
+- 当前默认 Rust 生成器是 [`rust_agent.py`](./rust_agent.py)
+- 可选替代实现位于 `src/agent/alternatives/`
 
 ### 2. 使用 SpecAgent
 
@@ -88,6 +95,43 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 对应流程：
 
 `SpecAgent -> SpecJsonAgent -> RustAgent -> CodeFixer -> TestFixer`
+
+### 3.1 使用 StableRustAgent 替代默认 RustAgent
+
+```bash
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --use-stable-rust-agent
+```
+
+对应流程：
+
+`CDocAgent -> StableRustAgent -> CodeFixer -> TestFixer`
+
+如果同时使用 `SpecAgent`：
+
+```bash
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --use-spec-agent --use-stable-rust-agent
+```
+
+### 3.2 使用 GrowthRustAgent 替代默认 RustAgent
+
+```bash
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --use-growth-rust-agent
+```
+
+对应流程：
+
+`CDocAgent -> GrowthRustAgent -> CodeFixer -> TestFixer`
+
+如果同时使用 `SpecAgent`：
+
+```bash
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --use-spec-agent --use-growth-rust-agent
+```
+
+说明：
+
+- `--use-stable-rust-agent` 与 `--use-growth-rust-agent` 互斥
+- 不传这两个开关时，主流程默认仍然使用 `RustAgent`
 
 ### 3.5 使用 PointerAgent 补充指针翻译指导
 
@@ -112,7 +156,11 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 
 - `output/c_docs/specs/<index>-<module>-rust-port/pointer.md`
 
-这些 `.md` 文件会被 `RustAgent` 递归读取，作为额外上下文。
+同时，`SpecAgent` 还会额外生成一份汇总：
+
+- `output/c_docs/docs/rewrite-context/04_gaps_and_risks/001_pointer_macro_summary.md`
+
+当前 `RustAgent` 默认读取的是这份汇总文件，而不是把所有模块下的 `pointer.md` 全部读入。
 
 ### 3.6 使用 MacroAgent 补充宏迁移指导
 
@@ -137,7 +185,11 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 
 - `output/c_docs/specs/<index>-<module>-rust-port/macro.md`
 
-这些 `.md` 文件会被 `RustAgent` 递归读取，作为额外上下文。
+同时，`SpecAgent` 还会额外生成一份汇总：
+
+- `output/c_docs/docs/rewrite-context/04_gaps_and_risks/001_pointer_macro_summary.md`
+
+当前 `RustAgent` 默认读取的是这份汇总文件，而不是把所有模块下的 `macro.md` 全部读入。
 
 ### 4. 使用已有分析文档，跳过分析阶段
 
@@ -150,7 +202,7 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 - 如果走默认路径，程序会读取 `output/c_docs/final_project_overview.md`
 - 如果走 `SpecAgent` 路径，程序会读取 `output/c_docs/docs/rewrite-context/` 和 `output/c_docs/.specify/memory/`
 - 如果同时开启 `--use-spec-json-agent`，程序会优先读取 `output/c_docs/spec_json/spec_context.json`
-- 如果同时开启 `SpecAgent + PointerAgent/MacroAgent`，程序还会额外读取各个 `output/c_docs/specs/<index>-<module>-rust-port/` 下的 `pointer.md` / `macro.md`
+- 如果同时开启 `SpecAgent + PointerAgent/MacroAgent`，程序还会额外读取 `output/c_docs/docs/rewrite-context/04_gaps_and_risks/001_pointer_macro_summary.md`
 
 ### 5. 只生成代码，不做修复
 
@@ -217,7 +269,7 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 
 ## 当前 Rust 生成策略
 
-`RustAgent` 当前支持骨架优先生成：
+当前默认 `RustAgent` 支持骨架优先生成：
 
 1. 先生成文件骨架
 2. 再在骨架上补全实现
@@ -228,6 +280,13 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 - 优先把字段、类型定义和公开接口写完整
 - 优先写类型定义，再写函数签名和实现占位
 - 实现阶段尽量保留骨架里已经写出的类型信息，不回退成更空的版本
+
+当前 Rust 生成器组织方式如下：
+
+- 默认实现：`src/agent/rust_agent.py`
+- 可选替代实现：
+  - `src/agent/alternatives/stable_rust_agent.py`
+  - `src/agent/alternatives/growth_rust_agent.py`
 
 ## Spec JSON 中间层
 

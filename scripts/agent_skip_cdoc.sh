@@ -1,4 +1,5 @@
 #!/bin/bash
+set -o pipefail
 
 if [ $# -ne 1 ]; then
     echo "用法: $0 <项目名称>"
@@ -38,9 +39,8 @@ echo -e "\n${GREEN}Rust 项目名称：${NC}${BLUE}$C_NAME-rust${NC}"
 
 
 python -u ./src/agent/main.py \
-    --model-name "qwen32" \
     --c_project_path "$DATASET" \
     --output_dir "$OUTPUT_DIR" \
     --rust-project-name "$C_NAME-rust" \
-    --skip-c-analysis
+    --skip-c-analysis \
     2>&1 | tee -a "$LOG_FILE"

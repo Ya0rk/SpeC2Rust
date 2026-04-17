@@ -18,6 +18,10 @@ class Model:
     def generate(self, prompt: str):
         return self.llm.get_response(prompt)
 
+    def set_request_label(self, label: str):
+        if hasattr(self.llm, "set_request_label"):
+            self.llm.set_request_label(label)
+
     def _get_model(self, config: Config):
         model_name = config.model_name
         api_key = config.api_key
@@ -45,5 +49,7 @@ class Model:
                 retry_base_delay_seconds=config.api_retry_base_delay_seconds,
                 max_retries=config.api_max_retries,
                 rate_limit_cooldown_seconds=config.api_rate_limit_cooldown_seconds,
+                disable_env_proxy=config.api_disable_env_proxy,
+                stream=config.api_stream,
             )
         raise ValueError(f"Unknown model name: {model_name}")

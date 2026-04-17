@@ -1,4 +1,5 @@
 #!/bin/bash
+set -o pipefail
 
 if [ $# -ne 1 ]; then
     echo "用法：$0 <项目名称>"
@@ -38,8 +39,7 @@ echo -e "\n${GREEN}Rust 项目名称：${NC}${BLUE}$C_NAME-rust${NC}"
 
 # 使用 tee 命令同时输出到终端和日志文件，使用 python -u 确保输出不被缓冲
 python -u ./src/agent/main.py \
-    --model-name "qwen32" \
     --c_project_path "$DATASET" \
     --output_dir "$OUTPUT_DIR" \
     --rust-project-name "$C_NAME-rust" \
-    2>&1 | tee -a "$LOG_FILE"
+    --use-spec-agent 2>&1 | tee -a "$LOG_FILE"

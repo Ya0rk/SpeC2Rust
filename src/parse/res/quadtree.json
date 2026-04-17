@@ -1,0 +1,932 @@
+[
+  {
+    "func_defid": "benchmark.c:bench",
+    "span": "benchmark.c:5:1:10:2",
+    "pieces": [
+      "benchmark.c:5:1:10:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 6,
+    "source": "static void\nbench(void (*bm)(void), char *label){\n  printf(\" %18s\", label);\n  fflush(stdout);\n  bm();\n}",
+    "calls": [
+      {
+        "caller": "benchmark.c:main",
+        "span": "benchmark.c:58:3:58:34",
+        "source": "bench(mark_insert, \"insertion\");"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "benchmark.c:start",
+    "span": "benchmark.c:15:1:18:2",
+    "pieces": [
+      "benchmark.c:15:1:18:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 4,
+    "source": "static void\nstart(void) {\n  startTime = clock();\n}",
+    "calls": [
+      {
+        "caller": "benchmark.c:mark_insert",
+        "span": "benchmark.c:36:3:36:10",
+        "source": "start();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "benchmark.c:stop",
+    "span": "benchmark.c:20:1:24:2",
+    "pieces": [
+      "benchmark.c:20:1:24:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 5,
+    "source": "static void\nstop(void) {\n  float duration = (float) (clock() - startTime) / CLOCKS_PER_SEC;\n  printf(\": \\e[32m%.4f\\e[0ms\\n\", duration);\n}",
+    "calls": [
+      {
+        "caller": "benchmark.c:mark_insert",
+        "span": "benchmark.c:47:3:47:9",
+        "source": "stop();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "benchmark.c:mark_insert",
+    "span": "benchmark.c:26:1:53:2",
+    "pieces": [
+      "benchmark.c:26:1:53:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 28,
+    "source": "static void\nmark_insert(void){\n  int fail = 0;\n  int success = 0;\n  int replace = 0;\n  int n = nodes;\n  int val = 10;\n  quadtree_t *tree = quadtree_new(0, 0, 1000, 1000);\n  double x;\n  double y;\n  start();\n  while(n--){\n    x = (double) (rand() % 1000);\n    y = (double) (rand() % 1000);\n    int status = quadtree_insert(tree, x, y, &val);\n    switch(status){\n      case 0: ++fail; break;\n      case 1: ++success; break;\n      case 2: ++replace; break;\n    }\n  }\n  stop();\n  printf(\"  %18s %i\\n\", \"length:\", tree->length);\n  printf(\"  %18s %d\\n\", \"insert success:\", success);\n  printf(\"  %18s %d\\n\", \"insert replace:\", replace);\n  printf(\"  %18s %d\\n\", \"insert fail:\", fail);\n  quadtree_free(tree);\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "benchmark.c:main",
+    "span": "benchmark.c:55:1:60:2",
+    "pieces": [
+      "benchmark.c:55:1:60:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 6,
+    "source": "int\nmain(int argc, const char *argv[]){\n  srand(time(NULL));\n  bench(mark_insert, \"insertion\");\n  return 0;\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test.c:descent",
+    "span": "test.c:13:1:13:38",
+    "pieces": [
+      "test.c:13:1:13:38"
+    ],
+    "sub_chunks": [],
+    "num_lines": 1,
+    "source": "id descent(quadtree_node_t *node){}\n\n",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test.c:ascent",
+    "span": "test.c:15:1:15:37",
+    "pieces": [
+      "test.c:15:1:15:37"
+    ],
+    "sub_chunks": [],
+    "num_lines": 1,
+    "source": "id ascent(quadtree_node_t *node){}\n\n",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test.c:test_node",
+    "span": "test.c:17:1:24:2",
+    "pieces": [
+      "test.c:17:1:24:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 8,
+    "source": "atic void\ntest_node(void){\n  quadtree_node_t *node = quadtree_node_new();\n  assert(!quadtree_node_isleaf(node));\n  assert(quadtree_node_isempty(node));\n  assert(!quadtree_node_ispointer(node));\n  free(node);\n}\n\n",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test.c:test_bounds",
+    "span": "test.c:26:1:48:2",
+    "pieces": [
+      "test.c:26:1:48:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 23,
+    "source": "atic void\ntest_bounds(void){\n  quadtree_bounds_t *bounds = quadtree_bounds_new();\n\n  assert(bounds);\n  assert(bounds->nw->x == INFINITY);\n  assert(bounds->se->x == -INFINITY);\n\n  quadtree_bounds_extend(bounds, 5.0, 5.0);\n  assert(bounds->nw->x == 5.0);\n  assert(bounds->se->x == 5.0);\n\n  quadtree_bounds_extend(bounds, 10.0, 10.0);\n  assert(bounds->nw->y == 10.0);\n  assert(bounds->nw->y == 10.0);\n  assert(bounds->se->y == 5.0);\n  assert(bounds->se->y == 5.0);\n\n  assert(bounds->width == 5.0);\n  assert(bounds->height == 5.0);\n\n  quadtree_bounds_free(bounds);\n}\n\n",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test.c:test_tree",
+    "span": "test.c:51:1:81:2",
+    "pieces": [
+      "test.c:51:1:81:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 31,
+    "source": "atic void\ntest_tree(void){\n  int val = 10;\n\n  quadtree_t *tree = quadtree_new(1, 1, 10, 10);\n  assert(tree->root->bounds->nw->x == 1);\n  assert(tree->root->bounds->nw->y == 10.0);\n  assert(tree->root->bounds->se->x == 10.0);\n  assert(tree->root->bounds->se->y == 1);\n\n\n  assert(quadtree_insert(tree, 0, 0, &val) == 0);\n  assert(quadtree_insert(tree, 110.0, 110.0, &val) == 0);\n\n  assert(quadtree_insert(tree, 8.0, 2.0, &val) != 0);\n  assert(tree->length == 1);\n  assert(tree->root->point->x == 8.0);\n  assert(tree->root->point->y == 2.0);\n\n  assert(quadtree_insert(tree, 0.0, 1.0, &val) == 0); /* failed insertion */\n  assert(quadtree_insert(tree, 2.0, 3.0, &val) == 1); /* normal insertion */\n  assert(quadtree_insert(tree, 2.0, 3.0, &val) == 2); /* replacement insertion */\n  assert(tree->length == 2);\n  assert(tree->root->point == NULL);\n\n  assert(quadtree_insert(tree, 3.0, 1.1, &val) == 1);\n  assert(tree->length == 3);\n  assert(quadtree_search(tree, 3.0, 1.1)->x == 3.0);\n  quadtree_walk(tree->root, ascent, descent);\n  quadtree_free(tree);\n}\n\n",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test.c:test_points",
+    "span": "test.c:83:1:89:2",
+    "pieces": [
+      "test.c:83:1:89:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 7,
+    "source": "atic void\ntest_points(void){\n  quadtree_point_t *point = quadtree_point_new(5, 6);\n  assert(point->x == 5);\n  assert(point->y == 6);\n  quadtree_point_free(point);\n}\n\n",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test.c:main",
+    "span": "test.c:91:1:97:2",
+    "pieces": [
+      "test.c:91:1:97:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 7,
+    "source": "t\nmain(int argc, const char *argv[]){\n  test(tree);\n  test(node);\n  test(bounds);\n  test(points);\n}\n",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\bounds.c:quadtree_bounds_extend",
+    "span": "src\\bounds.c:14:1:22:2",
+    "pieces": [
+      "src\\bounds.c:14:1:22:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "void\nquadtree_bounds_extend(quadtree_bounds_t *bounds, double x, double y){\n  bounds->nw->x = fmin(x, bounds->nw->x);\n  bounds->nw->y = fmax(y, bounds->nw->y);\n  bounds->se->x = fmax(x, bounds->se->x);\n  bounds->se->y = fmin(y, bounds->se->y);\n  bounds->width  = fabs(bounds->nw->x - bounds->se->x);\n  bounds->height = fabs(bounds->nw->y - bounds->se->y);\n}",
+    "calls": [
+      {
+        "caller": "test.c:test_bounds",
+        "span": "test.c:34:3:34:43",
+        "source": "quadtree_bounds_extend(bounds, 5.0, 5.0);"
+      },
+      {
+        "caller": "test.c:test_bounds",
+        "span": "test.c:38:3:38:45",
+        "source": "quadtree_bounds_extend(bounds, 10.0, 10.0);"
+      },
+      {
+        "caller": "src\\node.c:quadtree_node_with_bounds",
+        "span": "src\\node.c:55:3:55:51",
+        "source": "quadtree_bounds_extend(node->bounds, maxx, maxy);"
+      },
+      {
+        "caller": "src\\node.c:quadtree_node_with_bounds",
+        "span": "src\\node.c:56:3:56:51",
+        "source": "quadtree_bounds_extend(node->bounds, minx, miny);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\bounds.c:quadtree_bounds_free",
+    "span": "src\\bounds.c:24:1:29:2",
+    "pieces": [
+      "src\\bounds.c:24:1:29:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 6,
+    "source": "void\nquadtree_bounds_free(quadtree_bounds_t *bounds){\n  quadtree_point_free(bounds->nw);\n  quadtree_point_free(bounds->se);\n  free(bounds);\n}",
+    "calls": [
+      {
+        "caller": "test.c:test_bounds",
+        "span": "test.c:47:3:47:31",
+        "source": "quadtree_bounds_free(bounds);"
+      },
+      {
+        "caller": "src\\node.c:quadtree_node_free",
+        "span": "src\\node.c:67:3:67:37",
+        "source": "quadtree_bounds_free(node->bounds);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\bounds.c:quadtree_bounds_new",
+    "span": "src\\bounds.c:32:1:42:2",
+    "pieces": [
+      "src\\bounds.c:32:1:42:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 11,
+    "source": "quadtree_bounds_t*\nquadtree_bounds_new(void){\n  quadtree_bounds_t *bounds;\n  if((bounds = malloc(sizeof(*bounds))) == NULL)\n    return NULL;\n  bounds->nw     = quadtree_point_new(INFINITY, -INFINITY);\n  bounds->se     = quadtree_point_new(-INFINITY, INFINITY);\n  bounds->width  = 0;\n  bounds->height = 0;\n  return bounds;\n}",
+    "calls": [
+      {
+        "caller": "test.c:test_bounds",
+        "span": "test.c:28:31:28:52",
+        "source": "quadtree_bounds_t *bounds = quadtree_bounds_new();"
+      },
+      {
+        "caller": "src\\node.c:quadtree_node_with_bounds",
+        "span": "src\\node.c:54:23:54:44",
+        "source": "if(!(node->bounds = quadtree_bounds_new())) return NULL;"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\node.c:quadtree_node_ispointer",
+    "span": "src\\node.c:5:1:12:2",
+    "pieces": [
+      "src\\node.c:5:1:12:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 8,
+    "source": "int\nquadtree_node_ispointer(quadtree_node_t *node){\n  return node->nw != NULL\n      && node->ne != NULL\n      && node->sw != NULL\n      && node->se != NULL\n      && !quadtree_node_isleaf(node);\n}",
+    "calls": [
+      {
+        "caller": "test.c:test_node",
+        "span": "test.c:22:11:22:40",
+        "source": "assert(!quadtree_node_ispointer(node));"
+      },
+      {
+        "caller": "src\\quadtree.c:find_",
+        "span": "src\\quadtree.c:91:13:91:42",
+        "source": "} else if(quadtree_node_ispointer(node)){"
+      },
+      {
+        "caller": "src\\quadtree.c:insert_",
+        "span": "src\\quadtree.c:120:13:120:42",
+        "source": "} else if(quadtree_node_ispointer(root)){"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\node.c:quadtree_node_isempty",
+    "span": "src\\node.c:14:1:21:2",
+    "pieces": [
+      "src\\node.c:14:1:21:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 8,
+    "source": "int\nquadtree_node_isempty(quadtree_node_t *node){\n  return node->nw == NULL\n      && node->ne == NULL\n      && node->sw == NULL\n      && node->se == NULL\n      && !quadtree_node_isleaf(node);\n}",
+    "calls": [
+      {
+        "caller": "test.c:test_node",
+        "span": "test.c:21:10:21:37",
+        "source": "assert(quadtree_node_isempty(node));"
+      },
+      {
+        "caller": "src\\quadtree.c:insert_",
+        "span": "src\\quadtree.c:104:6:104:33",
+        "source": "if(quadtree_node_isempty(root)){"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\node.c:quadtree_node_isleaf",
+    "span": "src\\node.c:23:1:26:2",
+    "pieces": [
+      "src\\node.c:23:1:26:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 4,
+    "source": "int\nquadtree_node_isleaf(quadtree_node_t *node){\n  return node->point != NULL;\n}",
+    "calls": [
+      {
+        "caller": "test.c:test_node",
+        "span": "test.c:20:11:20:37",
+        "source": "assert(!quadtree_node_isleaf(node));"
+      },
+      {
+        "caller": "src\\node.c:quadtree_node_ispointer",
+        "span": "src\\node.c:11:11:11:37",
+        "source": "&& !quadtree_node_isleaf(node);"
+      },
+      {
+        "caller": "src\\node.c:quadtree_node_isempty",
+        "span": "src\\node.c:20:11:20:37",
+        "source": "&& !quadtree_node_isleaf(node);"
+      },
+      {
+        "caller": "src\\quadtree.c:find_",
+        "span": "src\\quadtree.c:88:6:88:32",
+        "source": "if(quadtree_node_isleaf(node)){"
+      },
+      {
+        "caller": "src\\quadtree.c:insert_",
+        "span": "src\\quadtree.c:108:13:108:39",
+        "source": "} else if(quadtree_node_isleaf(root)){"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\node.c:quadtree_node_reset",
+    "span": "src\\node.c:28:1:32:2",
+    "pieces": [
+      "src\\node.c:28:1:32:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 5,
+    "source": "void\nquadtree_node_reset(quadtree_node_t* node, void (*key_free)(void*)) {\n  quadtree_point_free(node->point);\n  (*key_free)(node->key);\n}",
+    "calls": [
+      {
+        "caller": "src\\node.c:quadtree_node_free",
+        "span": "src\\node.c:68:3:68:38",
+        "source": "quadtree_node_reset(node, key_free);"
+      },
+      {
+        "caller": "src\\quadtree.c:reset_node_",
+        "span": "src\\quadtree.c:33:5:33:46",
+        "source": "quadtree_node_reset(node, tree->key_free);"
+      },
+      {
+        "caller": "src\\quadtree.c:reset_node_",
+        "span": "src\\quadtree.c:35:5:35:40",
+        "source": "quadtree_node_reset(node, elision_);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\node.c:quadtree_node_new",
+    "span": "src\\node.c:35:1:48:2",
+    "pieces": [
+      "src\\node.c:35:1:48:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 14,
+    "source": "quadtree_node_t*\nquadtree_node_new(void) {\n  quadtree_node_t *node;\n  if(!(node = malloc(sizeof(*node))))\n    return NULL;\n  node->ne     = NULL;\n  node->nw     = NULL;\n  node->se     = NULL;\n  node->sw     = NULL;\n  node->point  = NULL;\n  node->bounds = NULL;\n  node->key    = NULL;\n  return node;\n}",
+    "calls": [
+      {
+        "caller": "test.c:test_node",
+        "span": "test.c:19:27:19:46",
+        "source": "quadtree_node_t *node = quadtree_node_new();"
+      },
+      {
+        "caller": "src\\node.c:quadtree_node_with_bounds",
+        "span": "src\\node.c:53:15:53:34",
+        "source": "if(!(node = quadtree_node_new())) return NULL;"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\node.c:quadtree_node_with_bounds",
+    "span": "src\\node.c:50:1:58:2",
+    "pieces": [
+      "src\\node.c:50:1:58:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "quadtree_node_t*\nquadtree_node_with_bounds(double minx, double miny, double maxx, double maxy){\n  quadtree_node_t* node;\n  if(!(node = quadtree_node_new())) return NULL;\n  if(!(node->bounds = quadtree_bounds_new())) return NULL;\n  quadtree_bounds_extend(node->bounds, maxx, maxy);\n  quadtree_bounds_extend(node->bounds, minx, miny);\n  return node;\n}",
+    "calls": [
+      {
+        "caller": "src\\quadtree.c:split_node_",
+        "span": "src\\quadtree.c:64:13:64:73",
+        "source": "if(!(nw = quadtree_node_with_bounds(x,      y - hh,     x + hw,     y))) return 0;"
+      },
+      {
+        "caller": "src\\quadtree.c:split_node_",
+        "span": "src\\quadtree.c:65:13:65:73",
+        "source": "if(!(ne = quadtree_node_with_bounds(x + hw, y - hh,     x + hw * 2, y))) return 0;"
+      },
+      {
+        "caller": "src\\quadtree.c:split_node_",
+        "span": "src\\quadtree.c:66:13:66:78",
+        "source": "if(!(sw = quadtree_node_with_bounds(x,      y - hh * 2, x + hw,     y - hh))) return 0;"
+      },
+      {
+        "caller": "src\\quadtree.c:split_node_",
+        "span": "src\\quadtree.c:67:13:67:78",
+        "source": "if(!(se = quadtree_node_with_bounds(x + hw, y - hh * 2, x + hw * 2, y - hh))) return 0;"
+      },
+      {
+        "caller": "src\\quadtree.c:quadtree_new",
+        "span": "src\\quadtree.c:134:16:134:65",
+        "source": "tree->root = quadtree_node_with_bounds(minx, miny, maxx, maxy);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\node.c:quadtree_node_free",
+    "span": "src\\node.c:60:1:70:2",
+    "pieces": [
+      "src\\node.c:60:1:70:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 11,
+    "source": "void\nquadtree_node_free(quadtree_node_t* node, void (*key_free)(void*)) {\n  if(node->nw != NULL) quadtree_node_free(node->nw, key_free);\n  if(node->ne != NULL) quadtree_node_free(node->ne, key_free);\n  if(node->sw != NULL) quadtree_node_free(node->sw, key_free);\n  if(node->se != NULL) quadtree_node_free(node->se, key_free);\n\n  quadtree_bounds_free(node->bounds);\n  quadtree_node_reset(node, key_free);\n  free(node);\n}",
+    "calls": [
+      {
+        "caller": "src\\node.c:quadtree_node_free",
+        "span": "src\\node.c:62:24:62:62",
+        "source": "if(node->nw != NULL) quadtree_node_free(node->nw, key_free);"
+      },
+      {
+        "caller": "src\\node.c:quadtree_node_free",
+        "span": "src\\node.c:63:24:63:62",
+        "source": "if(node->ne != NULL) quadtree_node_free(node->ne, key_free);"
+      },
+      {
+        "caller": "src\\node.c:quadtree_node_free",
+        "span": "src\\node.c:64:24:64:62",
+        "source": "if(node->sw != NULL) quadtree_node_free(node->sw, key_free);"
+      },
+      {
+        "caller": "src\\node.c:quadtree_node_free",
+        "span": "src\\node.c:65:24:65:62",
+        "source": "if(node->se != NULL) quadtree_node_free(node->se, key_free);"
+      },
+      {
+        "caller": "src\\quadtree.c:quadtree_free",
+        "span": "src\\quadtree.c:169:5:169:51",
+        "source": "quadtree_node_free(tree->root, tree->key_free);"
+      },
+      {
+        "caller": "src\\quadtree.c:quadtree_free",
+        "span": "src\\quadtree.c:171:5:171:45",
+        "source": "quadtree_node_free(tree->root, elision_);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\point.c:quadtree_point_new",
+    "span": "src\\point.c:3:1:11:2",
+    "pieces": [
+      "src\\point.c:3:1:11:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "quadtree_point_t*\nquadtree_point_new(double x, double y) {\n  quadtree_point_t* point;\n  if(!(point = malloc(sizeof(*point))))\n    return NULL;\n  point->x = x;\n  point->y = y;\n  return point;\n}",
+    "calls": [
+      {
+        "caller": "test.c:test_points",
+        "span": "test.c:85:29:85:53",
+        "source": "quadtree_point_t *point = quadtree_point_new(5, 6);"
+      },
+      {
+        "caller": "src\\bounds.c:quadtree_bounds_new",
+        "span": "src\\bounds.c:37:20:37:59",
+        "source": "bounds->nw     = quadtree_point_new(INFINITY, -INFINITY);"
+      },
+      {
+        "caller": "src\\bounds.c:quadtree_bounds_new",
+        "span": "src\\bounds.c:38:20:38:59",
+        "source": "bounds->se     = quadtree_point_new(-INFINITY, INFINITY);"
+      },
+      {
+        "caller": "src\\quadtree.c:quadtree_insert",
+        "span": "src\\quadtree.c:147:16:147:40",
+        "source": "if(!(point = quadtree_point_new(x, y))) return 0;"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\point.c:quadtree_point_free",
+    "span": "src\\point.c:13:1:16:2",
+    "pieces": [
+      "src\\point.c:13:1:16:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 4,
+    "source": "void\nquadtree_point_free(quadtree_point_t *point){\n  free(point);\n}",
+    "calls": [
+      {
+        "caller": "test.c:test_points",
+        "span": "test.c:88:3:88:29",
+        "source": "quadtree_point_free(point);"
+      },
+      {
+        "caller": "src\\bounds.c:quadtree_bounds_free",
+        "span": "src\\bounds.c:26:3:26:34",
+        "source": "quadtree_point_free(bounds->nw);"
+      },
+      {
+        "caller": "src\\bounds.c:quadtree_bounds_free",
+        "span": "src\\bounds.c:27:3:27:34",
+        "source": "quadtree_point_free(bounds->se);"
+      },
+      {
+        "caller": "src\\node.c:quadtree_node_reset",
+        "span": "src\\node.c:30:3:30:35",
+        "source": "quadtree_point_free(node->point);"
+      },
+      {
+        "caller": "src\\quadtree.c:quadtree_insert",
+        "span": "src\\quadtree.c:149:5:149:31",
+        "source": "quadtree_point_free(point);"
+      },
+      {
+        "caller": "src\\quadtree.c:quadtree_insert",
+        "span": "src\\quadtree.c:154:5:154:31",
+        "source": "quadtree_point_free(point);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\quadtree.c:node_contains_",
+    "span": "src\\quadtree.c:18:1:25:2",
+    "pieces": [
+      "src\\quadtree.c:18:1:25:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 8,
+    "source": "static int\nnode_contains_(quadtree_node_t *outer, quadtree_point_t *it) {\n  return outer->bounds != NULL\n      && outer->bounds->nw->x <= it->x\n      && outer->bounds->nw->y >= it->y\n      && outer->bounds->se->x >= it->x\n      && outer->bounds->se->y <= it->y;\n}",
+    "calls": [
+      {
+        "caller": "src\\quadtree.c:get_quadrant_",
+        "span": "src\\quadtree.c:41:6:41:37",
+        "source": "if(node_contains_(root->nw, point)) return root->nw;"
+      },
+      {
+        "caller": "src\\quadtree.c:get_quadrant_",
+        "span": "src\\quadtree.c:42:6:42:37",
+        "source": "if(node_contains_(root->ne, point)) return root->ne;"
+      },
+      {
+        "caller": "src\\quadtree.c:get_quadrant_",
+        "span": "src\\quadtree.c:43:6:43:37",
+        "source": "if(node_contains_(root->sw, point)) return root->sw;"
+      },
+      {
+        "caller": "src\\quadtree.c:get_quadrant_",
+        "span": "src\\quadtree.c:44:6:44:37",
+        "source": "if(node_contains_(root->se, point)) return root->se;"
+      },
+      {
+        "caller": "src\\quadtree.c:quadtree_insert",
+        "span": "src\\quadtree.c:148:7:148:40",
+        "source": "if(!node_contains_(tree->root, point)){"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\quadtree.c:elision_",
+    "span": "src\\quadtree.c:27:1:28:22",
+    "pieces": [
+      "src\\quadtree.c:27:1:28:22"
+    ],
+    "sub_chunks": [],
+    "num_lines": 2,
+    "source": "static void\nelision_(void* key){}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\quadtree.c:reset_node_",
+    "span": "src\\quadtree.c:30:1:37:2",
+    "pieces": [
+      "src\\quadtree.c:30:1:37:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 8,
+    "source": "static void\nreset_node_(quadtree_t *tree, quadtree_node_t *node){\n  if(tree->key_free != NULL) {\n    quadtree_node_reset(node, tree->key_free);\n  } else {\n    quadtree_node_reset(node, elision_);\n  }\n}",
+    "calls": [
+      {
+        "caller": "src\\quadtree.c:insert_",
+        "span": "src\\quadtree.c:110:7:110:30",
+        "source": "reset_node_(tree, root);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\quadtree.c:get_quadrant_",
+    "span": "src\\quadtree.c:39:1:46:2",
+    "pieces": [
+      "src\\quadtree.c:39:1:46:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 8,
+    "source": "static quadtree_node_t *\nget_quadrant_(quadtree_node_t *root, quadtree_point_t *point) {\n  if(node_contains_(root->nw, point)) return root->nw;\n  if(node_contains_(root->ne, point)) return root->ne;\n  if(node_contains_(root->sw, point)) return root->sw;\n  if(node_contains_(root->se, point)) return root->se;\n  return NULL;\n}",
+    "calls": [
+      {
+        "caller": "src\\quadtree.c:find_",
+        "span": "src\\quadtree.c:95:18:95:44",
+        "source": "return find_(get_quadrant_(node, &test), x, y);"
+      },
+      {
+        "caller": "src\\quadtree.c:insert_",
+        "span": "src\\quadtree.c:121:33:121:59",
+        "source": "quadtree_node_t* quadrant = get_quadrant_(root, point);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\quadtree.c:split_node_",
+    "span": "src\\quadtree.c:49:1:80:2",
+    "pieces": [
+      "src\\quadtree.c:49:1:80:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 32,
+    "source": "static int\nsplit_node_(quadtree_t *tree, quadtree_node_t *node){\n  quadtree_node_t *nw;\n  quadtree_node_t *ne;\n  quadtree_node_t *sw;\n  quadtree_node_t *se;\n  quadtree_point_t *old;\n  void *key;\n\n  double x  = node->bounds->nw->x;\n  double y  = node->bounds->nw->y;\n  double hw = node->bounds->width / 2;\n  double hh = node->bounds->height / 2;\n\n                                    //minx,   miny,       maxx,       maxy\n  if(!(nw = quadtree_node_with_bounds(x,      y - hh,     x + hw,     y))) return 0;\n  if(!(ne = quadtree_node_with_bounds(x + hw, y - hh,     x + hw * 2, y))) return 0;\n  if(!(sw = quadtree_node_with_bounds(x,      y - hh * 2, x + hw,     y - hh))) return 0;\n  if(!(se = quadtree_node_with_bounds(x + hw, y - hh * 2, x + hw * 2, y - hh))) return 0;\n\n  node->nw = nw;\n  node->ne = ne;\n  node->sw = sw;\n  node->se = se;\n\n  old = node->point;\n  key   = node->key;\n  node->point = NULL;\n  node->key   = NULL;\n\n  return insert_(tree, node, old, key);\n}",
+    "calls": [
+      {
+        "caller": "src\\quadtree.c:insert_",
+        "span": "src\\quadtree.c:115:11:115:34",
+        "source": "if(!split_node_(tree, root)){"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\quadtree.c:find_",
+    "span": "src\\quadtree.c:83:1:99:2",
+    "pieces": [
+      "src\\quadtree.c:83:1:99:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 17,
+    "source": "static quadtree_point_t*\nfind_(quadtree_node_t* node, double x, double y) {\n  if(!node){\n    return NULL;\n  }\n  if(quadtree_node_isleaf(node)){\n    if(node->point->x == x && node->point->y == y)\n      return node->point;\n  } else if(quadtree_node_ispointer(node)){\n    quadtree_point_t test;\n    test.x = x;\n    test.y = y;\n    return find_(get_quadrant_(node, &test), x, y);\n  }\n\n  return NULL;\n}",
+    "calls": [
+      {
+        "caller": "src\\quadtree.c:find_",
+        "span": "src\\quadtree.c:95:12:95:51",
+        "source": "return find_(get_quadrant_(node, &test), x, y);"
+      },
+      {
+        "caller": "src\\quadtree.c:quadtree_search",
+        "span": "src\\quadtree.c:163:10:163:33",
+        "source": "return find_(tree->root, x, y);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\quadtree.c:insert_",
+    "span": "src\\quadtree.c:102:1:125:2",
+    "pieces": [
+      "src\\quadtree.c:102:1:125:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 24,
+    "source": "static int\ninsert_(quadtree_t* tree, quadtree_node_t *root, quadtree_point_t *point, void *key) {\n  if(quadtree_node_isempty(root)){\n    root->point = point;\n    root->key   = key;\n    return 1; /* normal insertion flag */\n  } else if(quadtree_node_isleaf(root)){\n    if(root->point->x == point->x && root->point->y == point->y){\n      reset_node_(tree, root);\n      root->point = point;\n      root->key   = key;\n      return 2; /* replace insertion flag */\n    } else {\n      if(!split_node_(tree, root)){\n        return 0; /* failed insertion flag */\n      }\n      return insert_(tree, root, point, key);\n    }\n  } else if(quadtree_node_ispointer(root)){\n    quadtree_node_t* quadrant = get_quadrant_(root, point);\n    return quadrant == NULL ? 0 : insert_(tree, quadrant, point, key);\n  }\n  return 0;\n}",
+    "calls": [
+      {
+        "caller": "src\\quadtree.c:split_node_",
+        "span": "src\\quadtree.c:79:10:79:39",
+        "source": "return insert_(tree, node, old, key);"
+      },
+      {
+        "caller": "src\\quadtree.c:insert_",
+        "span": "src\\quadtree.c:118:14:118:45",
+        "source": "return insert_(tree, root, point, key);"
+      },
+      {
+        "caller": "src\\quadtree.c:insert_",
+        "span": "src\\quadtree.c:122:35:122:70",
+        "source": "return quadrant == NULL ? 0 : insert_(tree, quadrant, point, key);"
+      },
+      {
+        "caller": "src\\quadtree.c:quadtree_insert",
+        "span": "src\\quadtree.c:153:24:153:61",
+        "source": "if(!(insert_status = insert_(tree, tree->root, point, key))){"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\quadtree.c:quadtree_new",
+    "span": "src\\quadtree.c:129:1:140:2",
+    "pieces": [
+      "src\\quadtree.c:129:1:140:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 12,
+    "source": "quadtree_t*\nquadtree_new(double minx, double miny, double maxx, double maxy) {\n  quadtree_t *tree;\n  if(!(tree = malloc(sizeof(*tree))))\n    return NULL;\n  tree->root = quadtree_node_with_bounds(minx, miny, maxx, maxy);\n  if(!(tree->root))\n    return NULL;\n  tree->key_free = NULL;\n  tree->length = 0;\n  return tree;\n}",
+    "calls": [
+      {
+        "caller": "benchmark.c:mark_insert",
+        "span": "benchmark.c:33:22:33:52",
+        "source": "quadtree_t *tree = quadtree_new(0, 0, 1000, 1000);"
+      },
+      {
+        "caller": "test.c:test_tree",
+        "span": "test.c:55:22:55:48",
+        "source": "quadtree_t *tree = quadtree_new(1, 1, 10, 10);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\quadtree.c:quadtree_insert",
+    "span": "src\\quadtree.c:142:1:159:2",
+    "pieces": [
+      "src\\quadtree.c:142:1:159:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 18,
+    "source": "int\nquadtree_insert(quadtree_t *tree, double x, double y, void *key) {\n  quadtree_point_t *point;\n  int insert_status;\n\n  if(!(point = quadtree_point_new(x, y))) return 0;\n  if(!node_contains_(tree->root, point)){\n    quadtree_point_free(point);\n    return 0;\n  }\n  \n  if(!(insert_status = insert_(tree, tree->root, point, key))){\n    quadtree_point_free(point);\n    return 0;\n  }\n  if (insert_status == 1) tree->length++;\n  return insert_status;\n}",
+    "calls": [
+      {
+        "caller": "benchmark.c:mark_insert",
+        "span": "benchmark.c:40:18:40:51",
+        "source": "int status = quadtree_insert(tree, x, y, &val);"
+      },
+      {
+        "caller": "test.c:test_tree",
+        "span": "test.c:62:10:62:43",
+        "source": "assert(quadtree_insert(tree, 0, 0, &val) == 0);"
+      },
+      {
+        "caller": "test.c:test_tree",
+        "span": "test.c:63:10:63:51",
+        "source": "assert(quadtree_insert(tree, 110.0, 110.0, &val) == 0);"
+      },
+      {
+        "caller": "test.c:test_tree",
+        "span": "test.c:65:10:65:47",
+        "source": "assert(quadtree_insert(tree, 8.0, 2.0, &val) != 0);"
+      },
+      {
+        "caller": "test.c:test_tree",
+        "span": "test.c:70:10:70:47",
+        "source": "assert(quadtree_insert(tree, 0.0, 1.0, &val) == 0); /* failed insertion */"
+      },
+      {
+        "caller": "test.c:test_tree",
+        "span": "test.c:71:10:71:47",
+        "source": "assert(quadtree_insert(tree, 2.0, 3.0, &val) == 1); /* normal insertion */"
+      },
+      {
+        "caller": "test.c:test_tree",
+        "span": "test.c:72:10:72:47",
+        "source": "assert(quadtree_insert(tree, 2.0, 3.0, &val) == 2); /* replacement insertion */"
+      },
+      {
+        "caller": "test.c:test_tree",
+        "span": "test.c:76:10:76:47",
+        "source": "assert(quadtree_insert(tree, 3.0, 1.1, &val) == 1);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\quadtree.c:quadtree_search",
+    "span": "src\\quadtree.c:161:1:164:2",
+    "pieces": [
+      "src\\quadtree.c:161:1:164:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 4,
+    "source": "quadtree_point_t*\nquadtree_search(quadtree_t *tree, double x, double y) {\n  return find_(tree->root, x, y);\n}",
+    "calls": [
+      {
+        "caller": "test.c:test_tree",
+        "span": "test.c:78:10:78:41",
+        "source": "assert(quadtree_search(tree, 3.0, 1.1)->x == 3.0);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\quadtree.c:quadtree_free",
+    "span": "src\\quadtree.c:166:1:174:2",
+    "pieces": [
+      "src\\quadtree.c:166:1:174:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "void\nquadtree_free(quadtree_t *tree) {\n  if(tree->key_free != NULL) {\n    quadtree_node_free(tree->root, tree->key_free);\n  } else {\n    quadtree_node_free(tree->root, elision_);\n  }\n  free(tree);\n}",
+    "calls": [
+      {
+        "caller": "benchmark.c:mark_insert",
+        "span": "benchmark.c:52:3:52:22",
+        "source": "quadtree_free(tree);"
+      },
+      {
+        "caller": "test.c:test_tree",
+        "span": "test.c:80:3:80:22",
+        "source": "quadtree_free(tree);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "src\\quadtree.c:quadtree_walk",
+    "span": "src\\quadtree.c:176:1:185:2",
+    "pieces": [
+      "src\\quadtree.c:176:1:185:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 10,
+    "source": "void\nquadtree_walk(quadtree_node_t *root, void (*descent)(quadtree_node_t *node),\n                                     void (*ascent)(quadtree_node_t *node)) {\n  (*descent)(root);\n  if(root->nw != NULL) quadtree_walk(root->nw, descent, ascent);\n  if(root->ne != NULL) quadtree_walk(root->ne, descent, ascent);\n  if(root->sw != NULL) quadtree_walk(root->sw, descent, ascent);\n  if(root->se != NULL) quadtree_walk(root->se, descent, ascent);\n  (*ascent)(root);\n}",
+    "calls": [
+      {
+        "caller": "test.c:test_tree",
+        "span": "test.c:79:3:79:45",
+        "source": "quadtree_walk(tree->root, ascent, descent);"
+      },
+      {
+        "caller": "src\\quadtree.c:quadtree_walk",
+        "span": "src\\quadtree.c:180:24:180:64",
+        "source": "if(root->nw != NULL) quadtree_walk(root->nw, descent, ascent);"
+      },
+      {
+        "caller": "src\\quadtree.c:quadtree_walk",
+        "span": "src\\quadtree.c:181:24:181:64",
+        "source": "if(root->ne != NULL) quadtree_walk(root->ne, descent, ascent);"
+      },
+      {
+        "caller": "src\\quadtree.c:quadtree_walk",
+        "span": "src\\quadtree.c:182:24:182:64",
+        "source": "if(root->sw != NULL) quadtree_walk(root->sw, descent, ascent);"
+      },
+      {
+        "caller": "src\\quadtree.c:quadtree_walk",
+        "span": "src\\quadtree.c:183:24:183:64",
+        "source": "if(root->se != NULL) quadtree_walk(root->se, descent, ascent);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  }
+]

@@ -1,5 +1,755 @@
 [
   {
+    "func_defid": "avl_bf.c:avl_create",
+    "span": "avl_bf.c:28:1:54:2",
+    "pieces": [
+      "avl_bf.c:28:1:54:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 27,
+    "source": "avltree *avl_create(int (*compare_func)(const void *, const void *), void (*destroy_func)(void *))\n{\n\tavltree *avlt;\n\n\tavlt = (avltree *) malloc(sizeof(avltree));\n\tif (avlt == NULL)\n\t\treturn NULL; /* out of memory */\n\n\tavlt->compare = compare_func;\n\tavlt->destroy = destroy_func;\n\n\t/* sentinel node nil */\n\tavlt->nil.left = avlt->nil.right = avlt->nil.parent = AVL_NIL(avlt);\n\tavlt->nil.bf = 0;\n\tavlt->nil.data = NULL;\n\n\t/* sentinel node root */\n\tavlt->root.left = avlt->root.right = avlt->root.parent = AVL_NIL(avlt);\n\tavlt->root.bf = 0;\n\tavlt->root.data = NULL;\n\n\t#ifdef AVL_MIN\n\tavlt->min = NULL;\n\t#endif\n\n\treturn avlt;\n}",
+    "calls": [
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:16:14:16:52",
+        "source": "if ((avlt = avl_create(compare_func, destroy_func)) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:tree_create",
+        "span": "avl_test.c:92:9:92:47",
+        "source": "return avl_create(compare_func, destroy_func);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_destroy",
+    "span": "avl_bf.c:59:1:63:2",
+    "pieces": [
+      "avl_bf.c:59:1:63:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 5,
+    "source": "void avl_destroy(avltree *avlt)\n{\n\tdestroy(avlt, AVL_FIRST(avlt));\n\tfree(avlt);\n}",
+    "calls": [
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:54:2:54:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:permutation_insert",
+        "span": "avl_test.c:210:2:210:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:permutation_delete",
+        "span": "avl_test.c:243:2:243:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_create",
+        "span": "avl_test.c:268:3:268:20",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_create",
+        "span": "avl_test.c:272:2:272:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:315:2:315:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:319:2:319:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:363:2:363:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:367:2:367:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_insertion",
+        "span": "avl_test.c:451:3:451:20",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_insertion",
+        "span": "avl_test.c:457:2:457:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_deletion",
+        "span": "avl_test.c:586:3:586:20",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_atomic_deletion",
+        "span": "avl_test.c:592:2:592:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_insertion",
+        "span": "avl_test.c:640:3:640:20",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_insertion",
+        "span": "avl_test.c:646:2:646:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_deletion",
+        "span": "avl_test.c:690:3:690:20",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_chain_deletion",
+        "span": "avl_test.c:696:2:696:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_random_insertion_deletion",
+        "span": "avl_test.c:760:2:760:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_random_insertion_deletion",
+        "span": "avl_test.c:764:2:764:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:790:2:790:19",
+        "source": "avl_destroy(avlt);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_min",
+        "span": "avl_test.c:794:2:794:19",
+        "source": "avl_destroy(avlt);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_find",
+    "span": "avl_bf.c:69:1:84:2",
+    "pieces": [
+      "avl_bf.c:69:1:84:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 16,
+    "source": "avlnode *avl_find(avltree *avlt, void *data)\n{\n\tavlnode *p;\n\n\tp = AVL_FIRST(avlt);\n\n\twhile (p != AVL_NIL(avlt)) {\n\t\tint cmp;\n\t\tcmp = avlt->compare(data, p->data);\n\t\tif (cmp == 0)\n\t\t\treturn p; /* found */\n\t\tp = (cmp < 0) ? p->left : p->right;\n\t}\n\n\treturn NULL; /* not found */\n}",
+    "calls": [
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:41:14:41:36",
+        "source": "if ((node = avl_find(avlt, &query)) != NULL)"
+      },
+      {
+        "caller": "avl_test.c:tree_find",
+        "span": "avl_test.c:99:9:99:31",
+        "source": "return avl_find(avlt, &query);"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:301:6:301:29",
+        "source": "if (avl_find(avlt, r->data) != r || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:302:3:302:26",
+        "source": "avl_find(avlt, e->data) != e || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:303:3:303:26",
+        "source": "avl_find(avlt, d->data) != d || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:304:3:304:26",
+        "source": "avl_find(avlt, s->data) != s || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:305:3:305:26",
+        "source": "avl_find(avlt, o->data) != o || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:306:3:306:26",
+        "source": "avl_find(avlt, x->data) != x || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:307:3:307:26",
+        "source": "avl_find(avlt, c->data) != c || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:308:3:308:26",
+        "source": "avl_find(avlt, u->data) != u || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:309:3:309:26",
+        "source": "avl_find(avlt, b->data) != b || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_find",
+        "span": "avl_test.c:310:3:310:26",
+        "source": "avl_find(avlt, t->data) != t) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_successor",
+    "span": "avl_bf.c:90:1:108:2",
+    "pieces": [
+      "avl_bf.c:90:1:108:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 19,
+    "source": "avlnode *avl_successor(avltree *avlt, avlnode *node)\n{\n\tavlnode *p;\n\n\tp = node->right;\n\n\tif (p != AVL_NIL(avlt)) {\n\t\t/* move down until we find it */\n\t\tfor ( ; p->left != AVL_NIL(avlt); p = p->left) ;\n\t} else {\n\t\t/* move up until we find it or hit the root */\n\t\tfor (p = node->parent; node == p->right; node = p, p = p->parent) ;\n\n\t\tif (p == AVL_ROOT(avlt))\n\t\t\tp = NULL; /* not found */\n\t}\n\n\treturn p;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_delete",
+        "span": "avl_bf.c:295:16:295:43",
+        "source": "avlt->min = avl_successor(avlt, target); /* deleted, thus min = successor */"
+      },
+      {
+        "caller": "avl_bf.c:avl_delete",
+        "span": "avl_bf.c:298:12:298:37",
+        "source": "target = avl_successor(avlt, node); /* node->right must not be NIL, thus move down */"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:350:6:350:28",
+        "source": "if (avl_successor(avlt, b) != c || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:351:3:351:25",
+        "source": "avl_successor(avlt, c) != d || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:352:3:352:25",
+        "source": "avl_successor(avlt, d) != e || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:353:3:353:25",
+        "source": "avl_successor(avlt, e) != r || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:354:3:354:25",
+        "source": "avl_successor(avlt, r) != s || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:355:3:355:25",
+        "source": "avl_successor(avlt, s) != t || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:356:3:356:25",
+        "source": "avl_successor(avlt, t) != u || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:357:3:357:25",
+        "source": "avl_successor(avlt, u) != x || \\"
+      },
+      {
+        "caller": "avl_test.c:unit_test_successor",
+        "span": "avl_test.c:358:3:358:25",
+        "source": "avl_successor(avlt, x) != NULL) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_apply",
+    "span": "avl_bf.c:114:1:132:2",
+    "pieces": [
+      "avl_bf.c:114:1:132:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 19,
+    "source": "int avl_apply(avltree *avlt, avlnode *node, int (*func)(void *, void *), void *cookie, enum avltraversal order)\n{\n\tint err;\n\n\tif (node != AVL_NIL(avlt)) {\n\t\tif (order == PREORDER && (err = func(node->data, cookie)) != 0) /* preorder */\n\t\t\treturn err;\n\t\tif ((err = avl_apply(avlt, node->left, func, cookie, order)) != 0) /* left */\n\t\t\treturn err;\n\t\tif (order == INORDER && (err = func(node->data, cookie)) != 0) /* inorder */\n\t\t\treturn err;\n\t\tif ((err = avl_apply(avlt, node->right, func, cookie, order)) != 0) /* right */\n\t\t\treturn err;\n\t\tif (order == POSTORDER && (err = func(node->data, cookie)) != 0) /* postorder */\n\t\t\treturn err;\n\t}\n\n\treturn 0;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_apply",
+        "span": "avl_bf.c:121:14:121:62",
+        "source": "if ((err = avl_apply(avlt, node->left, func, cookie, order)) != 0) /* left */"
+      },
+      {
+        "caller": "avl_bf.c:avl_apply",
+        "span": "avl_bf.c:125:14:125:63",
+        "source": "if ((err = avl_apply(avlt, node->right, func, cookie, order)) != 0) /* right */"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_print",
+    "span": "avl_bf.c:137:1:142:2",
+    "pieces": [
+      "avl_bf.c:137:1:142:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 6,
+    "source": "void avl_print(avltree *avlt, void (*print_func)(void *))\n{\n\tprintf(\"\\n--\\n\");\n\tprint(avlt, AVL_FIRST(avlt), print_func, 0, \"T\");\n\tprintf(\"\\nheight = %d\\n\", check_height(avlt, AVL_FIRST(avlt)));\n}",
+    "calls": [
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:32:3:32:35",
+        "source": "avl_print(avlt, print_char_func);"
+      },
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:43:2:43:34",
+        "source": "avl_print(avlt, print_char_func);"
+      },
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:50:3:50:35",
+        "source": "avl_print(avlt, print_char_func);"
+      },
+      {
+        "caller": "avl_test.c:tree_print",
+        "span": "avl_test.c:104:2:104:29",
+        "source": "avl_print(avlt, print_func);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_check_order",
+    "span": "avl_bf.c:147:1:150:2",
+    "pieces": [
+      "avl_bf.c:147:1:150:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 4,
+    "source": "int avl_check_order(avltree *avlt, void *min, void *max)\n{\n\treturn check_order(avlt, AVL_FIRST(avlt), min, max);\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:tree_check",
+        "span": "avl_test.c:116:6:116:39",
+        "source": "if (avl_check_order(avlt, &min, &max) != 1) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_check_height",
+    "span": "avl_bf.c:155:1:161:2",
+    "pieces": [
+      "avl_bf.c:155:1:161:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 7,
+    "source": "int avl_check_height(avltree *avlt)\n{\n\tint height;\n\theight = check_height(avlt, AVL_FIRST(avlt));\n\n\treturn (height < 0) ? 0 : 1;\n}",
+    "calls": [
+      {
+        "caller": "avl_test.c:tree_check",
+        "span": "avl_test.c:121:6:121:28",
+        "source": "if (avl_check_height(avlt) != 1) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_insert",
+    "span": "avl_bf.c:167:1:274:2",
+    "pieces": [
+      "avl_bf.c:167:1:274:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 108,
+    "source": "avlnode *avl_insert(avltree *avlt, void *data)\n{\n\tavlnode *current, *parent;\n\tavlnode *new_node;\n\n\t/* do a binary search to find where it should be */\n\n\tcurrent = AVL_FIRST(avlt);\n\tparent = AVL_ROOT(avlt);\n\n\twhile (current != AVL_NIL(avlt)) {\n\t\tint cmp;\n\t\tcmp = avlt->compare(data, current->data);\n\n\t\t#ifndef AVL_DUP\n\t\tif (cmp == 0) {\n\t\t\tavlt->destroy(current->data);\n\t\t\tcurrent->data = data;\n\t\t\treturn current; /* updated */\n\t\t}\n\t\t#endif\n\n\t\tparent = current;\n\t\tcurrent = (cmp < 0) ? current->left : current->right;\n\t}\n\t\n\t/* replace the termination NIL pointer with the new node pointer */\n\n\tcurrent = new_node = (avlnode *) malloc(sizeof(avlnode));\n\tif (current == NULL)\n\t\treturn NULL; /* out of memory */\n\n\tcurrent->left = current->right = AVL_NIL(avlt);\n\tcurrent->parent = parent;\n\tcurrent->bf = 0;\n\tcurrent->data = data;\n\n\tif (parent == AVL_ROOT(avlt) || avlt->compare(data, parent->data) < 0)\n\t\tparent->left = current;\n\telse\n\t\tparent->right = current;\n\n\t#ifdef AVL_MIN\n\tif (avlt->min == NULL || avlt->compare(current->data, avlt->min->data) < 0)\n\t\tavlt->min = current;\n\t#endif\n\n\t/*\n\t * After insertion it is necessary to update the balance factors of all nodes, \n\t * observe that all nodes requiring correction must be on the path from the root to the new node.\n\t * \n\t * Backtracking the top-down path from the root to the new node:\n\t * 1. update the balance factor of parent node; \n\t * 2. rebalance if the balance factor of parent node temporarily becomes +2 or -2 (parent subtree has the same height as before, thus backtracking terminate immediately); \n\t * 3. terminate if the height of that parent subtree remains unchanged.\n\t */\n\twhile (current != AVL_FIRST(avlt)) { /* Loop (possibly up to the root) */\n\t\tif (current == parent->left) { /* The height of left subtree of parent subtree increases */\n\t\t\tif (parent->bf == 1) { /* parent subtree is right-heavy */\n\t\t\t\t/*\n\t\t\t\t * height increase of left subtree is absorbed at parent node, \n\t\t\t\t * height of parent subtree remains unchanged, thus backtracking terminate.\n\t\t\t\t */\n\t\t\t\tparent->bf = 0; /* height unchanged, balanced, goto break */\n\t\t\t\tbreak;\n\t\t\t} else if (parent->bf == 0) { /* parent subtree is balanced */\n\t\t\t\t/*\n\t\t\t\t * height of parent subtree increases by one, thus backtracking continue.\n\t\t\t\t */\n\t\t\t\tparent->bf = -1; /* height increased, left-heavy, goto loop */\n\t\t\t} else if (parent->bf == -1) { /* parent subtree is left-heavy */\n\t\t\t\t/*\n\t\t\t\t * the balance factor becomes -2, this has to be repaired by an appropriate rotation\n\t\t\t\t * after which parent subtree has the same height as before.\n\t\t\t\t */\n\t\t\t\tfix_insert_leftimbalance(avlt, parent); /* height unchanged, balanced, goto break */\n\t\t\t\tbreak;\n\t\t\t}\n\t\t} else { /* The height of right subtree of parent subtree increases */\n\t\t\tif (parent->bf == -1) { /* parent subtree is left-heavy */\n\t\t\t\t/*\n\t\t\t\t * height increase of right subtree is absorbed at parent node, \n\t\t\t\t * height of parent subtree remains unchanged, thus backtracking terminate.\n\t\t\t\t */\n\t\t\t\tparent->bf = 0; /* height unchanged, balanced, goto break */\n\t\t\t\tbreak;\n\t\t\t} else if (parent->bf == 0) { /* parent subtree is balanced */\n\t\t\t\t/*\n\t\t\t\t * height of parent subtree increases by one, thus backtracking continue.\n\t\t\t\t */\n\t\t\t\tparent->bf = 1; /* height increased, right-heavy, goto loop */\n\t\t\t} else if (parent->bf == 1) {\n\t\t\t\t/*\n\t\t\t\t * the balance factor becomes 2, this has to be repaired by an appropriate rotation\n\t\t\t\t * after which parent subtree has the same height as before.\n\t\t\t\t */\n\t\t\t\tfix_insert_rightimbalance(avlt, parent); /* height unchanged, balanced, goto break */\n\t\t\t\tbreak;\n\t\t\t}\n\t\t}\n\n\t\t/* move up */\n\t\tcurrent = parent;\n\t\tparent = current->parent;\n\t}\n\n\treturn new_node;\n}",
+    "calls": [
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:26:42:26:64",
+        "source": "if ((data = makedata(a[i])) == NULL || avl_insert(avlt, data) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:tree_insert",
+        "span": "avl_test.c:139:48:139:70",
+        "source": "if ((data = makedata(key)) == NULL || (node = avl_insert(avlt, data)) == NULL) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:avl_delete",
+    "span": "avl_bf.c:280:1:401:2",
+    "pieces": [
+      "avl_bf.c:280:1:401:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 122,
+    "source": "void *avl_delete(avltree *avlt, avlnode *node, int keep)\n{\n\tavlnode *current, *parent;\n\tavlnode *target;\n\tvoid *data;\n\n\tdata = node->data;\n\n\t/* choose node's in-order successor if it has two children */\n\t\n\tif (node->left == AVL_NIL(avlt) || node->right == AVL_NIL(avlt)) {\n\t\ttarget = node;\n\n\t\t#ifdef AVL_MIN\n\t\tif (avlt->min == target)\n\t\t\tavlt->min = avl_successor(avlt, target); /* deleted, thus min = successor */\n\t\t#endif\n\t} else {\n\t\ttarget = avl_successor(avlt, node); /* node->right must not be NIL, thus move down */\n\n\t\tnode->data = target->data; /* data swapped */\n\n\t\t#ifdef AVL_MIN\n\t\t/* if min == node, then min = successor = node (swapped), thus idle */\n\t\t/* if min == target, then min = successor, which is not the minimal, thus impossible */\n\t\t#endif\n\t}\n\n\t/*\n\t * After deletion it is necessary to update the balance factors of all nodes, \n\t * observe that all nodes requiring correction must be on the path from the root to the target node,\n\t * which is either the subject node or the replacement node.\n\t * \n\t * Backtracking the top-down path from the root to the target node:\n\t * 1. update the balance factor of parent node;\n\t * 2. rebalance if the balance factor of parent node temporarily becomes +2 or -2;\n\t * 3. terminate if the height of that parent subtree remains unchanged.\n\t */\n\tcurrent = target;\n\tparent = current->parent;\n\n\twhile (current != AVL_FIRST(avlt)) { /* Loop (possibly up to the root) */\n\t\tif (current == parent->left) { /* The height of left subtree of parent subtree decreases */\n\t\t\tif (parent->bf == -1) { /* parent subtree is left-heavy */\n\t\t\t\t/*\n\t\t\t\t * height of parent subtree decreases by one, thus backtracking continue.\n\t\t\t\t */\n\t\t\t\tparent->bf = 0; /* height decreased, balanced, goto loop */\n\t\t\t} else if (parent->bf == 0) { /* parent subtree is balanced */\n\t\t\t\t/*\n\t\t\t\t * height decrease of left subtree is absorbed at parent node, \n\t\t\t\t * height of parent subtree remains unchanged, thus backtracking terminate.\n\t\t\t\t */\n\t\t\t\tparent->bf = 1;\n\t\t\t\tbreak; /* height unchanged, right-heavy, goto break */\n\t\t\t} else if (parent->bf == 1) { /* parent subtree is right-heavy */\n\t\t\t\t/*\n\t\t\t\t * the balance factor becomes 2, this has to be repaired by an appropriate rotation after which \n\t\t\t\t * height of parent subtree remains unchanged or\n\t\t\t\t * height of parent subtree decreases by one.\n\t\t\t\t */\n\t\t\t\tparent = fix_delete_rightimbalance(avlt, parent);\n\t\t\t\tif (parent->bf == -1)\n\t\t\t\t\tbreak; /* height unchanged, left-heavy, goto break */\n\t\t\t\t/* parent->bf == 0; height decreased, balanced, goto loop */\n\t\t\t}\n\t\t} else { /* The height of right subtree of parent subtree decreases */\n\t\t\tif (parent->bf == 1) { /* parent subtree is right-heavy */\n\t\t\t\t/*\n\t\t\t\t * height of parent subtree decreases by one, thus backtracking continue.\n\t\t\t\t */\n\t\t\t\tparent->bf = 0; /* height decreased, balanced, goto loop */\n\t\t\t} else if (parent->bf == 0) {\n\t\t\t\t/*\n\t\t\t\t * height decrease of right subtree is absorbed at parent node, \n\t\t\t\t * height of parent subtree remains unchanged, thus backtracking terminate.\n\t\t\t\t */\n\t\t\t\tparent->bf = -1;\n\t\t\t\tbreak; /* height unchanged, left-heavy, goto break */\n\t\t\t} else if (parent->bf == -1) { /* parent subtree is left-heavy */\n\t\t\t\t/*\n\t\t\t\t * the balance factor becomes -2, this has to be repaired by an appropriate rotation after which \n\t\t\t\t * height of parent subtree remains unchanged or\n\t\t\t\t * height of parent subtree decreases by one.\n\t\t\t\t */\n\t\t\t\tparent = fix_delete_leftimbalance(avlt, parent);\n\t\t\t\tif (parent->bf == 1)\n\t\t\t\t\tbreak; /* height unchanged, right-heavy, goto break */\n\t\t\t\t/* height decreased, balanced, goto loop */\n\t\t\t}\n\t\t}\n\n\t\t/* move up */\n\t\tcurrent = parent;\n\t\tparent = current->parent;\n\t}\n\n\t/* replace the target node with its child (may be NIL) */\n\n\tavlnode *child; /* child of target */\n\n\tchild = (target->left == AVL_NIL(avlt)) ? target->right : target->left; /* child may be NIL */\n\n\tif (child != AVL_NIL(avlt))\n\t\tchild->parent = target->parent;\n\n\tif (target == target->parent->left)\n\t\ttarget->parent->left = child;\n\telse\n\t\ttarget->parent->right = child;\n\n\tfree(target);\n\n\t/* keep or discard data */\n\n\tif (keep == 0) {\n\t\tavlt->destroy(data);\n\t\tdata = NULL; /* freed */\n\t}\n\n\treturn data;\n}",
+    "calls": [
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:42:3:42:28",
+        "source": "avl_delete(avlt, node, 0);"
+      },
+      {
+        "caller": "avl_example.c:main",
+        "span": "avl_example.c:49:3:49:28",
+        "source": "avl_delete(avlt, node, 0);"
+      },
+      {
+        "caller": "avl_test.c:tree_delete",
+        "span": "avl_test.c:157:2:157:27",
+        "source": "avl_delete(avlt, node, 0);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:rotate_left",
+    "span": "avl_bf.c:407:1:430:2",
+    "pieces": [
+      "avl_bf.c:407:1:430:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 24,
+    "source": "avlnode *rotate_left(avltree *avlt, avlnode *x)\n{\n\tavlnode *y;\n\n\ty = x->right; /* child */\n\n\t/* tree x */\n\tx->right = y->left;\n\tif (x->right != AVL_NIL(avlt))\n\t\tx->right->parent = x;\n\n\t/* tree y */\n\ty->parent = x->parent;\n\tif (x == x->parent->left)\n\t\tx->parent->left = y;\n\telse\n\t\tx->parent->right = y;\n\n\t/* assemble tree x and tree y */\n\ty->left = x;\n\tx->parent = y;\n\n\treturn y;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:fix_insert_leftimbalance",
+        "span": "avl_bf.c:475:3:475:29",
+        "source": "rotate_left(avlt, p->left);"
+      },
+      {
+        "caller": "avl_bf.c:fix_insert_rightimbalance",
+        "span": "avl_bf.c:498:7:498:27",
+        "source": "p = rotate_left(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_insert_rightimbalance",
+        "span": "avl_bf.c:504:7:504:27",
+        "source": "p = rotate_left(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_leftimbalance",
+        "span": "avl_bf.c:535:3:535:29",
+        "source": "rotate_left(avlt, p->left);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_rightimbalance",
+        "span": "avl_bf.c:558:7:558:27",
+        "source": "p = rotate_left(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_rightimbalance",
+        "span": "avl_bf.c:561:7:561:27",
+        "source": "p = rotate_left(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_rightimbalance",
+        "span": "avl_bf.c:568:7:568:27",
+        "source": "p = rotate_left(avlt, p);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:rotate_right",
+    "span": "avl_bf.c:436:1:459:2",
+    "pieces": [
+      "avl_bf.c:436:1:459:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 24,
+    "source": "avlnode *rotate_right(avltree *avlt, avlnode *x)\n{\n\tavlnode *y;\n\n\ty = x->left; /* child */\n\n\t/* tree x */\n\tx->left = y->right;\n\tif (x->left != AVL_NIL(avlt))\n\t\tx->left->parent = x;\n\n\t/* tree y */\n\ty->parent = x->parent;\n\tif (x == x->parent->left)\n\t\tx->parent->left = y;\n\telse\n\t\tx->parent->right = y;\n\n\t/* assemble tree x and tree y */\n\ty->right = x;\n\tx->parent = y;\n\n\treturn y;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:fix_insert_leftimbalance",
+        "span": "avl_bf.c:470:7:470:28",
+        "source": "p = rotate_right(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_insert_leftimbalance",
+        "span": "avl_bf.c:476:7:476:28",
+        "source": "p = rotate_right(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_insert_rightimbalance",
+        "span": "avl_bf.c:503:3:503:31",
+        "source": "rotate_right(avlt, p->right);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_leftimbalance",
+        "span": "avl_bf.c:526:7:526:28",
+        "source": "p = rotate_right(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_leftimbalance",
+        "span": "avl_bf.c:529:7:529:28",
+        "source": "p = rotate_right(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_leftimbalance",
+        "span": "avl_bf.c:536:7:536:28",
+        "source": "p = rotate_right(avlt, p);"
+      },
+      {
+        "caller": "avl_bf.c:fix_delete_rightimbalance",
+        "span": "avl_bf.c:567:3:567:31",
+        "source": "rotate_right(avlt, p->right);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:fix_insert_leftimbalance",
+    "span": "avl_bf.c:465:1:489:2",
+    "pieces": [
+      "avl_bf.c:465:1:489:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 25,
+    "source": "avlnode *fix_insert_leftimbalance(avltree *avlt, avlnode *p)\n{\n\t/* p->left->bf updated here */\n\n\tif (p->left->bf == p->bf) { /* -1, -1 */\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = p->right->bf = 0;\n\t} else { /* 1, -1 */\n\t\tint oldbf;\n\t\toldbf = p->left->right->bf;\n\t\trotate_left(avlt, p->left);\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = 0;\n\t\tif (oldbf == -1) {\n\t\t\tp->left->bf = 0;\n\t\t\tp->right->bf = 1;\n\t\t} else if (oldbf == 1) {\n\t\t\tp->left->bf = -1;\n\t\t\tp->right->bf = 0;\n\t\t} else if (oldbf == 0) {\n\t\t\tp->left->bf = p->right->bf = 0;\n\t\t}\n\t}\n\treturn p;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_insert",
+        "span": "avl_bf.c:242:5:242:43",
+        "source": "fix_insert_leftimbalance(avlt, parent); /* height unchanged, balanced, goto break */"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:fix_insert_rightimbalance",
+    "span": "avl_bf.c:495:1:517:2",
+    "pieces": [
+      "avl_bf.c:495:1:517:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 23,
+    "source": "avlnode *fix_insert_rightimbalance(avltree *avlt, avlnode *p)\n{\n\tif (p->right->bf == p->bf) { /* 1, 1 */\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = p->left->bf = 0;\n\t} else { /* -1, 1 */\n\t\tint oldbf;\n\t\toldbf = p->right->left->bf;\n\t\trotate_right(avlt, p->right);\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = 0;\n\t\tif (oldbf == -1) {\n\t\t\tp->left->bf = 0;\n\t\t\tp->right->bf = 1;\n\t\t} else if (oldbf == 1) {\n\t\t\tp->left->bf = -1;\n\t\t\tp->right->bf = 0;\n\t\t} else if (oldbf == 0) {\n\t\t\tp->left->bf = p->right->bf = 0;\n\t\t}\n\t}\n\treturn p;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_insert",
+        "span": "avl_bf.c:263:5:263:44",
+        "source": "fix_insert_rightimbalance(avlt, parent); /* height unchanged, balanced, goto break */"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:fix_delete_leftimbalance",
+    "span": "avl_bf.c:523:1:549:2",
+    "pieces": [
+      "avl_bf.c:523:1:549:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 27,
+    "source": "avlnode *fix_delete_leftimbalance(avltree *avlt, avlnode *p)\n{\n\tif (p->left->bf == -1) {\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = p->right->bf = 0;\n\t} else if (p->left->bf == 0) {\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = 1;\n\t\tp->right->bf = -1;\n\t} else if (p->left->bf == 1) {\n\t\tint oldbf;\n\t\toldbf = p->left->right->bf;\n\t\trotate_left(avlt, p->left);\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = 0;\n\t\tif (oldbf == -1) {\n\t\t\tp->left->bf = 0;\n\t\t\tp->right->bf = 1;\n\t\t} else if (oldbf == 1) {\n\t\t\tp->left->bf = -1;\n\t\t\tp->right->bf = 0;\n\t\t} else if (oldbf == 0) {\n\t\t\tp->left->bf = p->right->bf = 0;\n\t\t}\n\t}\n\treturn p;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_delete",
+        "span": "avl_bf.c:365:14:365:52",
+        "source": "parent = fix_delete_leftimbalance(avlt, parent);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:fix_delete_rightimbalance",
+    "span": "avl_bf.c:555:1:581:2",
+    "pieces": [
+      "avl_bf.c:555:1:581:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 27,
+    "source": "avlnode *fix_delete_rightimbalance(avltree *avlt, avlnode *p)\n{\n\tif (p->right->bf == 1) {\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = p->left->bf = 0;\n\t} else if (p->right->bf == 0) {\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = -1;\n\t\tp->left->bf = 1;\n\t} else if (p->right->bf == -1) {\n\t\tint oldbf;\n\t\toldbf = p->right->left->bf;\n\t\trotate_right(avlt, p->right);\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = 0;\n\t\tif (oldbf == -1) {\n\t\t\tp->left->bf = 0;\n\t\t\tp->right->bf = 1;\n\t\t} else if (oldbf == 1) {\n\t\t\tp->left->bf = -1;\n\t\t\tp->right->bf = 0;\n\t\t} else if (oldbf == 0) {\n\t\t\tp->left->bf = p->right->bf = 0;\n\t\t}\n\t}\n\treturn p;\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_delete",
+        "span": "avl_bf.c:341:14:341:53",
+        "source": "parent = fix_delete_rightimbalance(avlt, parent);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:check_order",
+    "span": "avl_bf.c:586:1:599:2",
+    "pieces": [
+      "avl_bf.c:586:1:599:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 14,
+    "source": "int check_order(avltree *avlt, avlnode *n, void *min, void *max)\n{\n\tif (n == AVL_NIL(avlt))\n\t\treturn 1;\n\n\t#ifdef AVL_DUP\n\tif (avlt->compare(n->data, min) < 0 || avlt->compare(n->data, max) > 0)\n\t#else\n\tif (avlt->compare(n->data, min) <= 0 || avlt->compare(n->data, max) >= 0)\n\t#endif\n\t\treturn 0;\n\n\treturn check_order(avlt, n->left, min, n->data) && check_order(avlt, n->right, n->data, max);\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_check_order",
+        "span": "avl_bf.c:149:9:149:53",
+        "source": "return check_order(avlt, AVL_FIRST(avlt), min, max);"
+      },
+      {
+        "caller": "avl_bf.c:check_order",
+        "span": "avl_bf.c:598:9:598:49",
+        "source": "return check_order(avlt, n->left, min, n->data) && check_order(avlt, n->right, n->data, max);"
+      },
+      {
+        "caller": "avl_bf.c:check_order",
+        "span": "avl_bf.c:598:53:598:94",
+        "source": "return check_order(avlt, n->left, min, n->data) && check_order(avlt, n->right, n->data, max);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:check_height",
+    "span": "avl_bf.c:604:1:624:2",
+    "pieces": [
+      "avl_bf.c:604:1:624:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 21,
+    "source": "int check_height(avltree *avlt, avlnode *n)\n{\n\tint lh, rh, cmp;\n\n\tif (n == AVL_NIL(avlt))\n\t\treturn 0;\n\n\tlh = check_height(avlt, n->left);\n\tif (lh < 0)\n\t\treturn lh;\n\t\n\trh = check_height(avlt, n->right);\n\tif (rh < 0)\n\t\treturn rh;\n\t\n\tcmp = rh - lh;\n\tif (cmp < -1 || cmp > 1 || cmp != n->bf) /* check recomputed/cached balance factor */\n\t\treturn -1;\n\t\n\treturn 1 + ((lh > rh) ? lh : rh);\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_print",
+        "span": "avl_bf.c:141:28:141:63",
+        "source": "printf(\"\\nheight = %d\\n\", check_height(avlt, AVL_FIRST(avlt)));"
+      },
+      {
+        "caller": "avl_bf.c:avl_check_height",
+        "span": "avl_bf.c:158:11:158:46",
+        "source": "height = check_height(avlt, AVL_FIRST(avlt));"
+      },
+      {
+        "caller": "avl_bf.c:check_height",
+        "span": "avl_bf.c:611:7:611:34",
+        "source": "lh = check_height(avlt, n->left);"
+      },
+      {
+        "caller": "avl_bf.c:check_height",
+        "span": "avl_bf.c:615:7:615:35",
+        "source": "rh = check_height(avlt, n->right);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:print",
+    "span": "avl_bf.c:629:1:640:2",
+    "pieces": [
+      "avl_bf.c:629:1:640:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 12,
+    "source": "void print(avltree *avlt, avlnode *n, void (*print_func)(void *), int depth, char *label)\n{\n\tif (n != AVL_NIL(avlt)) {\n\t\tprint(avlt, n->right, print_func, depth + 1, \"R\");\n\t\tprintf(\"%*s\", 8 * depth, \"\");\n\t\tif (label)\n\t\t\tprintf(\"%s: \", label);\n\t\tprint_func(n->data);\n\t\tprintf(\" (%s%d)\\n\", (n->bf >= 0) ? \"+\" : \"\", n->bf);\n\t\tprint(avlt, n->left, print_func, depth + 1, \"L\");\n\t}\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_print",
+        "span": "avl_bf.c:140:2:140:50",
+        "source": "print(avlt, AVL_FIRST(avlt), print_func, 0, \"T\");"
+      },
+      {
+        "caller": "avl_bf.c:print",
+        "span": "avl_bf.c:632:3:632:52",
+        "source": "print(avlt, n->right, print_func, depth + 1, \"R\");"
+      },
+      {
+        "caller": "avl_bf.c:print",
+        "span": "avl_bf.c:638:3:638:51",
+        "source": "print(avlt, n->left, print_func, depth + 1, \"L\");"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_bf.c:destroy",
+    "span": "avl_bf.c:645:1:653:2",
+    "pieces": [
+      "avl_bf.c:645:1:653:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "void destroy(avltree *avlt, avlnode *n)\n{\n\tif (n != AVL_NIL(avlt)) {\n\t\tdestroy(avlt, n->left);\n\t\tdestroy(avlt, n->right);\n\t\tavlt->destroy(n->data);\n\t\tfree(n);\n\t}\n}",
+    "calls": [
+      {
+        "caller": "avl_bf.c:avl_destroy",
+        "span": "avl_bf.c:61:2:61:32",
+        "source": "destroy(avlt, AVL_FIRST(avlt));"
+      },
+      {
+        "caller": "avl_bf.c:destroy",
+        "span": "avl_bf.c:648:3:648:25",
+        "source": "destroy(avlt, n->left);"
+      },
+      {
+        "caller": "avl_bf.c:destroy",
+        "span": "avl_bf.c:649:3:649:26",
+        "source": "destroy(avlt, n->right);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
     "func_defid": "avl_data.c:makedata",
     "span": "avl_data.c:11:1:20:2",
     "pieces": [
@@ -10,14 +760,14 @@
     "source": "mydata *makedata(int key)\n{\n\tmydata *p;\n\n\tp = (mydata *) malloc(sizeof(mydata));\n\tif (p != NULL)\n\t\tp->key = key;\n\n\treturn p;\n}",
     "calls": [
       {
-        "caller": "avl_test.c:tree_insert",
-        "span": "avl_test.c:139:14:139:27",
-        "source": "if ((data = makedata(key)) == NULL || (node = avl_insert(avlt, data)) == NULL) {"
-      },
-      {
         "caller": "avl_example.c:main",
         "span": "avl_example.c:26:15:26:29",
         "source": "if ((data = makedata(a[i])) == NULL || avl_insert(avlt, data) == NULL) {"
+      },
+      {
+        "caller": "avl_test.c:tree_insert",
+        "span": "avl_test.c:139:14:139:27",
+        "source": "if ((data = makedata(key)) == NULL || (node = avl_insert(avlt, data)) == NULL) {"
       }
     ],
     "globals": [],
@@ -88,6 +838,20 @@
         "source": "print_char_func(node->data);"
       }
     ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "avl_example.c:main",
+    "span": "avl_example.c:11:1:56:2",
+    "pieces": [
+      "avl_example.c:11:1:56:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 46,
+    "source": "int main(int argc, char *argv[])\n{\n\tavltree *avlt;\n\n\t/* create a AVL tree */\n\tif ((avlt = avl_create(compare_func, destroy_func)) == NULL) {\n\t\tfprintf(stderr, \"create AVL tree failed\\n\");\n\t\treturn 1;\n\t}\n\n\t/* insert items */\n\tchar a[] = {'R', 'E', 'D', 'S', 'O', 'X', 'C', 'U', 'B', 'T'};\n\tint i;\n\tmydata *data;\n\tfor (i = 0; i < sizeof(a) / sizeof(a[0]); i++) {\n\t\tif ((data = makedata(a[i])) == NULL || avl_insert(avlt, data) == NULL) {\n\t\t\tfprintf(stderr, \"insert %c: out of memory\\n\", a[i]);\n\t\t\tfree(data);\n\t\t\tbreak;\n\t\t}\n\t\tprintf(\"insert %c\", a[i]);\n\t\tavl_print(avlt, print_char_func);\n\t\tprintf(\"\\n\");\n\t}\n\n\t/* delete item */\n\tavlnode *node;\n\tmydata query;\n\tquery.key = 'O';\n\tprintf(\"delete %c\", query.key);\n\tif ((node = avl_find(avlt, &query)) != NULL)\n\t\tavl_delete(avlt, node, 0);\n\tavl_print(avlt, print_char_func);\n\n\t#ifdef AVL_MIN\n\twhile ((node = AVL_MINIMAL(avlt))) {\n\t\tprintf(\"\\ndelete \");\n\t\tprint_char_func(node->data);\n\t\tavl_delete(avlt, node, 0);\n\t\tavl_print(avlt, print_char_func);\n\t}\n\t#endif\n\n\tavl_destroy(avlt);\n\treturn 0;\n}",
+    "calls": [],
     "globals": [],
     "imports": [],
     "chunks": []
@@ -879,770 +1643,6 @@
         "source": "mu_test(\"unit_test_min\", unit_test_min());"
       }
     ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:avl_create",
-    "span": "avl_bf.c:28:1:54:2",
-    "pieces": [
-      "avl_bf.c:28:1:54:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 27,
-    "source": "avltree *avl_create(int (*compare_func)(const void *, const void *), void (*destroy_func)(void *))\n{\n\tavltree *avlt;\n\n\tavlt = (avltree *) malloc(sizeof(avltree));\n\tif (avlt == NULL)\n\t\treturn NULL; /* out of memory */\n\n\tavlt->compare = compare_func;\n\tavlt->destroy = destroy_func;\n\n\t/* sentinel node nil */\n\tavlt->nil.left = avlt->nil.right = avlt->nil.parent = AVL_NIL(avlt);\n\tavlt->nil.bf = 0;\n\tavlt->nil.data = NULL;\n\n\t/* sentinel node root */\n\tavlt->root.left = avlt->root.right = avlt->root.parent = AVL_NIL(avlt);\n\tavlt->root.bf = 0;\n\tavlt->root.data = NULL;\n\n\t#ifdef AVL_MIN\n\tavlt->min = NULL;\n\t#endif\n\n\treturn avlt;\n}",
-    "calls": [
-      {
-        "caller": "avl_test.c:tree_create",
-        "span": "avl_test.c:92:9:92:47",
-        "source": "return avl_create(compare_func, destroy_func);"
-      },
-      {
-        "caller": "avl_example.c:main",
-        "span": "avl_example.c:16:14:16:52",
-        "source": "if ((avlt = avl_create(compare_func, destroy_func)) == NULL) {"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:avl_destroy",
-    "span": "avl_bf.c:59:1:63:2",
-    "pieces": [
-      "avl_bf.c:59:1:63:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 5,
-    "source": "void avl_destroy(avltree *avlt)\n{\n\tdestroy(avlt, AVL_FIRST(avlt));\n\tfree(avlt);\n}",
-    "calls": [
-      {
-        "caller": "avl_test.c:permutation_insert",
-        "span": "avl_test.c:210:2:210:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:permutation_delete",
-        "span": "avl_test.c:243:2:243:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_create",
-        "span": "avl_test.c:268:3:268:20",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_create",
-        "span": "avl_test.c:272:2:272:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_find",
-        "span": "avl_test.c:315:2:315:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_find",
-        "span": "avl_test.c:319:2:319:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_successor",
-        "span": "avl_test.c:363:2:363:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_successor",
-        "span": "avl_test.c:367:2:367:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_atomic_insertion",
-        "span": "avl_test.c:451:3:451:20",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_atomic_insertion",
-        "span": "avl_test.c:457:2:457:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_atomic_deletion",
-        "span": "avl_test.c:586:3:586:20",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_atomic_deletion",
-        "span": "avl_test.c:592:2:592:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_chain_insertion",
-        "span": "avl_test.c:640:3:640:20",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_chain_insertion",
-        "span": "avl_test.c:646:2:646:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_chain_deletion",
-        "span": "avl_test.c:690:3:690:20",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_chain_deletion",
-        "span": "avl_test.c:696:2:696:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_random_insertion_deletion",
-        "span": "avl_test.c:760:2:760:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_random_insertion_deletion",
-        "span": "avl_test.c:764:2:764:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_min",
-        "span": "avl_test.c:790:2:790:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_min",
-        "span": "avl_test.c:794:2:794:19",
-        "source": "avl_destroy(avlt);"
-      },
-      {
-        "caller": "avl_example.c:main",
-        "span": "avl_example.c:54:2:54:19",
-        "source": "avl_destroy(avlt);"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:avl_find",
-    "span": "avl_bf.c:69:1:84:2",
-    "pieces": [
-      "avl_bf.c:69:1:84:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 16,
-    "source": "avlnode *avl_find(avltree *avlt, void *data)\n{\n\tavlnode *p;\n\n\tp = AVL_FIRST(avlt);\n\n\twhile (p != AVL_NIL(avlt)) {\n\t\tint cmp;\n\t\tcmp = avlt->compare(data, p->data);\n\t\tif (cmp == 0)\n\t\t\treturn p; /* found */\n\t\tp = (cmp < 0) ? p->left : p->right;\n\t}\n\n\treturn NULL; /* not found */\n}",
-    "calls": [
-      {
-        "caller": "avl_test.c:tree_find",
-        "span": "avl_test.c:99:9:99:31",
-        "source": "return avl_find(avlt, &query);"
-      },
-      {
-        "caller": "avl_test.c:unit_test_find",
-        "span": "avl_test.c:301:6:301:29",
-        "source": "if (avl_find(avlt, r->data) != r || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_find",
-        "span": "avl_test.c:302:3:302:26",
-        "source": "avl_find(avlt, e->data) != e || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_find",
-        "span": "avl_test.c:303:3:303:26",
-        "source": "avl_find(avlt, d->data) != d || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_find",
-        "span": "avl_test.c:304:3:304:26",
-        "source": "avl_find(avlt, s->data) != s || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_find",
-        "span": "avl_test.c:305:3:305:26",
-        "source": "avl_find(avlt, o->data) != o || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_find",
-        "span": "avl_test.c:306:3:306:26",
-        "source": "avl_find(avlt, x->data) != x || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_find",
-        "span": "avl_test.c:307:3:307:26",
-        "source": "avl_find(avlt, c->data) != c || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_find",
-        "span": "avl_test.c:308:3:308:26",
-        "source": "avl_find(avlt, u->data) != u || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_find",
-        "span": "avl_test.c:309:3:309:26",
-        "source": "avl_find(avlt, b->data) != b || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_find",
-        "span": "avl_test.c:310:3:310:26",
-        "source": "avl_find(avlt, t->data) != t) {"
-      },
-      {
-        "caller": "avl_example.c:main",
-        "span": "avl_example.c:41:14:41:36",
-        "source": "if ((node = avl_find(avlt, &query)) != NULL)"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:avl_successor",
-    "span": "avl_bf.c:90:1:108:2",
-    "pieces": [
-      "avl_bf.c:90:1:108:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 19,
-    "source": "avlnode *avl_successor(avltree *avlt, avlnode *node)\n{\n\tavlnode *p;\n\n\tp = node->right;\n\n\tif (p != AVL_NIL(avlt)) {\n\t\t/* move down until we find it */\n\t\tfor ( ; p->left != AVL_NIL(avlt); p = p->left) ;\n\t} else {\n\t\t/* move up until we find it or hit the root */\n\t\tfor (p = node->parent; node == p->right; node = p, p = p->parent) ;\n\n\t\tif (p == AVL_ROOT(avlt))\n\t\t\tp = NULL; /* not found */\n\t}\n\n\treturn p;\n}",
-    "calls": [
-      {
-        "caller": "avl_test.c:unit_test_successor",
-        "span": "avl_test.c:350:6:350:28",
-        "source": "if (avl_successor(avlt, b) != c || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_successor",
-        "span": "avl_test.c:351:3:351:25",
-        "source": "avl_successor(avlt, c) != d || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_successor",
-        "span": "avl_test.c:352:3:352:25",
-        "source": "avl_successor(avlt, d) != e || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_successor",
-        "span": "avl_test.c:353:3:353:25",
-        "source": "avl_successor(avlt, e) != r || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_successor",
-        "span": "avl_test.c:354:3:354:25",
-        "source": "avl_successor(avlt, r) != s || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_successor",
-        "span": "avl_test.c:355:3:355:25",
-        "source": "avl_successor(avlt, s) != t || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_successor",
-        "span": "avl_test.c:356:3:356:25",
-        "source": "avl_successor(avlt, t) != u || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_successor",
-        "span": "avl_test.c:357:3:357:25",
-        "source": "avl_successor(avlt, u) != x || \\"
-      },
-      {
-        "caller": "avl_test.c:unit_test_successor",
-        "span": "avl_test.c:358:3:358:25",
-        "source": "avl_successor(avlt, x) != NULL) {"
-      },
-      {
-        "caller": "avl_bf.c:avl_delete",
-        "span": "avl_bf.c:295:16:295:43",
-        "source": "avlt->min = avl_successor(avlt, target); /* deleted, thus min = successor */"
-      },
-      {
-        "caller": "avl_bf.c:avl_delete",
-        "span": "avl_bf.c:298:12:298:37",
-        "source": "target = avl_successor(avlt, node); /* node->right must not be NIL, thus move down */"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:avl_apply",
-    "span": "avl_bf.c:114:1:132:2",
-    "pieces": [
-      "avl_bf.c:114:1:132:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 19,
-    "source": "int avl_apply(avltree *avlt, avlnode *node, int (*func)(void *, void *), void *cookie, enum avltraversal order)\n{\n\tint err;\n\n\tif (node != AVL_NIL(avlt)) {\n\t\tif (order == PREORDER && (err = func(node->data, cookie)) != 0) /* preorder */\n\t\t\treturn err;\n\t\tif ((err = avl_apply(avlt, node->left, func, cookie, order)) != 0) /* left */\n\t\t\treturn err;\n\t\tif (order == INORDER && (err = func(node->data, cookie)) != 0) /* inorder */\n\t\t\treturn err;\n\t\tif ((err = avl_apply(avlt, node->right, func, cookie, order)) != 0) /* right */\n\t\t\treturn err;\n\t\tif (order == POSTORDER && (err = func(node->data, cookie)) != 0) /* postorder */\n\t\t\treturn err;\n\t}\n\n\treturn 0;\n}",
-    "calls": [
-      {
-        "caller": "avl_bf.c:avl_apply",
-        "span": "avl_bf.c:121:14:121:62",
-        "source": "if ((err = avl_apply(avlt, node->left, func, cookie, order)) != 0) /* left */"
-      },
-      {
-        "caller": "avl_bf.c:avl_apply",
-        "span": "avl_bf.c:125:14:125:63",
-        "source": "if ((err = avl_apply(avlt, node->right, func, cookie, order)) != 0) /* right */"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:avl_print",
-    "span": "avl_bf.c:137:1:142:2",
-    "pieces": [
-      "avl_bf.c:137:1:142:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 6,
-    "source": "void avl_print(avltree *avlt, void (*print_func)(void *))\n{\n\tprintf(\"\\n--\\n\");\n\tprint(avlt, AVL_FIRST(avlt), print_func, 0, \"T\");\n\tprintf(\"\\nheight = %d\\n\", check_height(avlt, AVL_FIRST(avlt)));\n}",
-    "calls": [
-      {
-        "caller": "avl_test.c:tree_print",
-        "span": "avl_test.c:104:2:104:29",
-        "source": "avl_print(avlt, print_func);"
-      },
-      {
-        "caller": "avl_example.c:main",
-        "span": "avl_example.c:32:3:32:35",
-        "source": "avl_print(avlt, print_char_func);"
-      },
-      {
-        "caller": "avl_example.c:main",
-        "span": "avl_example.c:43:2:43:34",
-        "source": "avl_print(avlt, print_char_func);"
-      },
-      {
-        "caller": "avl_example.c:main",
-        "span": "avl_example.c:50:3:50:35",
-        "source": "avl_print(avlt, print_char_func);"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:avl_check_order",
-    "span": "avl_bf.c:147:1:150:2",
-    "pieces": [
-      "avl_bf.c:147:1:150:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 4,
-    "source": "int avl_check_order(avltree *avlt, void *min, void *max)\n{\n\treturn check_order(avlt, AVL_FIRST(avlt), min, max);\n}",
-    "calls": [
-      {
-        "caller": "avl_test.c:tree_check",
-        "span": "avl_test.c:116:6:116:39",
-        "source": "if (avl_check_order(avlt, &min, &max) != 1) {"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:avl_check_height",
-    "span": "avl_bf.c:155:1:161:2",
-    "pieces": [
-      "avl_bf.c:155:1:161:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 7,
-    "source": "int avl_check_height(avltree *avlt)\n{\n\tint height;\n\theight = check_height(avlt, AVL_FIRST(avlt));\n\n\treturn (height < 0) ? 0 : 1;\n}",
-    "calls": [
-      {
-        "caller": "avl_test.c:tree_check",
-        "span": "avl_test.c:121:6:121:28",
-        "source": "if (avl_check_height(avlt) != 1) {"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:avl_insert",
-    "span": "avl_bf.c:167:1:274:2",
-    "pieces": [
-      "avl_bf.c:167:1:274:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 108,
-    "source": "avlnode *avl_insert(avltree *avlt, void *data)\n{\n\tavlnode *current, *parent;\n\tavlnode *new_node;\n\n\t/* do a binary search to find where it should be */\n\n\tcurrent = AVL_FIRST(avlt);\n\tparent = AVL_ROOT(avlt);\n\n\twhile (current != AVL_NIL(avlt)) {\n\t\tint cmp;\n\t\tcmp = avlt->compare(data, current->data);\n\n\t\t#ifndef AVL_DUP\n\t\tif (cmp == 0) {\n\t\t\tavlt->destroy(current->data);\n\t\t\tcurrent->data = data;\n\t\t\treturn current; /* updated */\n\t\t}\n\t\t#endif\n\n\t\tparent = current;\n\t\tcurrent = (cmp < 0) ? current->left : current->right;\n\t}\n\t\n\t/* replace the termination NIL pointer with the new node pointer */\n\n\tcurrent = new_node = (avlnode *) malloc(sizeof(avlnode));\n\tif (current == NULL)\n\t\treturn NULL; /* out of memory */\n\n\tcurrent->left = current->right = AVL_NIL(avlt);\n\tcurrent->parent = parent;\n\tcurrent->bf = 0;\n\tcurrent->data = data;\n\n\tif (parent == AVL_ROOT(avlt) || avlt->compare(data, parent->data) < 0)\n\t\tparent->left = current;\n\telse\n\t\tparent->right = current;\n\n\t#ifdef AVL_MIN\n\tif (avlt->min == NULL || avlt->compare(current->data, avlt->min->data) < 0)\n\t\tavlt->min = current;\n\t#endif\n\n\t/*\n\t * After insertion it is necessary to update the balance factors of all nodes, \n\t * observe that all nodes requiring correction must be on the path from the root to the new node.\n\t * \n\t * Backtracking the top-down path from the root to the new node:\n\t * 1. update the balance factor of parent node; \n\t * 2. rebalance if the balance factor of parent node temporarily becomes +2 or -2 (parent subtree has the same height as before, thus backtracking terminate immediately); \n\t * 3. terminate if the height of that parent subtree remains unchanged.\n\t */\n\twhile (current != AVL_FIRST(avlt)) { /* Loop (possibly up to the root) */\n\t\tif (current == parent->left) { /* The height of left subtree of parent subtree increases */\n\t\t\tif (parent->bf == 1) { /* parent subtree is right-heavy */\n\t\t\t\t/*\n\t\t\t\t * height increase of left subtree is absorbed at parent node, \n\t\t\t\t * height of parent subtree remains unchanged, thus backtracking terminate.\n\t\t\t\t */\n\t\t\t\tparent->bf = 0; /* height unchanged, balanced, goto break */\n\t\t\t\tbreak;\n\t\t\t} else if (parent->bf == 0) { /* parent subtree is balanced */\n\t\t\t\t/*\n\t\t\t\t * height of parent subtree increases by one, thus backtracking continue.\n\t\t\t\t */\n\t\t\t\tparent->bf = -1; /* height increased, left-heavy, goto loop */\n\t\t\t} else if (parent->bf == -1) { /* parent subtree is left-heavy */\n\t\t\t\t/*\n\t\t\t\t * the balance factor becomes -2, this has to be repaired by an appropriate rotation\n\t\t\t\t * after which parent subtree has the same height as before.\n\t\t\t\t */\n\t\t\t\tfix_insert_leftimbalance(avlt, parent); /* height unchanged, balanced, goto break */\n\t\t\t\tbreak;\n\t\t\t}\n\t\t} else { /* The height of right subtree of parent subtree increases */\n\t\t\tif (parent->bf == -1) { /* parent subtree is left-heavy */\n\t\t\t\t/*\n\t\t\t\t * height increase of right subtree is absorbed at parent node, \n\t\t\t\t * height of parent subtree remains unchanged, thus backtracking terminate.\n\t\t\t\t */\n\t\t\t\tparent->bf = 0; /* height unchanged, balanced, goto break */\n\t\t\t\tbreak;\n\t\t\t} else if (parent->bf == 0) { /* parent subtree is balanced */\n\t\t\t\t/*\n\t\t\t\t * height of parent subtree increases by one, thus backtracking continue.\n\t\t\t\t */\n\t\t\t\tparent->bf = 1; /* height increased, right-heavy, goto loop */\n\t\t\t} else if (parent->bf == 1) {\n\t\t\t\t/*\n\t\t\t\t * the balance factor becomes 2, this has to be repaired by an appropriate rotation\n\t\t\t\t * after which parent subtree has the same height as before.\n\t\t\t\t */\n\t\t\t\tfix_insert_rightimbalance(avlt, parent); /* height unchanged, balanced, goto break */\n\t\t\t\tbreak;\n\t\t\t}\n\t\t}\n\n\t\t/* move up */\n\t\tcurrent = parent;\n\t\tparent = current->parent;\n\t}\n\n\treturn new_node;\n}",
-    "calls": [
-      {
-        "caller": "avl_test.c:tree_insert",
-        "span": "avl_test.c:139:48:139:70",
-        "source": "if ((data = makedata(key)) == NULL || (node = avl_insert(avlt, data)) == NULL) {"
-      },
-      {
-        "caller": "avl_example.c:main",
-        "span": "avl_example.c:26:42:26:64",
-        "source": "if ((data = makedata(a[i])) == NULL || avl_insert(avlt, data) == NULL) {"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:avl_delete",
-    "span": "avl_bf.c:280:1:401:2",
-    "pieces": [
-      "avl_bf.c:280:1:401:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 122,
-    "source": "void *avl_delete(avltree *avlt, avlnode *node, int keep)\n{\n\tavlnode *current, *parent;\n\tavlnode *target;\n\tvoid *data;\n\n\tdata = node->data;\n\n\t/* choose node's in-order successor if it has two children */\n\t\n\tif (node->left == AVL_NIL(avlt) || node->right == AVL_NIL(avlt)) {\n\t\ttarget = node;\n\n\t\t#ifdef AVL_MIN\n\t\tif (avlt->min == target)\n\t\t\tavlt->min = avl_successor(avlt, target); /* deleted, thus min = successor */\n\t\t#endif\n\t} else {\n\t\ttarget = avl_successor(avlt, node); /* node->right must not be NIL, thus move down */\n\n\t\tnode->data = target->data; /* data swapped */\n\n\t\t#ifdef AVL_MIN\n\t\t/* if min == node, then min = successor = node (swapped), thus idle */\n\t\t/* if min == target, then min = successor, which is not the minimal, thus impossible */\n\t\t#endif\n\t}\n\n\t/*\n\t * After deletion it is necessary to update the balance factors of all nodes, \n\t * observe that all nodes requiring correction must be on the path from the root to the target node,\n\t * which is either the subject node or the replacement node.\n\t * \n\t * Backtracking the top-down path from the root to the target node:\n\t * 1. update the balance factor of parent node;\n\t * 2. rebalance if the balance factor of parent node temporarily becomes +2 or -2;\n\t * 3. terminate if the height of that parent subtree remains unchanged.\n\t */\n\tcurrent = target;\n\tparent = current->parent;\n\n\twhile (current != AVL_FIRST(avlt)) { /* Loop (possibly up to the root) */\n\t\tif (current == parent->left) { /* The height of left subtree of parent subtree decreases */\n\t\t\tif (parent->bf == -1) { /* parent subtree is left-heavy */\n\t\t\t\t/*\n\t\t\t\t * height of parent subtree decreases by one, thus backtracking continue.\n\t\t\t\t */\n\t\t\t\tparent->bf = 0; /* height decreased, balanced, goto loop */\n\t\t\t} else if (parent->bf == 0) { /* parent subtree is balanced */\n\t\t\t\t/*\n\t\t\t\t * height decrease of left subtree is absorbed at parent node, \n\t\t\t\t * height of parent subtree remains unchanged, thus backtracking terminate.\n\t\t\t\t */\n\t\t\t\tparent->bf = 1;\n\t\t\t\tbreak; /* height unchanged, right-heavy, goto break */\n\t\t\t} else if (parent->bf == 1) { /* parent subtree is right-heavy */\n\t\t\t\t/*\n\t\t\t\t * the balance factor becomes 2, this has to be repaired by an appropriate rotation after which \n\t\t\t\t * height of parent subtree remains unchanged or\n\t\t\t\t * height of parent subtree decreases by one.\n\t\t\t\t */\n\t\t\t\tparent = fix_delete_rightimbalance(avlt, parent);\n\t\t\t\tif (parent->bf == -1)\n\t\t\t\t\tbreak; /* height unchanged, left-heavy, goto break */\n\t\t\t\t/* parent->bf == 0; height decreased, balanced, goto loop */\n\t\t\t}\n\t\t} else { /* The height of right subtree of parent subtree decreases */\n\t\t\tif (parent->bf == 1) { /* parent subtree is right-heavy */\n\t\t\t\t/*\n\t\t\t\t * height of parent subtree decreases by one, thus backtracking continue.\n\t\t\t\t */\n\t\t\t\tparent->bf = 0; /* height decreased, balanced, goto loop */\n\t\t\t} else if (parent->bf == 0) {\n\t\t\t\t/*\n\t\t\t\t * height decrease of right subtree is absorbed at parent node, \n\t\t\t\t * height of parent subtree remains unchanged, thus backtracking terminate.\n\t\t\t\t */\n\t\t\t\tparent->bf = -1;\n\t\t\t\tbreak; /* height unchanged, left-heavy, goto break */\n\t\t\t} else if (parent->bf == -1) { /* parent subtree is left-heavy */\n\t\t\t\t/*\n\t\t\t\t * the balance factor becomes -2, this has to be repaired by an appropriate rotation after which \n\t\t\t\t * height of parent subtree remains unchanged or\n\t\t\t\t * height of parent subtree decreases by one.\n\t\t\t\t */\n\t\t\t\tparent = fix_delete_leftimbalance(avlt, parent);\n\t\t\t\tif (parent->bf == 1)\n\t\t\t\t\tbreak; /* height unchanged, right-heavy, goto break */\n\t\t\t\t/* height decreased, balanced, goto loop */\n\t\t\t}\n\t\t}\n\n\t\t/* move up */\n\t\tcurrent = parent;\n\t\tparent = current->parent;\n\t}\n\n\t/* replace the target node with its child (may be NIL) */\n\n\tavlnode *child; /* child of target */\n\n\tchild = (target->left == AVL_NIL(avlt)) ? target->right : target->left; /* child may be NIL */\n\n\tif (child != AVL_NIL(avlt))\n\t\tchild->parent = target->parent;\n\n\tif (target == target->parent->left)\n\t\ttarget->parent->left = child;\n\telse\n\t\ttarget->parent->right = child;\n\n\tfree(target);\n\n\t/* keep or discard data */\n\n\tif (keep == 0) {\n\t\tavlt->destroy(data);\n\t\tdata = NULL; /* freed */\n\t}\n\n\treturn data;\n}",
-    "calls": [
-      {
-        "caller": "avl_test.c:tree_delete",
-        "span": "avl_test.c:157:2:157:27",
-        "source": "avl_delete(avlt, node, 0);"
-      },
-      {
-        "caller": "avl_example.c:main",
-        "span": "avl_example.c:42:3:42:28",
-        "source": "avl_delete(avlt, node, 0);"
-      },
-      {
-        "caller": "avl_example.c:main",
-        "span": "avl_example.c:49:3:49:28",
-        "source": "avl_delete(avlt, node, 0);"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:rotate_left",
-    "span": "avl_bf.c:407:1:430:2",
-    "pieces": [
-      "avl_bf.c:407:1:430:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 24,
-    "source": "avlnode *rotate_left(avltree *avlt, avlnode *x)\n{\n\tavlnode *y;\n\n\ty = x->right; /* child */\n\n\t/* tree x */\n\tx->right = y->left;\n\tif (x->right != AVL_NIL(avlt))\n\t\tx->right->parent = x;\n\n\t/* tree y */\n\ty->parent = x->parent;\n\tif (x == x->parent->left)\n\t\tx->parent->left = y;\n\telse\n\t\tx->parent->right = y;\n\n\t/* assemble tree x and tree y */\n\ty->left = x;\n\tx->parent = y;\n\n\treturn y;\n}",
-    "calls": [
-      {
-        "caller": "avl_bf.c:fix_insert_leftimbalance",
-        "span": "avl_bf.c:475:3:475:29",
-        "source": "rotate_left(avlt, p->left);"
-      },
-      {
-        "caller": "avl_bf.c:fix_insert_rightimbalance",
-        "span": "avl_bf.c:498:7:498:27",
-        "source": "p = rotate_left(avlt, p);"
-      },
-      {
-        "caller": "avl_bf.c:fix_insert_rightimbalance",
-        "span": "avl_bf.c:504:7:504:27",
-        "source": "p = rotate_left(avlt, p);"
-      },
-      {
-        "caller": "avl_bf.c:fix_delete_leftimbalance",
-        "span": "avl_bf.c:535:3:535:29",
-        "source": "rotate_left(avlt, p->left);"
-      },
-      {
-        "caller": "avl_bf.c:fix_delete_rightimbalance",
-        "span": "avl_bf.c:558:7:558:27",
-        "source": "p = rotate_left(avlt, p);"
-      },
-      {
-        "caller": "avl_bf.c:fix_delete_rightimbalance",
-        "span": "avl_bf.c:561:7:561:27",
-        "source": "p = rotate_left(avlt, p);"
-      },
-      {
-        "caller": "avl_bf.c:fix_delete_rightimbalance",
-        "span": "avl_bf.c:568:7:568:27",
-        "source": "p = rotate_left(avlt, p);"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:rotate_right",
-    "span": "avl_bf.c:436:1:459:2",
-    "pieces": [
-      "avl_bf.c:436:1:459:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 24,
-    "source": "avlnode *rotate_right(avltree *avlt, avlnode *x)\n{\n\tavlnode *y;\n\n\ty = x->left; /* child */\n\n\t/* tree x */\n\tx->left = y->right;\n\tif (x->left != AVL_NIL(avlt))\n\t\tx->left->parent = x;\n\n\t/* tree y */\n\ty->parent = x->parent;\n\tif (x == x->parent->left)\n\t\tx->parent->left = y;\n\telse\n\t\tx->parent->right = y;\n\n\t/* assemble tree x and tree y */\n\ty->right = x;\n\tx->parent = y;\n\n\treturn y;\n}",
-    "calls": [
-      {
-        "caller": "avl_bf.c:fix_insert_leftimbalance",
-        "span": "avl_bf.c:470:7:470:28",
-        "source": "p = rotate_right(avlt, p);"
-      },
-      {
-        "caller": "avl_bf.c:fix_insert_leftimbalance",
-        "span": "avl_bf.c:476:7:476:28",
-        "source": "p = rotate_right(avlt, p);"
-      },
-      {
-        "caller": "avl_bf.c:fix_insert_rightimbalance",
-        "span": "avl_bf.c:503:3:503:31",
-        "source": "rotate_right(avlt, p->right);"
-      },
-      {
-        "caller": "avl_bf.c:fix_delete_leftimbalance",
-        "span": "avl_bf.c:526:7:526:28",
-        "source": "p = rotate_right(avlt, p);"
-      },
-      {
-        "caller": "avl_bf.c:fix_delete_leftimbalance",
-        "span": "avl_bf.c:529:7:529:28",
-        "source": "p = rotate_right(avlt, p);"
-      },
-      {
-        "caller": "avl_bf.c:fix_delete_leftimbalance",
-        "span": "avl_bf.c:536:7:536:28",
-        "source": "p = rotate_right(avlt, p);"
-      },
-      {
-        "caller": "avl_bf.c:fix_delete_rightimbalance",
-        "span": "avl_bf.c:567:3:567:31",
-        "source": "rotate_right(avlt, p->right);"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:fix_insert_leftimbalance",
-    "span": "avl_bf.c:465:1:489:2",
-    "pieces": [
-      "avl_bf.c:465:1:489:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 25,
-    "source": "avlnode *fix_insert_leftimbalance(avltree *avlt, avlnode *p)\n{\n\t/* p->left->bf updated here */\n\n\tif (p->left->bf == p->bf) { /* -1, -1 */\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = p->right->bf = 0;\n\t} else { /* 1, -1 */\n\t\tint oldbf;\n\t\toldbf = p->left->right->bf;\n\t\trotate_left(avlt, p->left);\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = 0;\n\t\tif (oldbf == -1) {\n\t\t\tp->left->bf = 0;\n\t\t\tp->right->bf = 1;\n\t\t} else if (oldbf == 1) {\n\t\t\tp->left->bf = -1;\n\t\t\tp->right->bf = 0;\n\t\t} else if (oldbf == 0) {\n\t\t\tp->left->bf = p->right->bf = 0;\n\t\t}\n\t}\n\treturn p;\n}",
-    "calls": [
-      {
-        "caller": "avl_bf.c:avl_insert",
-        "span": "avl_bf.c:242:5:242:43",
-        "source": "fix_insert_leftimbalance(avlt, parent); /* height unchanged, balanced, goto break */"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:fix_insert_rightimbalance",
-    "span": "avl_bf.c:495:1:517:2",
-    "pieces": [
-      "avl_bf.c:495:1:517:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 23,
-    "source": "avlnode *fix_insert_rightimbalance(avltree *avlt, avlnode *p)\n{\n\tif (p->right->bf == p->bf) { /* 1, 1 */\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = p->left->bf = 0;\n\t} else { /* -1, 1 */\n\t\tint oldbf;\n\t\toldbf = p->right->left->bf;\n\t\trotate_right(avlt, p->right);\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = 0;\n\t\tif (oldbf == -1) {\n\t\t\tp->left->bf = 0;\n\t\t\tp->right->bf = 1;\n\t\t} else if (oldbf == 1) {\n\t\t\tp->left->bf = -1;\n\t\t\tp->right->bf = 0;\n\t\t} else if (oldbf == 0) {\n\t\t\tp->left->bf = p->right->bf = 0;\n\t\t}\n\t}\n\treturn p;\n}",
-    "calls": [
-      {
-        "caller": "avl_bf.c:avl_insert",
-        "span": "avl_bf.c:263:5:263:44",
-        "source": "fix_insert_rightimbalance(avlt, parent); /* height unchanged, balanced, goto break */"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:fix_delete_leftimbalance",
-    "span": "avl_bf.c:523:1:549:2",
-    "pieces": [
-      "avl_bf.c:523:1:549:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 27,
-    "source": "avlnode *fix_delete_leftimbalance(avltree *avlt, avlnode *p)\n{\n\tif (p->left->bf == -1) {\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = p->right->bf = 0;\n\t} else if (p->left->bf == 0) {\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = 1;\n\t\tp->right->bf = -1;\n\t} else if (p->left->bf == 1) {\n\t\tint oldbf;\n\t\toldbf = p->left->right->bf;\n\t\trotate_left(avlt, p->left);\n\t\tp = rotate_right(avlt, p);\n\t\tp->bf = 0;\n\t\tif (oldbf == -1) {\n\t\t\tp->left->bf = 0;\n\t\t\tp->right->bf = 1;\n\t\t} else if (oldbf == 1) {\n\t\t\tp->left->bf = -1;\n\t\t\tp->right->bf = 0;\n\t\t} else if (oldbf == 0) {\n\t\t\tp->left->bf = p->right->bf = 0;\n\t\t}\n\t}\n\treturn p;\n}",
-    "calls": [
-      {
-        "caller": "avl_bf.c:avl_delete",
-        "span": "avl_bf.c:365:14:365:52",
-        "source": "parent = fix_delete_leftimbalance(avlt, parent);"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:fix_delete_rightimbalance",
-    "span": "avl_bf.c:555:1:581:2",
-    "pieces": [
-      "avl_bf.c:555:1:581:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 27,
-    "source": "avlnode *fix_delete_rightimbalance(avltree *avlt, avlnode *p)\n{\n\tif (p->right->bf == 1) {\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = p->left->bf = 0;\n\t} else if (p->right->bf == 0) {\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = -1;\n\t\tp->left->bf = 1;\n\t} else if (p->right->bf == -1) {\n\t\tint oldbf;\n\t\toldbf = p->right->left->bf;\n\t\trotate_right(avlt, p->right);\n\t\tp = rotate_left(avlt, p);\n\t\tp->bf = 0;\n\t\tif (oldbf == -1) {\n\t\t\tp->left->bf = 0;\n\t\t\tp->right->bf = 1;\n\t\t} else if (oldbf == 1) {\n\t\t\tp->left->bf = -1;\n\t\t\tp->right->bf = 0;\n\t\t} else if (oldbf == 0) {\n\t\t\tp->left->bf = p->right->bf = 0;\n\t\t}\n\t}\n\treturn p;\n}",
-    "calls": [
-      {
-        "caller": "avl_bf.c:avl_delete",
-        "span": "avl_bf.c:341:14:341:53",
-        "source": "parent = fix_delete_rightimbalance(avlt, parent);"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:check_order",
-    "span": "avl_bf.c:586:1:599:2",
-    "pieces": [
-      "avl_bf.c:586:1:599:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 14,
-    "source": "int check_order(avltree *avlt, avlnode *n, void *min, void *max)\n{\n\tif (n == AVL_NIL(avlt))\n\t\treturn 1;\n\n\t#ifdef AVL_DUP\n\tif (avlt->compare(n->data, min) < 0 || avlt->compare(n->data, max) > 0)\n\t#else\n\tif (avlt->compare(n->data, min) <= 0 || avlt->compare(n->data, max) >= 0)\n\t#endif\n\t\treturn 0;\n\n\treturn check_order(avlt, n->left, min, n->data) && check_order(avlt, n->right, n->data, max);\n}",
-    "calls": [
-      {
-        "caller": "avl_bf.c:avl_check_order",
-        "span": "avl_bf.c:149:9:149:53",
-        "source": "return check_order(avlt, AVL_FIRST(avlt), min, max);"
-      },
-      {
-        "caller": "avl_bf.c:check_order",
-        "span": "avl_bf.c:598:9:598:49",
-        "source": "return check_order(avlt, n->left, min, n->data) && check_order(avlt, n->right, n->data, max);"
-      },
-      {
-        "caller": "avl_bf.c:check_order",
-        "span": "avl_bf.c:598:53:598:94",
-        "source": "return check_order(avlt, n->left, min, n->data) && check_order(avlt, n->right, n->data, max);"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:check_height",
-    "span": "avl_bf.c:604:1:624:2",
-    "pieces": [
-      "avl_bf.c:604:1:624:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 21,
-    "source": "int check_height(avltree *avlt, avlnode *n)\n{\n\tint lh, rh, cmp;\n\n\tif (n == AVL_NIL(avlt))\n\t\treturn 0;\n\n\tlh = check_height(avlt, n->left);\n\tif (lh < 0)\n\t\treturn lh;\n\t\n\trh = check_height(avlt, n->right);\n\tif (rh < 0)\n\t\treturn rh;\n\t\n\tcmp = rh - lh;\n\tif (cmp < -1 || cmp > 1 || cmp != n->bf) /* check recomputed/cached balance factor */\n\t\treturn -1;\n\t\n\treturn 1 + ((lh > rh) ? lh : rh);\n}",
-    "calls": [
-      {
-        "caller": "avl_bf.c:avl_print",
-        "span": "avl_bf.c:141:28:141:63",
-        "source": "printf(\"\\nheight = %d\\n\", check_height(avlt, AVL_FIRST(avlt)));"
-      },
-      {
-        "caller": "avl_bf.c:avl_check_height",
-        "span": "avl_bf.c:158:11:158:46",
-        "source": "height = check_height(avlt, AVL_FIRST(avlt));"
-      },
-      {
-        "caller": "avl_bf.c:check_height",
-        "span": "avl_bf.c:611:7:611:34",
-        "source": "lh = check_height(avlt, n->left);"
-      },
-      {
-        "caller": "avl_bf.c:check_height",
-        "span": "avl_bf.c:615:7:615:35",
-        "source": "rh = check_height(avlt, n->right);"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:print",
-    "span": "avl_bf.c:629:1:640:2",
-    "pieces": [
-      "avl_bf.c:629:1:640:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 12,
-    "source": "void print(avltree *avlt, avlnode *n, void (*print_func)(void *), int depth, char *label)\n{\n\tif (n != AVL_NIL(avlt)) {\n\t\tprint(avlt, n->right, print_func, depth + 1, \"R\");\n\t\tprintf(\"%*s\", 8 * depth, \"\");\n\t\tif (label)\n\t\t\tprintf(\"%s: \", label);\n\t\tprint_func(n->data);\n\t\tprintf(\" (%s%d)\\n\", (n->bf >= 0) ? \"+\" : \"\", n->bf);\n\t\tprint(avlt, n->left, print_func, depth + 1, \"L\");\n\t}\n}",
-    "calls": [
-      {
-        "caller": "avl_bf.c:avl_print",
-        "span": "avl_bf.c:140:2:140:50",
-        "source": "print(avlt, AVL_FIRST(avlt), print_func, 0, \"T\");"
-      },
-      {
-        "caller": "avl_bf.c:print",
-        "span": "avl_bf.c:632:3:632:52",
-        "source": "print(avlt, n->right, print_func, depth + 1, \"R\");"
-      },
-      {
-        "caller": "avl_bf.c:print",
-        "span": "avl_bf.c:638:3:638:51",
-        "source": "print(avlt, n->left, print_func, depth + 1, \"L\");"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_bf.c:destroy",
-    "span": "avl_bf.c:645:1:653:2",
-    "pieces": [
-      "avl_bf.c:645:1:653:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 9,
-    "source": "void destroy(avltree *avlt, avlnode *n)\n{\n\tif (n != AVL_NIL(avlt)) {\n\t\tdestroy(avlt, n->left);\n\t\tdestroy(avlt, n->right);\n\t\tavlt->destroy(n->data);\n\t\tfree(n);\n\t}\n}",
-    "calls": [
-      {
-        "caller": "avl_bf.c:avl_destroy",
-        "span": "avl_bf.c:61:2:61:32",
-        "source": "destroy(avlt, AVL_FIRST(avlt));"
-      },
-      {
-        "caller": "avl_bf.c:destroy",
-        "span": "avl_bf.c:648:3:648:25",
-        "source": "destroy(avlt, n->left);"
-      },
-      {
-        "caller": "avl_bf.c:destroy",
-        "span": "avl_bf.c:649:3:649:26",
-        "source": "destroy(avlt, n->right);"
-      }
-    ],
-    "globals": [],
-    "imports": [],
-    "chunks": []
-  },
-  {
-    "func_defid": "avl_example.c:main",
-    "span": "avl_example.c:11:1:56:2",
-    "pieces": [
-      "avl_example.c:11:1:56:2"
-    ],
-    "sub_chunks": [],
-    "num_lines": 46,
-    "source": "int main(int argc, char *argv[])\n{\n\tavltree *avlt;\n\n\t/* create a AVL tree */\n\tif ((avlt = avl_create(compare_func, destroy_func)) == NULL) {\n\t\tfprintf(stderr, \"create AVL tree failed\\n\");\n\t\treturn 1;\n\t}\n\n\t/* insert items */\n\tchar a[] = {'R', 'E', 'D', 'S', 'O', 'X', 'C', 'U', 'B', 'T'};\n\tint i;\n\tmydata *data;\n\tfor (i = 0; i < sizeof(a) / sizeof(a[0]); i++) {\n\t\tif ((data = makedata(a[i])) == NULL || avl_insert(avlt, data) == NULL) {\n\t\t\tfprintf(stderr, \"insert %c: out of memory\\n\", a[i]);\n\t\t\tfree(data);\n\t\t\tbreak;\n\t\t}\n\t\tprintf(\"insert %c\", a[i]);\n\t\tavl_print(avlt, print_char_func);\n\t\tprintf(\"\\n\");\n\t}\n\n\t/* delete item */\n\tavlnode *node;\n\tmydata query;\n\tquery.key = 'O';\n\tprintf(\"delete %c\", query.key);\n\tif ((node = avl_find(avlt, &query)) != NULL)\n\t\tavl_delete(avlt, node, 0);\n\tavl_print(avlt, print_char_func);\n\n\t#ifdef AVL_MIN\n\twhile ((node = AVL_MINIMAL(avlt))) {\n\t\tprintf(\"\\ndelete \");\n\t\tprint_char_func(node->data);\n\t\tavl_delete(avlt, node, 0);\n\t\tavl_print(avlt, print_char_func);\n\t}\n\t#endif\n\n\tavl_destroy(avlt);\n\treturn 0;\n}",
-    "calls": [],
     "globals": [],
     "imports": [],
     "chunks": []

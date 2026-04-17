@@ -93,6 +93,65 @@ class SpecAgent:
 
         return chunks
 
+    def _extract_done_marker(self, content: str) -> Tuple[str, bool]:
+        """
+        从长文档续写结果中剥离完成标记。
+        """
+        text = content or ""
+        done = "<CGR_DONE>" in text
+        return text.replace("<CGR_DONE>", "").strip(), done
+
+    def _generate_markdown_with_continuation(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_rounds: int = 4,
+        label: str = "",
+    ) -> str:
+        """
+        对长 markdown 文档启用续写式生成，减少单次长响应中断的概率。
+        """
+        accumulated = ""
+        initial_prompt = (
+            user_prompt
+            + "\n\n额外要求：\n"
+            + "1. 如果一次无法写完，请先输出前半部分，并且只有在真正完成时才在末尾追加 <CGR_DONE>\n"
+            + "2. 如果尚未完成，不要输出 <CGR_DONE>\n"
+            + "3. 续写时不要重复前文，要从上一次结尾处直接继续\n"
+            + "4. 只输出 markdown 正文和可能的 <CGR_DONE>，不要输出解释\n"
+        )
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': initial_prompt}
+        ]
+
+        for round_index in range(1, max_rounds + 1):
+            self.llm.set_request_label(f"{label or 'Spec 文档生成'} [round {round_index}]")
+            response = self.llm.generate(messages)
+            chunk = response[0]
+            chunk, done = self._extract_done_marker(chunk)
+
+            if chunk:
+                accumulated += chunk
+
+            if done:
+                return accumulated.strip()
+
+            if round_index == max_rounds:
+                break
+
+            messages = [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'assistant', 'content': accumulated},
+                {
+                    'role': 'user',
+                    'content': '上一次输出尚未完成，请从刚才最后位置继续，不要重复前文；完成时仅在末尾追加 <CGR_DONE>。'
+                }
+            ]
+
+        return accumulated.strip()
+
     def _normalize_struct_entries(self, structs: List) -> List[Dict]:
         # 接口文档阶段统一把结构体条目变成 dict，避免后续 prompt 拼接逻辑分支过多。
         normalized = []
@@ -1151,13 +1210,12 @@ class SpecAgent:
                 all_analyses=behavior_chunks[0],
             )
 
-            messages = [
-                {'role': 'system', 'content': prompt_manager.get('spec_agent', 'generate_behaviors_doc_system_prompt')},
-                {'role': 'user', 'content': prompt}
-            ]
-
-            response = self.llm.generate(messages)
-            content = response[0]
+            content = self._generate_markdown_with_continuation(
+                prompt_manager.get('spec_agent', 'generate_behaviors_doc_system_prompt'),
+                prompt,
+                max_rounds=4,
+                label="行为文档",
+            )
         else:
             # 模块很多时，先做分批行为摘要，再做最终汇总。
             # 这是为了兼顾“尽量完整理解项目”和“本地模型上下文有限”这两个目标。
@@ -1175,13 +1233,12 @@ class SpecAgent:
                     batch_analyses=chunk,
                 )
 
-                messages = [
-                    {'role': 'system', 'content': prompt_manager.get('spec_agent', 'generate_behaviors_batch_summary_system_prompt')},
-                    {'role': 'user', 'content': prompt}
-                ]
-
-                response = self.llm.generate(messages)
-                batch_content = response[0]
+                batch_content = self._generate_markdown_with_continuation(
+                    prompt_manager.get('spec_agent', 'generate_behaviors_batch_summary_system_prompt'),
+                    prompt,
+                    max_rounds=3,
+                    label=f"行为摘要批次 {batch_index}",
+                )
                 batch_path = batches_dir / f"{batch_index:03d}_behavior_summary.md"
                 with open(batch_path, 'w', encoding='utf-8') as f:
                     f.write(batch_content)
@@ -1197,13 +1254,12 @@ class SpecAgent:
                 batch_summaries="\n\n".join(batch_summaries),
             )
 
-            messages = [
-                {'role': 'system', 'content': prompt_manager.get('spec_agent', 'generate_behaviors_final_doc_system_prompt')},
-                {'role': 'user', 'content': prompt}
-            ]
-
-            response = self.llm.generate(messages)
-            content = response[0]
+            content = self._generate_markdown_with_continuation(
+                prompt_manager.get('spec_agent', 'generate_behaviors_final_doc_system_prompt'),
+                prompt,
+                max_rounds=4,
+                label="行为文档最终汇总",
+            )
         
         # 保存文档
         behaviors_path = rewrite_context_dir / "001_behavior_specification.md"
@@ -1245,13 +1301,12 @@ class SpecAgent:
                                    interface_summary=self._truncate_text(interfaces_doc, self.MAX_CONSTITUTION_DOC_CHARS),
                                    behavior_summary=self._truncate_text(behaviors_doc, self.MAX_CONSTITUTION_DOC_CHARS))
         
-        messages = [
-            {'role': 'system', 'content': prompt_manager.get('spec_agent', 'generate_constitution_system_prompt')},
-            {'role': 'user', 'content': prompt}
-        ]
-        
-        response = self.llm.generate(messages)
-        content = response[0]
+        content = self._generate_markdown_with_continuation(
+            prompt_manager.get('spec_agent', 'generate_constitution_system_prompt'),
+            prompt,
+            max_rounds=5,
+            label="constitution.md",
+        )
         
         # 保存文档
         memory_dir = Path(output_dir) / ".specify" / "memory"
@@ -1313,13 +1368,12 @@ class SpecAgent:
                                    functions_info=functions_info,
                                    structs_info=structs_info)
         
-        messages = [
-            {'role': 'system', 'content': prompt_manager.get('spec_agent', 'generate_module_spec_system_prompt')},
-            {'role': 'user', 'content': prompt}
-        ]
-        
-        response = self.llm.generate(messages)
-        content = response[0]
+        content = self._generate_markdown_with_continuation(
+            prompt_manager.get('spec_agent', 'generate_module_spec_system_prompt'),
+            prompt,
+            max_rounds=5,
+            label=f"{branch_name}/spec.md",
+        )
         
         # 保存文档
         spec_path = specs_dir / "spec.md"
@@ -1360,13 +1414,12 @@ class SpecAgent:
                                    functions=module.get('functions', []),
                                    structs=module_structs)
         
-        messages = [
-            {'role': 'system', 'content': prompt_manager.get('spec_agent', 'generate_module_plan_system_prompt')},
-            {'role': 'user', 'content': prompt}
-        ]
-        
-        response = self.llm.generate(messages)
-        content = response[0]
+        content = self._generate_markdown_with_continuation(
+            prompt_manager.get('spec_agent', 'generate_module_plan_system_prompt'),
+            prompt,
+            max_rounds=4,
+            label=f"{branch_name}/plan.md",
+        )
         
         # 保存文档
         plan_path = specs_dir / "plan.md"
@@ -1407,13 +1460,12 @@ class SpecAgent:
                                    functions=module.get('functions', []),
                                    structs=module_structs)
         
-        messages = [
-            {'role': 'system', 'content': prompt_manager.get('spec_agent', 'generate_module_tasks_system_prompt')},
-            {'role': 'user', 'content': prompt}
-        ]
-        
-        response = self.llm.generate(messages)
-        content = response[0]
+        content = self._generate_markdown_with_continuation(
+            prompt_manager.get('spec_agent', 'generate_module_tasks_system_prompt'),
+            prompt,
+            max_rounds=4,
+            label=f"{branch_name}/tasks.md",
+        )
         
         # 保存文档
         tasks_path = specs_dir / "tasks.md"
@@ -1452,13 +1504,12 @@ class SpecAgent:
                                    project_name=Path(project_path).name,
                                    all_analyses=all_analyses)
         
-        messages = [
-            {'role': 'system', 'content': prompt_manager.get('spec_agent', 'generate_gaps_and_risks_system_prompt')},
-            {'role': 'user', 'content': prompt}
-        ]
-        
-        response = self.llm.generate(messages)
-        content = response[0]
+        content = self._generate_markdown_with_continuation(
+            prompt_manager.get('spec_agent', 'generate_gaps_and_risks_system_prompt'),
+            prompt,
+            max_rounds=4,
+            label="gaps_and_risks.md",
+        )
         
         # 保存文档
         gaps_path = rewrite_context_dir / "04_gaps_and_risks.md"
@@ -1543,6 +1594,65 @@ class SpecAgent:
             macro_items = self._filter_findings_for_module(module, self.macro_findings)
             with open(specs_dir / "macro.md", "w", encoding="utf-8") as f:
                 f.write(self._build_module_auxiliary_note("Macro Notes", macro_items))
+
+    def _generate_auxiliary_risk_summary(self, output_dir: str) -> None:
+        """
+        将模块级 pointer/macro 信息再汇总一份到 rewrite-context/04_gaps_and_risks/。
+        只有在启用了对应专项分析时才创建该目录。
+        """
+        if not self.pointer_notes_enabled and not self.macro_notes_enabled:
+            return
+
+        risk_dir = Path(output_dir) / "docs" / "rewrite-context" / "04_gaps_and_risks"
+        risk_dir.mkdir(parents=True, exist_ok=True)
+
+        lines = [
+            "# Pointer / Macro Gaps and Risks",
+            "",
+            "本文件汇总专项分析器给出的高风险迁移点，便于 Rust 生成阶段和人工复查阶段优先关注。",
+            "",
+        ]
+
+        if self.pointer_notes_enabled:
+            pointer_summary = self._summarize_auxiliary_findings(self.pointer_findings)
+            lines.extend([
+                "## Pointer 风险汇总",
+                f"- 条目总数：{len(self.pointer_findings)}",
+            ])
+            if pointer_summary:
+                top_pointer = list(pointer_summary.items())[:6]
+                lines.append("- 主要类型：" + "，".join(f"{kind}={count}" for kind, count in top_pointer))
+            lines.extend([
+                "- 重点关注：所有权恢复、节点/链式结构、双重指针、函数指针、显式分配与释放。",
+                "- Rust 侧优先检查 Box/Rc<RefCell>/NonNull/&mut/FFI 边界是否选择合理。",
+                "",
+            ])
+
+        if self.macro_notes_enabled:
+            macro_summary = self._summarize_auxiliary_findings(self.macro_findings)
+            lines.extend([
+                "## Macro 风险汇总",
+                f"- 条目总数：{len(self.macro_findings)}",
+            ])
+            if macro_summary:
+                top_macro = list(macro_summary.items())[:6]
+                lines.append("- 主要类型：" + "，".join(f"{kind}={count}" for kind, count in top_macro))
+            lines.extend([
+                "- 重点关注：函数式宏、语句型宏、条件编译块、位标志宏、依赖预处理技巧的复杂宏。",
+                "- Rust 侧优先检查 const / 函数 / #[cfg] / bitflags! / 手工改写 的选型是否正确。",
+                "",
+            ])
+
+        lines.extend([
+            "## 使用建议",
+            "- 若生成代码在所有权、宏替换、条件编译、回调接口处反复出错，应优先回看模块目录下的 pointer.md / macro.md。",
+            "- 本文件只做汇总，不替代各模块的专项说明。",
+            "",
+        ])
+
+        summary_path = risk_dir / "001_pointer_macro_summary.md"
+        with open(summary_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
 
     def _write_auxiliary_guide_files(self, guide_root: Path, guide_title: str, findings: List[Dict], summary: Dict[str, int], templates: Dict[str, Dict]) -> None:
         """
@@ -1738,6 +1848,8 @@ class SpecAgent:
             self._generate_plan_per_module(project_path, module, output_dir, i)
             self._generate_tasks_per_module(project_path, module, output_dir, i)
             self._write_module_auxiliary_notes(module, output_dir, i)
+
+        self._generate_auxiliary_risk_summary(output_dir)
         
         print("\n" + "=" * 60)
         print("✓ SpecAgent 完成！")
@@ -1751,7 +1863,8 @@ class SpecAgent:
         print("    ├── 01_subsystems/*.md")
         print("    ├── 02_interfaces/001_public_interfaces.md")
         print("    ├── 03_behaviors/001_behavior_specification.md")
-        # print("    └── 04_gaps_and_risks.md")
+        if self.pointer_notes_enabled or self.macro_notes_enabled:
+            print("    └── 04_gaps_and_risks/001_pointer_macro_summary.md")
         print("  .specify/memory/constitution.md")
         print("  specs/<index>-<module>-rust-port/")
         print("    ├── spec.md")

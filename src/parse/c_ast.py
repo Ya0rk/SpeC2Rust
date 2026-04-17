@@ -9,13 +9,14 @@ from tree_sitter import Language, Parser
 import networkx as nx
 from utils.fmtpr import prRed
 from utils.cmd import run
+import tree_sitter_c as tsc
 
 pre_path = Path(__file__).parent.parent
 
-Language.build_library(
-    str(pre_path / "utils/tree-sitter/build/c-language.so"),
-    [str(pre_path / "utils/tree-sitter/tree-sitter-c")]
-)
+# Language.build_library(
+#     str(pre_path / "utils/tree-sitter/build/c-language.so"),
+#     [str(pre_path / "utils/tree-sitter/tree-sitter-c")]
+# )
 
 class CCodeAnalyzer:
     """C代码分析器类，使用tree-sitter解析C代码并提取函数信息"""
@@ -23,10 +24,15 @@ class CCodeAnalyzer:
     def __init__(self):
         """初始化分析器"""
         print("初始化C代码分析器...")
-                     
+
+        c_language = self._load_c_language()
+
+        # 初始化 Parser
         self.parser = Parser()
-        c_language = Language(str(pre_path / "utils/tree-sitter/build/c-language.so"), "c")
         self.parser.set_language(c_language)
+
+        # c_language = Language(str(pre_path / "utils/tree-sitter/build/c-language.so"), "c")
+        # self.parser.set_language(c_language)
 
         
         # 存储分析结果
@@ -35,6 +41,37 @@ class CCodeAnalyzer:
         self.structs = []
         self.macros = []
         self.file_path_map = {}  # 文件路径映射
+
+    def _load_c_language(self):
+        """
+        兼容不同 tree_sitter / tree_sitter_c 版本的 C 语言加载方式。
+        依次尝试：
+        1. tree_sitter_c.language() + Language(ptr)
+        2. tree_sitter_c.language() + Language(ptr, "c")
+        3. 回退到仓库内置的 c-language.so
+        """
+        load_errors = []
+
+        try:
+            ptr = tsc.language()
+            return Language(ptr)
+        except Exception as e:
+            load_errors.append(f"Language(ptr) 失败: {e}")
+
+        try:
+            ptr = tsc.language()
+            return Language(ptr, "c")
+        except Exception as e:
+            load_errors.append(f"Language(ptr, 'c') 失败: {e}")
+
+        so_path = pre_path / "utils" / "tree-sitter" / "build" / "c-language.so"
+        if so_path.exists():
+            try:
+                return Language(str(so_path), "c")
+            except Exception as e:
+                load_errors.append(f"Language(so_path, 'c') 失败: {e}")
+
+        raise RuntimeError("无法初始化 tree-sitter C 语言解析器；" + "；".join(load_errors))
         
     def analyze_directory(self, c_code_dir: str, output_file: str) -> None:
         """

@@ -25,6 +25,8 @@ from agent.pointer_agent import PointerAgent
 from agent.spec_agent import SpecAgent
 from agent.spec_json_agent import SpecJsonAgent
 from agent.rust_agent import RustAgent
+from agent.alternatives.stable_rust_agent import StableRustAgent
+from agent.alternatives.growth_rust_agent import GrowthRustAgent
 from agent.code_fixer_agent import CodeFixer, TestFixer
 from config.config import Config
 from utils.fmtpr import prGreen, prRed, prBlue, prYellow
@@ -73,6 +75,16 @@ def main():
         help="可选开启宏分析中间层，生成 C 宏到 Rust 的迁移指导文档"
     )
     parser.add_argument(
+        "--use-stable-rust-agent",
+        action="store_true",
+        help="使用可选的 StableRustAgent，采用更薄、更可控的代码生成路径"
+    )
+    parser.add_argument(
+        "--use-growth-rust-agent",
+        action="store_true",
+        help="使用可选的 GrowthRustAgent，按主树干最小可编译集逐步生长式生成代码"
+    )
+    parser.add_argument(
         "--use-error-organizer-agent",
         action="store_true",
         help="可选开启错误梳理中间层，先归类并分批整理错误，再交给修复器处理"
@@ -92,6 +104,12 @@ def main():
         "--skip-test-fix",
         action="store_true",
         help="跳过测试修复步骤"
+    )
+    parser.add_argument(
+        "--continue",
+        dest="continue_run",
+        action="store_true",
+        help="继续上一次生成，复用已有项目与生成计划；默认不传时会全量重建 Rust 项目"
     )
     parser.add_argument(
         "--max-fix-iterations",
@@ -129,10 +147,21 @@ def main():
     prYellow(f"模型名称：{config.model_name}")
     prYellow(f"远程模型：{config.api_model or '(default)'}")
     prYellow(f"分析路径：{'SpecAgent' if args.use_spec_agent else 'CDocAgent'}")
+    rust_agent_mode = "RustAgent"
+    if args.use_growth_rust_agent:
+        rust_agent_mode = "GrowthRustAgent"
+    elif args.use_stable_rust_agent:
+        rust_agent_mode = "StableRustAgent"
+    prYellow(f"代码生成路径：{rust_agent_mode}")
+    prYellow(f"续跑模式：{'开启' if args.continue_run else '关闭（默认全量重建）'}")
     prYellow(f"Spec JSON 中间层：{'开启' if args.use_spec_json_agent else '关闭'}")
     prYellow(f"PointerAgent：{'开启' if args.use_pointer_agent else '关闭'}")
     prYellow(f"最大修复迭代次数：{args.max_fix_iterations}")
     prBlue("=" * 80)
+
+    if args.use_stable_rust_agent and args.use_growth_rust_agent:
+        prRed("\n✗ 错误：--use-stable-rust-agent 与 --use-growth-rust-agent 不能同时开启")
+        sys.exit(1)
 
     if args.use_spec_json_agent and not args.use_spec_agent:
         prYellow("提示：Spec JSON 中间层仅对 SpecAgent 路径生效，当前将忽略该开关。")
@@ -218,15 +247,18 @@ def main():
                 if os.path.exists(doc_path):
                     doc_paths.append(doc_path)
 
-        # SpecAgent 路径下，PointerAgent / MacroAgent 的结果会落到各个 specs/<module>/ 目录里。
-        # 这里只把简短的 pointer.md / macro.md 加入上下文，避免把整个 specs 树都喂给 RustAgent。
-        specs_root = os.path.join(c_doc_dir, "specs")
-        if os.path.exists(specs_root):
-            for root, _, files in os.walk(specs_root):
-                if args.use_pointer_agent and "pointer.md" in files:
-                    doc_paths.append(os.path.join(root, "pointer.md"))
-                if args.use_macro_agent and "macro.md" in files:
-                    doc_paths.append(os.path.join(root, "macro.md"))
+        # SpecAgent 路径下，PointerAgent / MacroAgent 会先写入各模块目录，
+        # 再由 rewrite-context/04_gaps_and_risks/ 下的汇总文件提供给 RustAgent。
+        # 这样可以避免把所有模块的 pointer.md / macro.md 全部塞进上下文。
+        auxiliary_summary_path = os.path.join(
+            c_doc_dir,
+            "docs",
+            "rewrite-context",
+            "04_gaps_and_risks",
+            "001_pointer_macro_summary.md",
+        )
+        if os.path.exists(auxiliary_summary_path):
+            doc_paths.append(auxiliary_summary_path)
     else:
         target_doc_name = ["final_project_overview.md"]
         for doc_file in target_doc_name:
@@ -252,7 +284,14 @@ def main():
     prYellow("步骤 2: 根据文档生成 Rust 代码")
     prBlue("=" * 80)
 
-    rust_agent = RustAgent(config=config)
+    if args.use_growth_rust_agent:
+        rust_agent = GrowthRustAgent(config=config)
+    elif args.use_stable_rust_agent:
+        rust_agent = StableRustAgent(config=config)
+    else:
+        rust_agent = RustAgent(config=config)
+    if hasattr(rust_agent, "continue_mode"):
+        rust_agent.continue_mode = args.continue_run
     success = rust_agent.generate_from_docs(
         project_name=args.rust_project_name,
         output_dir=args.output_dir,

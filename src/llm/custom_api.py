@@ -1,4 +1,6 @@
+import json
 import random
+import sys
 import time
 
 import requests
@@ -19,6 +21,8 @@ class CustomApiGen:
         retry_base_delay_seconds: float = 8,
         max_retries: int = 6,
         rate_limit_cooldown_seconds: float = 60,
+        disable_env_proxy: bool = True,
+        stream: bool = False,
     ):
         self.api_key = api_key or ""
         self.model = model
@@ -28,7 +32,15 @@ class CustomApiGen:
         self.retry_base_delay_seconds = float(retry_base_delay_seconds)
         self.max_retries = int(max_retries)
         self.rate_limit_cooldown_seconds = float(rate_limit_cooldown_seconds)
+        self.disable_env_proxy = bool(disable_env_proxy)
+        self.stream = bool(stream)
         self._last_request_time = 0.0
+        self._current_max_tokens = self.max_tokens
+        self._current_request_label = ""
+        self.session = requests.Session()
+        # 某些环境会注入 HTTP(S)_PROXY，导致兼容 API 走到不稳定代理链路。
+        # 对直连模型服务的场景，默认禁用 requests 对环境代理变量的继承。
+        self.session.trust_env = not self.disable_env_proxy
 
     def _normalize_url(self, api_base_url: str) -> str:
         if not api_base_url:
@@ -62,9 +74,62 @@ class CustomApiGen:
         jitter = random.uniform(0, min(3.0, max(1.0, base_delay * 0.1)))
         return base_delay + jitter
 
+    def set_request_label(self, label: str):
+        self._current_request_label = (label or "").strip()
+
+    def _stream_response_content(self, response) -> str:
+        """
+        解析 OpenAI-compatible SSE 流，并实时打印增量内容。
+        """
+        chunks = []
+        started = False
+
+        for raw_line in response.iter_lines(decode_unicode=True):
+            if not raw_line:
+                continue
+
+            line = raw_line.strip()
+            if not line.startswith("data:"):
+                continue
+
+            data = line[len("data:"):].strip()
+            if data == "[DONE]":
+                break
+
+            try:
+                event = json.loads(data)
+            except Exception:
+                continue
+
+            choices = event.get("choices") or []
+            if not choices:
+                continue
+
+            delta = choices[0].get("delta") or {}
+            piece = delta.get("content") or ""
+            if not piece:
+                continue
+
+            if not started:
+                stream_title = self._current_request_label or "unnamed request"
+                print(f"\n[stream start] {stream_title}")
+                started = True
+
+            sys.stdout.write(piece)
+            sys.stdout.flush()
+            chunks.append(piece)
+
+        if started:
+            stream_title = self._current_request_label or "unnamed request"
+            print(f"\n[stream end] {stream_title}")
+
+        return "".join(chunks)
+
     def get_response(self, messages, temperature=0, top_k=1):
         if top_k != 1 and temperature == 0:
             raise ModelException("Top k sampling requires a non-zero temperature")
+
+        self._current_max_tokens = self.max_tokens
 
         headers = {
             "Content-Type": "application/json",
@@ -75,7 +140,7 @@ class CustomApiGen:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         retry_count = 0
-        current_max_tokens = self.max_tokens
+        response_end_prematurely_count = 0
 
         while True:
             try:
@@ -85,14 +150,15 @@ class CustomApiGen:
                     "model": self.model,
                     "messages": messages,
                     "temperature": temperature,
-                    "max_tokens": current_max_tokens,
-                    "stream": False,
+                    "max_tokens": self._current_max_tokens,
+                    "stream": self.stream,
                 }
-                response = requests.post(
+                response = self.session.post(
                     self.api_url,
                     json=payload,
                     headers=headers,
                     timeout=180,
+                    stream=self.stream,
                 )
                 self._last_request_time = time.time()
 
@@ -105,38 +171,66 @@ class CustomApiGen:
                         f"Custom API request failed: status={response.status_code}, detail={detail}"
                     )
 
+                if self.stream:
+                    body_content = self._stream_response_content(response)
+                    response_end_prematurely_count = 0
+                    return [body_content]
+
                 body = response.json()
+                response_end_prematurely_count = 0
                 return [body["choices"][0]["message"]["content"]]
             except Exception as e:
                 retry_count += 1
-                if retry_count >= self.max_retries:
+                if self.max_retries > 0 and retry_count >= self.max_retries:
                     raise ModelException(f"Custom API failed after retries: {str(e)}")
 
                 error_text = str(e)
+                lowered_error = error_text.lower()
                 is_rate_limited = (
                     "429" in error_text
-                    or "rate limit" in error_text.lower()
-                    or "too many requests" in error_text.lower()
-                    or "max retries exceeded" in error_text.lower()
+                    or "rate limit" in lowered_error
+                    or "too many requests" in lowered_error
+                )
+                is_proxy_or_tls_error = (
+                    "proxyerror" in lowered_error
+                    or "unable to connect to proxy" in lowered_error
+                    or "remotedisconnected" in lowered_error
+                    or "ssleoferror" in lowered_error
+                    or "unexpected eof while reading" in lowered_error
+                    or "ssl:" in lowered_error
                 )
 
-                if "Response ended prematurely" in error_text and current_max_tokens > 512:
-                    current_max_tokens = max(512, current_max_tokens // 2)
-                    print(
-                        f"Custom API error: {error_text}. "
-                        f"Reducing max_tokens to {current_max_tokens} before retry."
-                    )
+                if "response ended prematurely" in lowered_error:
+                    response_end_prematurely_count += 1
+                    if response_end_prematurely_count >= 3 and self._current_max_tokens > 2048:
+                        next_max_tokens = max(2048, self._current_max_tokens // 2)
+                        if next_max_tokens < self._current_max_tokens:
+                            print(
+                                f"Custom API long-response instability detected after {response_end_prematurely_count} premature endings. "
+                                f"Reducing max_tokens from {self._current_max_tokens} to {next_max_tokens} for subsequent retries."
+                            )
+                            self._current_max_tokens = next_max_tokens
 
                 delay_seconds = self._build_retry_delay(retry_count, is_rate_limited)
-                if is_rate_limited:
+                retry_label = (
+                    f"{retry_count}/{self.max_retries}"
+                    if self.max_retries > 0
+                    else f"{retry_count}/inf"
+                )
+                if is_proxy_or_tls_error:
+                    print(
+                        f"Custom API proxy/TLS error: {error_text}. "
+                        f"Retrying in {delay_seconds:.1f}s ({retry_label})..."
+                    )
+                elif is_rate_limited:
                     print(
                         f"Custom API rate limit detected: {error_text}. "
-                        f"Cooling down for {delay_seconds:.1f}s before retry {retry_count}/{self.max_retries}..."
+                        f"Cooling down for {delay_seconds:.1f}s before retry {retry_label}..."
                     )
                 else:
                     print(
                         f"Custom API error: {error_text}. "
-                        f"Retrying in {delay_seconds:.1f}s ({retry_count}/{self.max_retries})..."
+                        f"Retrying in {delay_seconds:.1f}s ({retry_label})..."
                     )
 
                 time.sleep(delay_seconds)
