@@ -18,7 +18,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from utils.cmd import run
 from config.config import Config
-from agent.prompt import prompt_manager
+from config.prompt import prompt_manager
 from llm.model import Model
 
 
