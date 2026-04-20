@@ -18,7 +18,7 @@ from llm.model import Model
 class Fixer:
     """代码修复父类 - 提供通用的修复功能"""
     
-    def __init__(self, config: Config, project_path: str, max_iterations: int = 5, error_organizer_agent=None):
+    def __init__(self, config: Config, project_path: str, max_iterations: int = 10, error_organizer_agent=None):
         """
         初始化修复器
         
@@ -796,7 +796,7 @@ class Fixer:
 class CodeFixer(Fixer):
     """代码修复模块 - 根据格式化、检查、编译错误进行多轮代码修复"""
     
-    def __init__(self, config: Config, project_path: str, max_iterations: int = 5, error_organizer_agent=None):
+    def __init__(self, config: Config, project_path: str, max_iterations: int = 10, error_organizer_agent=None):
         """
         初始化代码修复器
         
@@ -1794,7 +1794,7 @@ class CodeFixer(Fixer):
 class TestFixer(Fixer):
     """代码测试修复模块 - 根据测试失败信息进行多轮修复"""
     
-    def __init__(self, config: Config, project_path: str, max_iterations: int = 5, error_organizer_agent=None):
+    def __init__(self, config: Config, project_path: str, max_iterations: int = 10, error_organizer_agent=None):
         """
         初始化测试修复器
         

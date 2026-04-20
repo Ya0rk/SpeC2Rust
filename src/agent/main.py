@@ -28,6 +28,7 @@ from agent.rust_agent import RustAgent
 from agent.alternatives.stable_rust_agent import StableRustAgent
 from agent.alternatives.growth_rust_agent import GrowthRustAgent
 from agent.code_fixer_agent import CodeFixer, TestFixer
+from agent.unfinished_code_agent import UnfinishedCodeAgent
 from config.config import Config
 from utils.fmtpr import prGreen, prRed, prBlue, prYellow
 
@@ -101,6 +102,17 @@ def main():
         help="跳过代码修复步骤"
     )
     parser.add_argument(
+        "--skip-unfinished-check",
+        action="store_true",
+        help="跳过未完成实现检查步骤（默认会扫描 todo!/unimplemented! 并尝试续写）"
+    )
+    parser.add_argument(
+        "--unfinished-max-passes",
+        type=int,
+        default=2,
+        help="未完成实现检查的最大续写轮数（默认：2）"
+    )
+    parser.add_argument(
         "--skip-test-fix",
         action="store_true",
         help="跳过测试修复步骤"
@@ -114,8 +126,8 @@ def main():
     parser.add_argument(
         "--max-fix-iterations",
         type=int,
-        default=5,
-        help="最大修复迭代次数（默认：5）"
+        default=10,
+        help="最大修复迭代次数（默认：10）"
     )
 
     args = parser.parse_args()
@@ -154,6 +166,8 @@ def main():
         rust_agent_mode = "StableRustAgent"
     prYellow(f"代码生成路径：{rust_agent_mode}")
     prYellow(f"续跑模式：{'开启' if args.continue_run else '关闭（默认全量重建）'}")
+    prYellow(f"未完成实现检查：{'关闭' if args.skip_unfinished_check else '开启'}")
+    prYellow(f"未完成实现最大续写轮数：{args.unfinished_max_passes}")
     prYellow(f"Spec JSON 中间层：{'开启' if args.use_spec_json_agent else '关闭'}")
     prYellow(f"PointerAgent：{'开启' if args.use_pointer_agent else '关闭'}")
     prYellow(f"最大修复迭代次数：{args.max_fix_iterations}")
@@ -241,7 +255,8 @@ def main():
         else:
             candidate_paths = [
                 os.path.join(c_doc_dir, "docs", "rewrite-context"),
-                os.path.join(c_doc_dir, ".specify", "memory")
+                os.path.join(c_doc_dir, ".specify", "memory"),
+                os.path.join(c_doc_dir, "specs"),
             ]
             for doc_path in candidate_paths:
                 if os.path.exists(doc_path):
@@ -276,6 +291,17 @@ def main():
         sys.exit(1)
 
     prGreen(f"\n✓ 找到 {len(doc_paths)} 个文档文件")
+    for doc_path in doc_paths:
+        prGreen(f"  - 文档输入：{doc_path}")
+
+    source_json_path = ""
+    if args.c_project_path:
+        candidate_source_json = repo_root / "src" / "parse" / "res" / f"{Path(args.c_project_path).name}.json"
+        if candidate_source_json.exists():
+            source_json_path = str(candidate_source_json)
+            prGreen(f"  - 源码 JSON：{source_json_path}")
+        else:
+            prYellow(f"提示：未找到对应源码 JSON：{candidate_source_json}")
 
     # =========================================================================
     # 步骤 2: 根据文档生成 Rust 代码
@@ -295,7 +321,9 @@ def main():
     success = rust_agent.generate_from_docs(
         project_name=args.rust_project_name,
         output_dir=args.output_dir,
-        doc_paths=doc_paths
+        doc_paths=doc_paths,
+        c_project_path=args.c_project_path or "",
+        source_json_path=source_json_path,
     )
 
     if not success:
@@ -305,6 +333,37 @@ def main():
     rust_project_path = os.path.join(args.output_dir, args.rust_project_name)
     prGreen(f"\n✓ Rust 代码生成完成")
     prGreen(f"  项目路径：{rust_project_path}")
+
+    # =========================================================================
+    # 步骤 2.5: 检查并补全未完成实现
+    # =========================================================================
+    if not args.skip_unfinished_check:
+        prBlue("\n" + "=" * 80)
+        prYellow("步骤 2.5: 检查并补全未完成实现")
+        prBlue("=" * 80)
+
+        unfinished_code_agent = UnfinishedCodeAgent(config=config, rust_agent=rust_agent)
+        unfinished_report = unfinished_code_agent.check_and_continue(
+            project_path=rust_project_path,
+            max_passes=args.unfinished_max_passes,
+        )
+
+        repaired_count = len(unfinished_report.get("repaired_files", []))
+        remaining_count = len(unfinished_report.get("remaining_files", []))
+        detected_any = bool(unfinished_report.get("passes"))
+        if repaired_count:
+            prGreen(f"\n✓ 未完成实现补全完成，已续写 {repaired_count} 个文件")
+        elif detected_any:
+            prRed("\n⚠ 检测到未完成实现，但本轮未成功续写任何文件")
+        else:
+            prGreen("\n✓ 未检测到需要续写的未完成实现")
+
+        if remaining_count:
+            prRed(f"⚠ 仍有 {remaining_count} 个文件包含未完成占位：{unfinished_report.get('remaining_files', [])}")
+        else:
+            prGreen("  当前项目中未检测到 todo!/unimplemented! 等未完成占位")
+    else:
+        prRed("\n⊘ 跳过未完成实现检查步骤")
 
     # =========================================================================
     # 步骤 3: 对生成的 Rust 代码进行编译修复

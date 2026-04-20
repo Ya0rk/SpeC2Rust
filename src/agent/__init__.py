@@ -8,6 +8,7 @@ from agent.alternatives.growth_rust_agent import GrowthRustAgent
 from agent.code_fixer_agent import CodeFixer, TestFixer, Fixer
 from agent.spec_agent import SpecAgent
 from agent.spec_json_agent import SpecJsonAgent
+from agent.unfinished_code_agent import UnfinishedCodeAgent
 
 
 
@@ -24,4 +25,5 @@ __all__ = [
     'TestFixer',
     'SpecAgent',
     'SpecJsonAgent',
+    'UnfinishedCodeAgent',
 ]

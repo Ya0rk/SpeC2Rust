@@ -17,4 +17,4 @@ tree-sitter-c==0.21.3
 codebleu==0.6.0
 
 # 图形/网络分析（请确认是 network 还是 networkx）
-network==0.1
+networkx==0.1

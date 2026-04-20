@@ -42,4 +42,7 @@ python -u ./src/agent/main.py \
     --c_project_path "$DATASET" \
     --output_dir "$OUTPUT_DIR" \
     --rust-project-name "$C_NAME-rust" \
+    --use-macro-agent \
+    --use-pointer-agent \
+    --use-error-organizer-agent \
     --use-spec-agent 2>&1 | tee -a "$LOG_FILE"

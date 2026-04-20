@@ -10,3 +10,4 @@ src/utils/tree-sitter/tree-sitter-c
 report.md
 spec_agent.md
 spec
+log/

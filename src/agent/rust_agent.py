@@ -4,6 +4,7 @@ import json
 import re
 import hashlib
 import shutil
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Optional
@@ -17,7 +18,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from utils.cmd import run
 from config.config import Config
-from config.prompt import prompt_manager
+from agent.prompt import prompt_manager
 from llm.model import Model
 
 
@@ -45,6 +46,12 @@ class RustAgent:
         self.generation_plan: Dict = {}
         self.api_contract: Dict = {}
         self.continue_mode: bool = False
+        self.source_project_path: str = ""
+        self.source_json_path: str = ""
+        self.source_records: List[Dict] = []
+        self.source_context_summary: str = ""
+        self.tool_interface_constraints: str = ""
+        self.source_interface_summary: str = ""
 
     def _clip_document_content(self, doc_path: str, content: str) -> str:
         """
@@ -71,6 +78,327 @@ class RustAgent:
             clipped
             + "\n\n[文档过长，后续内容已截断；如需完整内容，请回到源文档查看。]\n"
         )
+
+    def _normalize_rel_path(self, path: str) -> str:
+        return (path or "").replace("\\", "/").strip()
+
+    def _tokenize_identifier(self, text: str) -> List[str]:
+        normalized = self._normalize_rel_path(text)
+        base = os.path.splitext(os.path.basename(normalized))[0]
+        pieces = re.split(r"[^A-Za-z0-9_]+", normalized + " " + base)
+        tokens = []
+        for piece in pieces:
+            if not piece:
+                continue
+            for part in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)|\d+", piece):
+                lowered = part.lower()
+                if lowered:
+                    tokens.append(lowered)
+            lowered_piece = piece.lower()
+            if lowered_piece and lowered_piece not in tokens:
+                tokens.append(lowered_piece)
+        stopwords = {
+            "src", "tests", "test", "mod", "lib", "main", "readme",
+            "cargo", "parser", "module", "utils", "common",
+        }
+        return [token for token in tokens if token not in stopwords and len(token) > 1]
+
+    def _repo_root(self) -> Path:
+        return Path(__file__).resolve().parents[2]
+
+    def _derive_source_json_path(self, c_project_path: str = "", project_name: str = "") -> str:
+        candidates = []
+        if c_project_path:
+            project_base = Path(c_project_path).name
+            candidates.append(self._repo_root() / "src" / "parse" / "res" / f"{project_base}.json")
+        if project_name:
+            candidates.append(self._repo_root() / "src" / "parse" / "res" / f"{project_name}.json")
+
+        seen = set()
+        for candidate in candidates:
+            candidate_str = str(candidate)
+            if candidate_str in seen:
+                continue
+            seen.add(candidate_str)
+            if os.path.exists(candidate_str):
+                return candidate_str
+        return ""
+
+    def configure_source_context(self, c_project_path: str = "", source_json_path: str = ""):
+        """
+        绑定原始 C 项目源码上下文，供 Rust 生成阶段使用。
+        """
+        self.source_project_path = c_project_path or self.source_project_path
+        resolved_json_path = source_json_path or self._derive_source_json_path(
+            c_project_path=self.source_project_path,
+            project_name=self.project_name,
+        )
+        self.source_json_path = resolved_json_path or ""
+        self.source_records = self._load_source_records(self.source_json_path)
+        self.source_context_summary = self._build_source_context_summary()
+        self.tool_interface_constraints = self._build_tool_interface_constraints()
+        self.source_interface_summary = self._build_source_interface_summary()
+
+    def _load_source_records(self, source_json_path: str) -> List[Dict]:
+        """
+        从 parse/res/*.json 中加载可供生成阶段使用的源码事实。
+        """
+        if not source_json_path or not os.path.exists(source_json_path):
+            return []
+
+        try:
+            with open(source_json_path, "r", encoding="utf-8", errors="ignore") as f:
+                payload = json.load(f)
+        except Exception as e:
+            print(f"加载源码 JSON 失败：{source_json_path}，错误：{e}")
+            return []
+
+        raw_records = []
+        if isinstance(payload, list):
+            raw_records = payload
+        elif isinstance(payload, dict):
+            for key in ("functions", "records", "items"):
+                if isinstance(payload.get(key), list):
+                    raw_records.extend(payload.get(key, []))
+            if not raw_records:
+                raw_records = [payload]
+
+        normalized_records = []
+        for item in raw_records:
+            if not isinstance(item, dict):
+                continue
+
+            func_defid = item.get("func_defid", "")
+            name = item.get("name") or (func_defid.rsplit(":", 1)[-1] if ":" in func_defid else "")
+            span = item.get("span", "")
+            file_path = ""
+            if ":" in func_defid:
+                file_path = func_defid.rsplit(":", 1)[0]
+            elif span:
+                span_match = re.match(r"^(.*):\d+:\d+:\d+:\d+$", span)
+                if span_match:
+                    file_path = span_match.group(1)
+
+            normalized_records.append(
+                {
+                    "name": name or "unknown",
+                    "file": self._normalize_rel_path(file_path),
+                    "span": span,
+                    "source": item.get("source", "") or "",
+                    "num_lines": item.get("num_lines") or len(str(item.get("source", "")).splitlines()),
+                    "calls": item.get("calls", []) if isinstance(item.get("calls", []), list) else [],
+                    "func_defid": func_defid,
+                }
+            )
+        return normalized_records
+
+    def _truncate_text(self, text: str, max_chars: int) -> str:
+        if len(text) <= max_chars:
+            return text
+        return text[:max_chars] + "\n...[截断]..."
+
+    def _build_source_context_summary(self, max_records: int = 12, max_chars: int = 16000) -> str:
+        """
+        构造项目级源码事实摘要，避免 Rust 生成只依赖 rewrite-context 摘要文档。
+        """
+        if not self.source_records:
+            return ""
+
+        parts = []
+        parts.append("原始 C 源码事实摘要（来自解析 JSON，优先级高于摘要文档）：")
+        grouped_by_file = defaultdict(list)
+        for record in self.source_records:
+            grouped_by_file[record["file"]].append(record)
+
+        parts.append("源文件概览：")
+        for file_path, records in list(grouped_by_file.items())[:8]:
+            names = ", ".join(record["name"] for record in records[:8])
+            parts.append(f"- {file_path}: {len(records)} 个函数/记录，代表项：{names}")
+
+        main_records = [record for record in self.source_records if record["name"] == "main"]
+        if main_records:
+            parts.append("入口函数：")
+            for record in main_records[:3]:
+                signature = self._truncate_text(record.get("source", "").split("{", 1)[0].strip(), 220)
+                parts.append(f"- {record['file']} {record['span']}: {signature}")
+
+        parts.append("关键源码片段：")
+        prioritized = sorted(
+            self.source_records,
+            key=lambda item: (
+                0 if item["name"] == "main" else 1,
+                -int(item.get("num_lines", 0)),
+                item["name"],
+            ),
+        )
+        for record in prioritized[:max_records]:
+            snippet = self._truncate_text(record.get("source", "").strip(), 1200)
+            parts.append(
+                f"\n### {record['name']} [{record['file']} {record['span']}]\n"
+                f"```c\n{snippet}\n```"
+            )
+
+        text = "\n".join(parts).strip()
+        return self._truncate_text(text, max_chars)
+
+    def _build_source_interface_summary(self, max_chars: int = 5000) -> str:
+        """
+        提炼与对外接口相关的源码事实，用于约束项目结构和入口设计。
+        """
+        if not self.source_records:
+            return ""
+
+        parts = ["原始 C 项目的外部接口事实："]
+        main_records = [record for record in self.source_records if record["name"] == "main"]
+        if main_records:
+            for record in main_records[:4]:
+                signature = self._truncate_text(record.get("source", "").split("{", 1)[0].strip(), 220)
+                parts.append(f"- 入口函数：{signature} @ {record['file']}")
+
+        for record in self.source_records[:10]:
+            if record["name"] == "main":
+                continue
+            signature = self._truncate_text(record.get("source", "").split("{", 1)[0].strip(), 180)
+            if signature:
+                parts.append(f"- 函数：{signature} @ {record['file']}")
+
+        return self._truncate_text("\n".join(parts).strip(), max_chars)
+
+    def _build_tool_interface_constraints(self, max_chars: int = 4000) -> str:
+        """
+        判断原项目是否更像工具/CLI，并生成必须保留的接口约束。
+        """
+        signals = []
+        main_records = [record for record in self.source_records if record["name"] == "main"]
+        cli_like = False
+        for record in main_records:
+            source = record.get("source", "")
+            header = source.split("{", 1)[0]
+            if "argc" in header or "argv" in header:
+                cli_like = True
+            if any(token in source for token in ("usage", "printf(", "fprintf(", "open(", "read(", "exit(")):
+                cli_like = True
+
+        doc_blob = "\n".join(self.doc_contents.values()) if self.doc_contents else ""
+        if "可执行文件" in doc_blob or "入口候选" in doc_blob:
+            cli_like = True
+
+        if not cli_like:
+            return ""
+
+        signals.append("检测结果：原始 C 项目更像工具/CLI/可执行程序，而不是单纯库。")
+        for record in main_records[:3]:
+            header = self._truncate_text(record.get("source", "").split("{", 1)[0].strip(), 220)
+            signals.append(f"- 入口签名：{header} @ {record['file']}")
+        signals.append("- 必须保留命令行入口，而不是擅自改造成仅能被库调用的 API。")
+        signals.append("- 必须尽量保持参数顺序、参数含义、stdout/stderr 输出通道、usage/error 文案职责和退出语义一致。")
+        signals.append("- 如果需要额外的库层封装，可以新增内部模块，但不能破坏原工具的外部使用方式。")
+        signals.append("- 对 main/入口调度、解析流程、错误退出路径，应优先参考原 C 源码，而不是仅根据摘要重写。")
+        return self._truncate_text("\n".join(signals), max_chars)
+
+    def _extract_record_call_tokens(self, record: Dict) -> set[str]:
+        """
+        从函数调用关系中提取通用符号 token，用于弱关联匹配。
+        """
+        tokens = set()
+        for call in record.get("calls", [])[:12]:
+            caller = str(call.get("caller", "")).rsplit(":", 1)[-1]
+            source = str(call.get("source", ""))
+            for token in self._tokenize_identifier(caller):
+                tokens.add(token)
+            for token in re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", source):
+                lowered = token.lower()
+                if len(lowered) > 1:
+                    tokens.add(lowered)
+        return tokens
+
+    def _score_source_record_for_target_file(self, file_path: str, record: Dict) -> int:
+        """
+        基于项目无关的通用信号，为目标 Rust 文件挑选相关 C 源码。
+        只依赖名字、路径、入口约束和调用关系，不做项目特例判断。
+        """
+        normalized_path = self._normalize_rel_path(file_path)
+        path_tokens = set(self._tokenize_identifier(normalized_path))
+        file_stem = os.path.splitext(os.path.basename(normalized_path))[0].lower()
+
+        record_name = str(record.get("name", "")).lower()
+        record_file = self._normalize_rel_path(record.get("file", ""))
+        record_file_stem = os.path.splitext(os.path.basename(record_file))[0].lower()
+        record_tokens = set(self._tokenize_identifier(record_name) + self._tokenize_identifier(record_file))
+        call_tokens = self._extract_record_call_tokens(record)
+
+        score = 0
+
+        if file_stem and record_name == file_stem:
+            score += 24
+        if file_stem and record_file_stem == file_stem:
+            score += 14
+
+        token_overlap = path_tokens & record_tokens
+        score += len(token_overlap) * 4
+
+        call_overlap = path_tokens & call_tokens
+        score += min(len(call_overlap), 4) * 2
+
+        if normalized_path.endswith("main.rs") and record_name == "main":
+            score += 25
+        elif "main" in path_tokens and record_name == "main":
+            score += 12
+
+        # 若 Rust 目标文件和 C 源文件来自同名模块/同名编译单元，给适度加权。
+        file_path_segments = set(segment.lower() for segment in normalized_path.split("/") if segment)
+        record_path_segments = set(segment.lower() for segment in record_file.split("/") if segment)
+        segment_overlap = file_path_segments & record_path_segments
+        score += min(len(segment_overlap), 3) * 3
+
+        return score
+
+    def _build_relevant_source_context_for_file(self, file_path: str, max_records: int = 6, max_chars: int = 12000) -> str:
+        """
+        为目标 Rust 文件挑选最相关的 C 源码片段。
+        """
+        if not self.source_records:
+            return ""
+
+        scored = []
+        for record in self.source_records:
+            score = self._score_source_record_for_target_file(file_path, record)
+            if score > 0:
+                scored.append((score, record))
+
+        if not scored:
+            fallback_records = sorted(
+                self.source_records,
+                key=lambda item: (
+                    0 if item["name"] == "main" else 1,
+                    -int(item.get("num_lines", 0)),
+                ),
+            )[:max_records]
+        else:
+            fallback_records = [
+                item[1]
+                for item in sorted(
+                    scored,
+                    key=lambda pair: (-pair[0], -int(pair[1].get("num_lines", 0)), pair[1]["name"]),
+                )[:max_records]
+            ]
+
+        parts = [f"与 Rust 文件 `{file_path}` 最相关的原始 C 源码："]
+        for record in fallback_records:
+            calls = record.get("calls", [])[:6]
+            parts.append(f"\n### {record['name']} [{record['file']} {record['span']}]")
+            if calls:
+                call_lines = ", ".join(
+                    self._truncate_text(str(call.get("source", "")).strip(), 80)
+                    for call in calls
+                    if call.get("source")
+                )
+                if call_lines:
+                    parts.append(f"调用位置示例：{call_lines}")
+            snippet = self._truncate_text(record.get("source", "").strip(), 1800)
+            parts.append(f"```c\n{snippet}\n```")
+
+        return self._truncate_text("\n".join(parts).strip(), max_chars)
 
     def _is_cargo_toml(self, file_path: str) -> bool:
         """判断是否为 Cargo.toml。"""
@@ -1008,7 +1336,8 @@ cargo test
                 self.api_contract = self._load_api_contract()
                 if not os.path.exists(os.path.join(project_path, "Cargo.toml")):
                     print("检测到项目目录缺少 Cargo.toml，重新初始化 cargo 项目")
-                    cmd = f"cd {output_dir} && cargo new {project_name} --lib"
+                    # cmd = f"cd {output_dir} && cargo new {project_name} --lib"
+                    cmd = f"cd {output_dir} && cargo new {project_name}"
                     print(f"执行命令：{cmd}")
                     result = run(cmd)
                     print(f"项目创建成功：{result}")
@@ -1021,7 +1350,8 @@ cargo test
         self.api_contract = {"project_name": project_name, "files": {}}
 
         # 使用 cargo new 创建项目
-        cmd = f"cd {output_dir} && cargo new {project_name} --lib"
+        # cmd = f"cd {output_dir} && cargo new {project_name} --lib"
+        cmd = f"cd {output_dir} && cargo new {project_name}"
         print(f"执行命令：{cmd}")
         result = run(cmd)
         print(f"项目创建成功：{result}")
@@ -1072,6 +1402,107 @@ cargo test
                 print(f"路径不存在：{doc_path}")
         
         return self.doc_contents
+
+    def attach_existing_project(self, project_path: str, project_name: Optional[str] = None, doc_paths: Optional[List[str]] = None):
+        """
+        绑定到已存在的 Rust 项目，便于后续做定点续写或修复。
+        """
+        self.project_path = project_path
+        self.project_name = project_name or os.path.basename(project_path.rstrip("\\/"))
+        self.generation_plan = self._load_generation_plan()
+        self.api_contract = self._load_api_contract()
+        if doc_paths:
+            self.load_documents(doc_paths)
+
+    def build_project_generation_context(self, include_docs: bool = False, max_doc_chars: int = 12000) -> str:
+        """
+        构造现有项目的生成上下文，供定点续写使用。
+        """
+        parts = []
+        project_structure = self.generation_plan.get("project_structure", "")
+        implementation_plan = self.generation_plan.get("implementation_plan", "")
+
+        if project_structure:
+            parts.append(f"项目结构：\n{project_structure}")
+        if implementation_plan:
+            parts.append(f"实现计划：\n{implementation_plan}")
+
+        api_contract_context = self._build_api_contract_context()
+        if api_contract_context:
+            parts.append(f"当前接口契约：\n{api_contract_context}")
+
+        if self.source_context_summary:
+            parts.append(f"原始 C 源码摘要：\n{self.source_context_summary}")
+
+        if self.tool_interface_constraints:
+            parts.append(f"工具接口保持约束：\n{self.tool_interface_constraints}")
+
+        if include_docs and self.doc_contents:
+            doc_parts = []
+            current_len = 0
+            for path, content in self.doc_contents.items():
+                chunk = f"\n=== 文档：{path} ===\n{content}\n"
+                if current_len + len(chunk) > max_doc_chars:
+                    remaining = max_doc_chars - current_len
+                    if remaining > 0:
+                        doc_parts.append(chunk[:remaining])
+                    break
+                doc_parts.append(chunk)
+                current_len += len(chunk)
+            docs_text = "".join(doc_parts).strip()
+            if docs_text:
+                parts.append(f"项目文档摘要：\n{docs_text}")
+
+        return "\n\n".join(part for part in parts if part).strip()
+
+    def regenerate_existing_file(
+        self,
+        file_path: str,
+        system_prompt: str,
+        user_prompt: str,
+        code_lang: str = "rust",
+        max_rounds: int = 5,
+        label: str = "",
+        status_note: str = "",
+    ) -> str:
+        """
+        对现有文件做定点续写，并复用现有写回、截断保护和计划状态管理逻辑。
+        """
+        if not self.project_path:
+            raise ValueError("project_path 未设置，无法续写现有文件")
+
+        full_path = os.path.join(self.project_path, file_path)
+        self._mark_generation_status(file_path, "in_progress", status_note or "regenerating_existing_file")
+
+        code = self._generate_with_continuation(
+            system_prompt,
+            user_prompt,
+            code_lang=code_lang,
+            max_rounds=max_rounds,
+            label=label or f"续写文件 {file_path}",
+        )
+
+        if not code or not str(code).strip():
+            self._mark_generation_status(file_path, "failed", "empty_regeneration")
+            return ""
+
+        generation_completed = getattr(self, "_last_generation_completed", False)
+        if self._looks_like_truncated_rust_source(file_path, code) and not generation_completed:
+            self._mark_generation_status(file_path, "failed", "truncated_regeneration")
+            return ""
+
+        if self._is_cargo_toml(file_path) and self._looks_like_invalid_cargo_toml(code):
+            code = self._build_fallback_cargo_toml()
+        if self._is_cargo_toml(file_path):
+            code = self._sanitize_cargo_toml_for_config(code)
+        if self._is_readme(file_path) and self._looks_like_invalid_readme(code):
+            code = self._build_fallback_readme()
+
+        self._write_file(full_path, code)
+        if file_path.replace("\\", "/").lower().endswith(".rs"):
+            self._update_api_contract_for_file(file_path, code)
+        self._mark_generation_status(file_path, "completed", status_note or "regenerated_existing_file")
+        return code
     
     def _generate_project_structure(self) -> str:
         """
@@ -1087,6 +1518,21 @@ cargo test
         for path, content in self.doc_contents.items():
             all_docs += f"\n=== 文档：{path} ===\n"
             all_docs += content
+            all_docs += "\n"
+
+        if self.source_context_summary:
+            all_docs += "\n=== 原始 C 源码摘要 ===\n"
+            all_docs += self.source_context_summary
+            all_docs += "\n"
+
+        if self.source_interface_summary:
+            all_docs += "\n=== 原始 C 对外接口事实 ===\n"
+            all_docs += self.source_interface_summary
+            all_docs += "\n"
+
+        if self.tool_interface_constraints:
+            all_docs += "\n=== 工具接口保持约束 ===\n"
+            all_docs += self.tool_interface_constraints
             all_docs += "\n"
         
         # 构建提示
@@ -1130,6 +1576,13 @@ cargo test
         prompt = prompt_manager.get('rust_agent', 'generate_implementation_plan_prompt',
                                    project_structure=project_structure,
                                    files_to_generate=files_to_generate)
+
+        if self.source_context_summary:
+            prompt += f"\n\n补充的原始 C 源码摘要：\n{self.source_context_summary}\n"
+        if self.source_interface_summary:
+            prompt += f"\n\n补充的原始 C 对外接口事实：\n{self.source_interface_summary}\n"
+        if self.tool_interface_constraints:
+            prompt += f"\n\n必须遵守的工具接口保持约束：\n{self.tool_interface_constraints}\n"
 
         sys_prompt = prompt_manager.get('rust_agent', 'generate_implementation_plan_system_prompt')
 
@@ -1212,6 +1665,11 @@ cargo test
                                        file_path=file_path,
                                        context=context,
                                        implementation_plan=implementation_plan)
+            source_context = self._build_relevant_source_context_for_file(file_path)
+            if source_context:
+                prompt += f"\n\n最相关的原始 C 源码片段：\n{source_context}\n"
+            if self.tool_interface_constraints:
+                prompt += f"\n\n必须遵守的工具接口保持约束：\n{self.tool_interface_constraints}\n"
             extra_requirements = self._get_file_specific_generation_requirements(file_path)
             if extra_requirements:
                 prompt += f"\n\n额外文件级要求：\n{extra_requirements}\n"
@@ -1273,6 +1731,7 @@ cargo test
             )
 
         extra_requirements = self._get_skeleton_extra_requirements(file_path)
+        source_context = self._build_relevant_source_context_for_file(file_path, max_records=5, max_chars=9000)
         prompt = f"""请先为下面的 Rust 文件生成“代码骨架”，用于后续逐步补全实现。
 
 要求：
@@ -1295,7 +1754,13 @@ cargo test
 
 实现计划：
 {implementation_plan}
+
+最相关的原始 C 源码片段：
+{source_context or '当前没有可用的源码片段，请至少严格遵循已有上下文与接口事实。'}
 """
+
+        if self.tool_interface_constraints:
+            prompt += f"\n必须遵守的工具接口保持约束：\n{self.tool_interface_constraints}\n"
 
         return self._generate_with_continuation(
             '你是一个擅长生成 Rust 工程骨架的代码助手。请只输出代码，不要输出解释。',
@@ -1389,6 +1854,7 @@ cargo test
                 label=f"补全实现 {file_path}",
             )
 
+        source_context = self._build_relevant_source_context_for_file(file_path)
         prompt = f"""下面已经有一个 Rust 文件骨架，请在保持整体结构稳定的前提下，继续补全其中的实现内容。
 
 要求：
@@ -1412,10 +1878,15 @@ cargo test
 
 实现计划：
 {implementation_plan}
+
+最相关的原始 C 源码片段：
+{source_context or '当前没有可用的源码片段，请至少严格遵循已有上下文与接口事实。'}
 """
         extra_requirements = self._get_file_specific_generation_requirements(file_path)
         if extra_requirements:
             prompt += f"\n额外文件级要求：\n{extra_requirements}\n"
+        if self.tool_interface_constraints:
+            prompt += f"\n必须遵守的工具接口保持约束：\n{self.tool_interface_constraints}\n"
 
         return self._generate_with_continuation(
             '你是一个擅长在既有 Rust 骨架上逐步补全实现的代码助手。请只输出代码，不要输出解释。',
@@ -1850,7 +2321,17 @@ cargo test
         
         # 6. 逐个生成文件
         all_generated_code = {}
-        context = f"项目结构：\n{project_structure}\n\n实现计划：\n{implementation_plan}\n"
+        context_parts = [
+            f"项目结构：\n{project_structure}",
+            f"实现计划：\n{implementation_plan}",
+        ]
+        if self.source_context_summary:
+            context_parts.append(f"原始 C 源码摘要：\n{self.source_context_summary}")
+        if self.source_interface_summary:
+            context_parts.append(f"原始 C 对外接口事实：\n{self.source_interface_summary}")
+        if self.tool_interface_constraints:
+            context_parts.append(f"工具接口保持约束：\n{self.tool_interface_constraints}")
+        context = "\n\n".join(context_parts) + "\n"
         
         for file_path in new_files_to_generate:
             plan_state = self.generation_plan.get("files", {}).get(file_path, {})
@@ -2081,7 +2562,14 @@ cargo test
             print(f"检查失败：{e}")
             return False
     
-    def generate_from_docs(self, project_name: str, output_dir: str, doc_paths: List[str]) -> bool:
+    def generate_from_docs(
+        self,
+        project_name: str,
+        output_dir: str,
+        doc_paths: List[str],
+        c_project_path: str = "",
+        source_json_path: str = "",
+    ) -> bool:
         """
         根据文档生成完整的 Rust 项目（主入口方法）
         
@@ -2089,6 +2577,8 @@ cargo test
             project_name: 项目名称
             output_dir: 输出目录
             doc_paths: 文档路径列表
+            c_project_path: 原始 C 项目路径
+            source_json_path: 解析后的源码 JSON 路径
             
         Returns:
             是否成功
@@ -2102,6 +2592,16 @@ cargo test
         
         # 2. 加载项目文档
         self.load_documents(doc_paths)
+
+        # 2.5. 绑定原始源码上下文，避免仅凭摘要文档猜测实现
+        self.configure_source_context(
+            c_project_path=c_project_path,
+            source_json_path=source_json_path,
+        )
+        if self.source_json_path:
+            print(f"已加载源码 JSON：{self.source_json_path}")
+        if self.tool_interface_constraints:
+            print("检测到工具/CLI 接口约束，后续生成将强制保持外部使用方式一致")
         
         # 3. 生成代码
         self.generate_code()

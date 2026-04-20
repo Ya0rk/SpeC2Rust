@@ -663,6 +663,11 @@ class RustAgentPrompts:
 4. 核心数据结构和 trait 设计
 5. 关键函数和方法签名
 6. 错误处理策略
+
+额外要求：
+- 如果上下文中已经提供了 C 源码片段、函数体或接口事实，这些源码事实优先于摘要性描述
+- 不要凭空创造原 C 项目中不存在的核心模块、指令集、状态机或协议
+- 如果原项目明显是工具/CLI/可执行程序，Rust 项目结构必须保留对应的入口与对外使用方式，不要擅自改成纯库项目
 """
     
     @staticmethod
@@ -701,6 +706,11 @@ class RustAgentPrompts:
 - 关键算法和实现要点
 - 减少 unsafe 的使用
 
+约束：
+- 如果上下文中提供了 C 源码函数体、源码片段或接口事实，计划必须以这些事实为准
+- 对工具类项目，必须明确保留命令行入口、参数语义、输出行为和退出方式的迁移方案
+- 不要把只有源码位置但未给出实现依据的部分擅自扩写成复杂新设计
+
 请使用<implementation_plan>标签包裹实现计划。"""
     
     @staticmethod
@@ -737,6 +747,9 @@ class RustAgentPrompts:
 7. Cargo.toml 不要使用 // 注释，而要使用 # 注释
 8. 减少 unsafe 的使用
 9. 注意算法的合理正确性，避免逻辑错误
+10. 如果上下文中已经提供了 C 源码片段、函数体、宏、全局变量或接口事实，必须优先按照这些源码事实实现，不要自行脑补
+11. 如果原项目是工具/CLI，必须保持对外使用接口一致，不要擅自改变参数形式、入口方式、输出通道或退出语义
+12. 如果当前 Rust 文件与某个 C 函数/模块明显对应，应尽量贴着对应源码迁移，而不是只根据模块摘要重写成另一套逻辑
 
 请直接输出代码内容，不要包含其他说明文字。使用```rust 代码块包裹代码。"""
     
@@ -750,6 +763,74 @@ class RustAgentPrompts:
 2. 清晰的命名
 3. 合理的抽象
 4. 高效的实现"""
+
+
+# ============================================================================
+# UnfinishedCodeAgent Prompts - 未完成实现检查与续写
+# ============================================================================
+
+class UnfinishedCodeAgentPrompts:
+    """UnfinishedCodeAgent 相关 prompt 模板"""
+
+    @staticmethod
+    def continue_unfinished_file(
+        file_path: str,
+        findings_summary: str,
+        current_code: str,
+        project_context: str,
+        documentation_context: str = "",
+    ) -> str:
+        """为包含占位实现的 Rust 文件生成续写 prompt"""
+        prompt = f"""下面这个 Rust 文件中仍然存在“未完成实现”的占位，需要你直接把它补成可工作的正式实现。
+
+目标文件：
+{file_path}
+
+检测到的未完成占位：
+{findings_summary}
+
+当前文件代码：
+```rust
+{current_code}
+```
+
+项目上下文：
+{project_context}
+"""
+        if documentation_context:
+            prompt += f"""
+补充文档上下文：
+{documentation_context}
+"""
+
+        prompt += """
+请严格遵守以下要求：
+1. 只输出修复后的完整单文件 Rust 代码，不要输出解释
+2. 保留当前文件中已经正确的结构、命名、公开接口和模块组织
+3. 重点补全 todo!()、unimplemented!()、以及明显表示“尚未实现”的 panic!/unreachable! 占位
+4. 优先实现真实逻辑，不要继续保留新的 todo!() / unimplemented!()
+5. 如果某处确实无法完整恢复，也要给出最小但语义合理的可运行实现，避免直接留空占位
+6. 不要随意删除已经存在的类型定义、字段、trait 实现和公共函数
+7. 保持 Rust 惯用法、类型设计、所有权和错误处理风格一致
+
+请直接输出最终代码内容，并使用 ```rust 代码块包裹。"""
+        return prompt
+
+    @staticmethod
+    def continue_unfinished_file_system_prompt() -> str:
+        """补全未完成 Rust 文件的系统 prompt"""
+        return """你是一个专门负责补全 Rust 未实现代码的专家。
+
+你的任务不是重写整个项目，而是在现有文件基础上定点补齐未完成实现。
+
+工作原则：
+1. 优先补齐真实逻辑，不保留 todo!() / unimplemented!() 占位
+2. 尽量保持现有接口和数据结构稳定
+3. 输出必须是完整、可替换原文件的单文件 Rust 代码
+4. 不输出解释，只输出代码"""
+
+
+unfinished_code_prompt_manager = UnfinishedCodeAgentPrompts()
 
 
 # ============================================================================
