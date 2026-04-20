@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 
 from config.config import Config
 
-from .prompt import unfinished_code_prompt_manager
+from config.prompt import unfinished_code_prompt_manager
 from .rust_agent import RustAgent
 
 

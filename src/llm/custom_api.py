@@ -77,6 +77,55 @@ class CustomApiGen:
     def set_request_label(self, label: str):
         self._current_request_label = (label or "").strip()
 
+    @staticmethod
+    def _decode_stream_line(raw_line) -> str:
+        if isinstance(raw_line, bytes):
+            return raw_line.decode("utf-8", errors="replace")
+        return raw_line
+
+    @staticmethod
+    def _text_metrics(text: str) -> tuple[int, int, int]:
+        mojibake_markers = sum(text.count(marker) for marker in ("Ã", "Â", "â", "ð", "è", "ä", "æ", "å", "ç", "é"))
+        control_chars = sum(
+            1
+            for ch in text
+            if ord(ch) < 32 and ch not in "\r\n\t" or 0x80 <= ord(ch) <= 0x9F
+        )
+        cjk_chars = sum(1 for ch in text if 0x4E00 <= ord(ch) <= 0x9FFF)
+        return mojibake_markers, control_chars, cjk_chars
+
+    @classmethod
+    def _has_mojibake_signals(cls, text: str) -> bool:
+        markers, controls, _ = cls._text_metrics(text)
+        return markers > 0 or controls > 0
+
+    @classmethod
+    def _repair_mojibake_text(cls, text: str) -> str:
+        if not text:
+            return text
+
+        best_text = text
+        for _ in range(3):
+            if not cls._has_mojibake_signals(best_text):
+                break
+
+            try:
+                repaired = best_text.encode("latin-1").decode("utf-8")
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                break
+
+            original_markers, original_controls, original_cjk = cls._text_metrics(best_text)
+            repaired_markers, repaired_controls, repaired_cjk = cls._text_metrics(repaired)
+
+            original_noise = original_markers + original_controls
+            repaired_noise = repaired_markers + repaired_controls
+            if repaired_noise < original_noise and repaired_cjk >= original_cjk:
+                best_text = repaired
+                continue
+            break
+
+        return best_text
+
     def _stream_response_content(self, response) -> str:
         """
         解析 OpenAI-compatible SSE 流，并实时打印增量内容。
@@ -84,11 +133,11 @@ class CustomApiGen:
         chunks = []
         started = False
 
-        for raw_line in response.iter_lines(decode_unicode=True):
+        for raw_line in response.iter_lines(decode_unicode=False):
             if not raw_line:
                 continue
 
-            line = raw_line.strip()
+            line = self._decode_stream_line(raw_line).strip()
             if not line.startswith("data:"):
                 continue
 
@@ -123,7 +172,7 @@ class CustomApiGen:
             stream_title = self._current_request_label or "unnamed request"
             print(f"\n[stream end] {stream_title}")
 
-        return "".join(chunks)
+        return self._repair_mojibake_text("".join(chunks))
 
     def get_response(self, messages, temperature=0, top_k=1):
         if top_k != 1 and temperature == 0:
@@ -161,6 +210,7 @@ class CustomApiGen:
                     stream=self.stream,
                 )
                 self._last_request_time = time.time()
+                response.encoding = "utf-8"
 
                 if response.status_code != 200:
                     try:
@@ -178,7 +228,8 @@ class CustomApiGen:
 
                 body = response.json()
                 response_end_prematurely_count = 0
-                return [body["choices"][0]["message"]["content"]]
+                content = body["choices"][0]["message"]["content"]
+                return [self._repair_mojibake_text(content)]
             except Exception as e:
                 retry_count += 1
                 if self.max_retries > 0 and retry_count >= self.max_retries:
