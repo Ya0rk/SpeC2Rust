@@ -2261,6 +2261,102 @@ cargo test
                 detected_deps[crate_name] = common_deps[crate_name]
         
         return detected_deps
+
+    def _merge_generation_targets(self, base_files: List[str], planned_files: List[str]) -> List[str]:
+        """
+        合并“项目结构解析结果”和“实现计划重排结果”，避免实现计划意外缩减文件集合。
+        """
+        merged: List[str] = []
+        seen = set()
+        for item in (base_files or []) + (planned_files or []):
+            normalized = self._clean_relative_project_path(str(item), "")
+            if not normalized:
+                continue
+            if normalized not in seen:
+                seen.add(normalized)
+                merged.append(normalized)
+        return self._sanitize_generation_file_list(merged)
+
+    def _collect_missing_files(self, planned_files: List[str]) -> List[str]:
+        """
+        收集当前仍未落盘的计划文件。
+        """
+        missing = []
+        for file_path in planned_files:
+            if not self._is_nonempty_existing_file(file_path):
+                missing.append(file_path)
+        return missing
+
+    def _generate_single_file(self, file_path: str, context: str, implementation_plan: str, planned_files: List[str]) -> tuple[bool, str]:
+        """
+        生成并写入单个文件，返回 (是否成功, 写入内容)。
+        """
+        print(f"生成文件：{file_path}")
+        self._mark_generation_status(file_path, "in_progress")
+
+        api_contract_context = self._build_api_contract_context()
+        file_context = context
+        if api_contract_context:
+            file_context += f"\n\n=== 当前接口契约 ===\n{api_contract_context}\n"
+
+        skeleton_code = ""
+        if getattr(self.config, "skeleton_first", False):
+            print(f"先生成骨架：{file_path}")
+            skeleton_code = self._generate_skeleton(file_path, file_context, implementation_plan)
+            print(f"再基于骨架补全实现：{file_path}")
+            code = self._implement_from_skeleton(file_path, skeleton_code, file_context, implementation_plan)
+            if (not code or not str(code).strip()) and skeleton_code and str(skeleton_code).strip():
+                print(f"实现阶段返回空内容，保留骨架版本：{file_path}")
+                code = skeleton_code
+        else:
+            code = self._generate_code(file_path, file_context, implementation_plan)
+
+        if not code or not str(code).strip():
+            print(f"模型未生成有效内容，跳过该文件：{file_path}")
+            self._mark_generation_status(file_path, "failed", "empty_generation")
+            return False, ""
+
+        generation_completed = getattr(self, "_last_generation_completed", False)
+        if self._looks_like_truncated_rust_source(file_path, code) and not generation_completed:
+            if getattr(self.config, "skeleton_first", False) and skeleton_code and not self._looks_like_truncated_rust_source(file_path, skeleton_code):
+                print(f"检测到实现结果疑似截断，回退到骨架版本：{file_path}")
+                code = skeleton_code
+            else:
+                print(f"检测到文件疑似截断，跳过写入：{file_path}")
+                self._mark_generation_status(file_path, "failed", "truncated_generation")
+                return False, ""
+        elif self._looks_like_truncated_rust_source(file_path, code) and generation_completed:
+            print(f"检测到文件疑似截断，但续写已显式完成，保留写入：{file_path}")
+
+        if file_path.replace("\\", "/").lower() == "src/lib.rs" and self._looks_like_doc_only_lib_rs(code):
+            print("检测到 lib.rs 仅包含注释或文档，回退为最小模块入口")
+            code = self._build_fallback_lib_rs(planned_files)
+
+        if self._is_cargo_toml(file_path) and self._looks_like_invalid_cargo_toml(code):
+            print("检测到生成的 Cargo.toml 内容异常，回退到最小可用配置")
+            code = self._build_fallback_cargo_toml()
+        if self._is_cargo_toml(file_path):
+            code = self._sanitize_cargo_toml_for_config(code)
+        if self._is_readme(file_path) and self._looks_like_invalid_readme(code):
+            print("检测到生成的 README.md 内容异常，回退到最小说明文档")
+            code = self._build_fallback_readme()
+
+        if self._should_detect_dependencies(file_path):
+            deps = self._detect_dependencies(code)
+            if deps:
+                print(f"检测到依赖：{deps}")
+                self._update_cargo_toml(deps)
+
+        full_path = os.path.join(self.project_path, file_path)
+        self._write_file(full_path, code)
+        if not self._is_nonempty_existing_file(file_path):
+            self._mark_generation_status(file_path, "failed", "write_failed_or_empty_after_write")
+            return False, ""
+
+        if file_path.replace("\\", "/").lower().endswith(".rs"):
+            self._update_api_contract_for_file(file_path, code)
+        self._mark_generation_status(file_path, "completed")
+        return True, code
     
     def generate_code(self) -> List[str]:
         """
@@ -2286,6 +2382,7 @@ cargo test
 
         # 2. 解析项目结构，生成文件列表
         files_to_generate = self._parse_file_list(project_structure)
+        files_to_generate = self._sanitize_generation_file_list(files_to_generate)
         print(f"files_to_generate: {files_to_generate}")
         # pause = input("按任意键继续...")
 
@@ -2309,6 +2406,9 @@ cargo test
         else:
             print("模型未提供 <new_files_to_generate> 标签，使用原始文件顺序。")
             new_files_to_generate = self._sanitize_generation_file_list(files_to_generate)
+
+        # 关键：最终目标文件集合必须至少覆盖项目结构里解析出的文件，不能被实现计划意外缩减。
+        new_files_to_generate = self._merge_generation_targets(files_to_generate, new_files_to_generate)
 
         # 对生成顺序做轻量调整：优先结构体、类型和错误定义
         new_files_to_generate = self._sort_files_for_generation(new_files_to_generate)
@@ -2349,77 +2449,37 @@ cargo test
             # file_type = file_info['type']
             # description = file_info.get('description', '')
             
-            print(f"生成文件：{file_path}")
-            self._mark_generation_status(file_path, "in_progress")
-            
-            # 生成代码
-            api_contract_context = self._build_api_contract_context()
-            file_context = context
-            if api_contract_context:
-                file_context += f"\n\n=== 当前接口契约 ===\n{api_contract_context}\n"
-            skeleton_code = ""
-            if getattr(self.config, "skeleton_first", False):
-                print(f"先生成骨架：{file_path}")
-                skeleton_code = self._generate_skeleton(file_path, file_context, implementation_plan)
-                print(f"再基于骨架补全实现：{file_path}")
-                code = self._implement_from_skeleton(file_path, skeleton_code, file_context, implementation_plan)
-                if (not code or not str(code).strip()) and skeleton_code and str(skeleton_code).strip():
-                    print(f"实现阶段返回空内容，保留骨架版本：{file_path}")
-                    code = skeleton_code
-            else:
-                code = self._generate_code(file_path, file_context, implementation_plan)
-
-            if not code or not str(code).strip():
-                print(f"模型未生成有效内容，跳过该文件：{file_path}")
-                self._mark_generation_status(file_path, "failed", "empty_generation")
+            ok, code = self._generate_single_file(file_path, context, implementation_plan, new_files_to_generate)
+            if not ok:
                 continue
-
-            generation_completed = getattr(self, "_last_generation_completed", False)
-            if self._looks_like_truncated_rust_source(file_path, code) and not generation_completed:
-                if getattr(self.config, "skeleton_first", False) and skeleton_code and not self._looks_like_truncated_rust_source(file_path, skeleton_code):
-                    print(f"检测到实现结果疑似截断，回退到骨架版本：{file_path}")
-                    code = skeleton_code
-                else:
-                    print(f"检测到文件疑似截断，跳过写入：{file_path}")
-                    self._mark_generation_status(file_path, "failed", "truncated_generation")
-                    continue
-            elif self._looks_like_truncated_rust_source(file_path, code) and generation_completed:
-                print(f"检测到文件疑似截断，但续写已显式完成，保留写入：{file_path}")
-
-            if file_path.replace("\\", "/").lower() == "src/lib.rs" and self._looks_like_doc_only_lib_rs(code):
-                print("检测到 lib.rs 仅包含注释或文档，回退为最小模块入口")
-                code = self._build_fallback_lib_rs(new_files_to_generate)
-
-            # 对 Cargo.toml 做写入前保护，避免把 Rust 源码误写成配置文件。
-            if self._is_cargo_toml(file_path) and self._looks_like_invalid_cargo_toml(code):
-                print("检测到生成的 Cargo.toml 内容异常，回退到最小可用配置")
-                code = self._build_fallback_cargo_toml()
-            if self._is_cargo_toml(file_path):
-                code = self._sanitize_cargo_toml_for_config(code)
-            if self._is_readme(file_path) and self._looks_like_invalid_readme(code):
-                print("检测到生成的 README.md 内容异常，回退到最小说明文档")
-                code = self._build_fallback_readme()
-            
-            # 仅对 Rust 源文件做依赖检测，避免 README/文档示例污染 Cargo.toml。
-            if self._should_detect_dependencies(file_path):
-                deps = self._detect_dependencies(code)
-                if deps:
-                    print(f"检测到依赖：{deps}")
-                    self._update_cargo_toml(deps)
-            
-            # 保存生成的代码
             all_generated_code[file_path] = code
-            
-            # 写入文件
-            full_path = os.path.join(self.project_path, file_path)
-            self._write_file(full_path, code)
-            if file_path.replace("\\", "/").lower().endswith(".rs"):
-                self._update_api_contract_for_file(file_path, code)
-            self._mark_generation_status(file_path, "completed")
-            
-            # 更新上下文
             context += f"\n\n=== 已生成文件：{file_path} ===\n{code}\n"
-        
+
+        # 二次补全：若首轮仍有缺失文件，自动补生成，避免“只生成少数文件”却返回成功。
+        missing_files = self._collect_missing_files(new_files_to_generate)
+        if missing_files:
+            retry_rounds = int(getattr(self.config, "missing_file_retry_rounds", 2) or 2)
+            retry_rounds = max(1, retry_rounds)
+            print(f"检测到缺失文件 {len(missing_files)} 个，开始补生成：{missing_files}")
+            for round_idx in range(1, retry_rounds + 1):
+                if not missing_files:
+                    break
+                print(f"缺失文件补生成第 {round_idx}/{retry_rounds} 轮")
+                for file_path in list(missing_files):
+                    ok, code = self._generate_single_file(file_path, context, implementation_plan, new_files_to_generate)
+                    if ok:
+                        all_generated_code[file_path] = code
+                        context += f"\n\n=== 已生成文件：{file_path} ===\n{code}\n"
+                missing_files = self._collect_missing_files(new_files_to_generate)
+
+        strict_full_generation = bool(getattr(self.config, "strict_full_project_generation", True))
+        missing_files = self._collect_missing_files(new_files_to_generate)
+        if missing_files:
+            print(f"最终仍有缺失文件：{missing_files}")
+            if strict_full_generation:
+                raise RuntimeError(f"Rust 工程生成不完整，缺失文件：{missing_files}")
+            print("strict_full_project_generation=false，继续后续流程。")
+
         print(f"代码生成完成，共生成 {len(self.generated_files)} 个文件")
         return self.generated_files
     
