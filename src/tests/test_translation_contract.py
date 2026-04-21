@@ -279,6 +279,33 @@ fn recover_state() {}
         self.assertIn("线程安全", joined)
         self.assertIn("恢复机制", joined)
 
+    def test_rust_agent_contract_lint_does_not_treat_package_metadata_as_dependencies(self):
+        self._write_contract()
+        agent = RustAgent(Config(config_path=None, model_name="qwen32"))
+
+        agent.load_documents([str(self.root)])
+        findings = agent._lint_generated_code_against_contract(
+            "Cargo.toml",
+            """
+[package]
+name = "generic-project"
+version = "0.1.0"
+edition = "2021"
+description = "test package"
+readme = "README.md"
+license = "MIT"
+authors = ["test <test@example.com>"]
+
+[dependencies]
+
+[lib]
+name = "generic_project"
+path = "src/lib.rs"
+""".strip(),
+        )
+
+        self.assertEqual(findings, [])
+
 
 if __name__ == "__main__":
     unittest.main()

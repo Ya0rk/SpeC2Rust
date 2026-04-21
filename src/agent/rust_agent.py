@@ -1428,9 +1428,17 @@ edition = "2021"
 
         elif self._is_cargo_toml(file_path):
             if self.dependency_policy == "std_only_by_default" and not self.allowed_dependencies:
+                current_section = ""
+                dependency_sections = {"dependencies", "dev-dependencies", "build-dependencies"}
                 for line in text.splitlines():
                     stripped = line.strip()
-                    if not stripped or stripped.startswith("#") or stripped.startswith("["):
+                    if not stripped or stripped.startswith("#"):
+                        continue
+                    section_match = re.match(r"^\[([A-Za-z0-9_.-]+)\]\s*$", stripped)
+                    if section_match:
+                        current_section = section_match.group(1)
+                        continue
+                    if current_section not in dependency_sections:
                         continue
                     match = re.match(r"^([A-Za-z0-9_-]+)\s*=", stripped)
                     if match:
