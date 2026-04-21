@@ -1,0 +1,5 @@
+{"iteration": 1, "stage": "clone", "baseline_dir": "E:\\Code\\C2R-Auto\\cGrcode\\src\\tests\\_tmp_rust_repair_agent_b682fc9711a94c55b4652bc548d24896\\source", "run_dir": "E:\\Code\\C2R-Auto\\cGrcode\\src\\tests\\_tmp_rust_repair_agent_b682fc9711a94c55b4652bc548d24896\\runs\\run-001"}
+{"iteration": 1, "stage": "local_sanitize"}
+{"iteration": 1, "stage": "local_rules", "error_count": 1, "error_signature": "8230188741885931384", "error_excerpt": "error[E0001]: first\n --> src/lib.rs:1:1"}
+{"iteration": 1, "stage": "llm_more_context", "cycle_index": 1, "more_read_requests": [{"path": "src/lib.rs", "mode": "whole_file"}], "updated_summary": "继续读取，不结束本轮", "materials_now": [{"path": "src/lib.rs", "mode": "whole_file", "start_line": null, "end_line": null, "content_chars": 17}]}
+{"iteration": 1, "stage": "round_timeout", "cycle_index": 1, "elapsed_seconds": 11, "error_count": 1, "error_signature": "8230188741885931384", "error_excerpt": "error[E0001]: first\n --> src/lib.rs:1:1", "current_summary": "继续读取，不结束本轮"}

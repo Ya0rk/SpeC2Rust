@@ -1,6 +1,7 @@
 import sys
 import unittest
 import json
+from types import SimpleNamespace
 from pathlib import Path
 import shutil
 import uuid
@@ -445,6 +446,35 @@ error[E0599]: no method named `foo`
                 except PermissionError:
                     pass
 
+    def test_run_single_iteration_can_repair_in_place_without_cloning(self):
+        config = Config(config_path=None, model_name="qwen32")
+        root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
+        root.mkdir()
+        try:
+            project = root / "project"
+            project.mkdir()
+            (project / "Cargo.toml").write_text("[package]\nname='demo'\nversion='0.1.0'\n", encoding="utf-8")
+            (project / "src").mkdir()
+            (project / "src" / "lib.rs").write_text("pub fn demo() {}\n", encoding="utf-8")
+
+            agent = RustRepairAgent(config=config, max_iterations=3)
+            agent._clone_project_tree = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not clone"))
+            agent._cargo_check = lambda *_: (True, "")
+            agent._cargo_test = lambda *_: (True, "")
+
+            result = agent._run_single_iteration(str(project), str(root / "runs"), 1, in_place=True)
+
+            self.assertEqual(Path(result.run_dir).resolve(), project.resolve())
+            self.assertFalse((root / "runs").exists())
+            self.assertTrue(result.check_passed)
+            self.assertTrue(result.test_passed)
+        finally:
+            if root.exists():
+                try:
+                    shutil.rmtree(root)
+                except PermissionError:
+                    pass
+
     def test_repair_project_keeps_baseline_when_worse_run_is_rejected_and_passes_handoff_summary(self):
         config = Config(config_path=None, model_name="qwen32")
         root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
@@ -499,12 +529,13 @@ error[E0599]: no method named `foo`
                 ),
             ])
 
-            def fake_run_single_iteration(baseline_dir, runs_root, iteration, handoff_summary=""):
+            def fake_run_single_iteration(baseline_dir, runs_root, iteration, handoff_summary="", in_place=False):
                 calls.append({
                     "baseline_dir": baseline_dir,
                     "runs_root": runs_root,
                     "iteration": iteration,
                     "handoff_summary": handoff_summary,
+                    "in_place": in_place,
                 })
                 return next(results)
 
@@ -513,7 +544,7 @@ error[E0599]: no method named `foo`
                 f"handoff::{candidate_summary}::accepted={accepted_as_best}"
             )
 
-            best = agent.repair_project(str(project), runs_root=str(root / "runs"), apply_best=False)
+            best = agent.repair_project(str(project), runs_root=str(root / "runs"), apply_best=False, in_place=False)
 
             self.assertEqual(best.run_dir, str(run2))
             self.assertEqual(len(calls), 2)
@@ -526,6 +557,92 @@ error[E0599]: no method named `foo`
                     shutil.rmtree(root)
                 except PermissionError:
                     pass
+
+    def test_repair_project_defaults_to_in_place(self):
+        config = Config(config_path=None, model_name="qwen32")
+        root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
+        root.mkdir()
+        try:
+            project = root / "project"
+            project.mkdir()
+            (project / "Cargo.toml").write_text("[package]\nname='demo'\nversion='0.1.0'\n", encoding="utf-8")
+            (project / "src").mkdir()
+            (project / "src" / "lib.rs").write_text("pub fn demo() {}\n", encoding="utf-8")
+
+            agent = RustRepairAgent(config=config, max_iterations=1)
+            agent._cargo_check = lambda *_: (False, "error: baseline\n --> src/lib.rs:1:1")
+            calls = []
+
+            def fake_run_single_iteration(baseline_dir, runs_root, iteration, handoff_summary="", in_place=False):
+                calls.append({
+                    "baseline_dir": baseline_dir,
+                    "runs_root": runs_root,
+                    "iteration": iteration,
+                    "handoff_summary": handoff_summary,
+                    "in_place": in_place,
+                })
+                return RepairRunResult(
+                    run_dir=str(project),
+                    check_passed=True,
+                    test_passed=True,
+                    error_count=0,
+                    output="",
+                )
+
+            agent._run_single_iteration = fake_run_single_iteration
+            agent._request_handoff_summary = lambda *args, **kwargs: ""
+
+            best = agent.repair_project(str(project))
+
+            self.assertEqual(Path(best.run_dir).resolve(), project.resolve())
+            self.assertEqual(len(calls), 1)
+            self.assertTrue(calls[0]["in_place"])
+            self.assertEqual(Path(calls[0]["baseline_dir"]).resolve(), project.resolve())
+        finally:
+            if root.exists():
+                try:
+                    shutil.rmtree(root)
+                except PermissionError:
+                    pass
+
+    def test_main_optional_rust_repair_agent_runs_in_place(self):
+        import importlib
+
+        main_module = importlib.import_module("agent.main")
+        config = Config(config_path=None, model_name="qwen32")
+        args = SimpleNamespace(use_rust_repair_agent=True, rust_repair_max_iterations=7)
+        calls = []
+
+        class FakeRepairAgent:
+            def __init__(self, config, max_iterations):
+                calls.append(("init", config, max_iterations))
+
+            def repair_project(self, **kwargs):
+                calls.append(("repair_project", kwargs))
+                return RepairRunResult(
+                    run_dir=kwargs["project_path"],
+                    check_passed=True,
+                    test_passed=True,
+                    error_count=0,
+                    output="",
+                )
+
+        original_agent = getattr(main_module, "RustRepairAgent", None)
+        try:
+            main_module.RustRepairAgent = FakeRepairAgent
+            result = main_module.run_optional_rust_repair_agent(args, config, "target-project")
+        finally:
+            if original_agent is None:
+                delattr(main_module, "RustRepairAgent")
+            else:
+                main_module.RustRepairAgent = original_agent
+
+        self.assertTrue(result.check_passed)
+        self.assertEqual(calls[0], ("init", config, 7))
+        self.assertEqual(calls[1][0], "repair_project")
+        self.assertEqual(calls[1][1]["project_path"], "target-project")
+        self.assertTrue(calls[1][1]["in_place"])
+        self.assertFalse(calls[1][1]["apply_best"])
 
 
 if __name__ == "__main__":

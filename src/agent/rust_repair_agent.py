@@ -1084,14 +1084,22 @@ class RustRepairAgent:
         self._write_file(full_path, fixed_code)
         return True
 
-    def _run_single_iteration(self, baseline_dir: str, runs_root: str, iteration: int, handoff_summary: str = "") -> RepairRunResult:
-        run_dir = self._clone_project_tree(baseline_dir, runs_root, iteration)
+    def _run_single_iteration(
+        self,
+        baseline_dir: str,
+        runs_root: str,
+        iteration: int,
+        handoff_summary: str = "",
+        in_place: bool = False,
+    ) -> RepairRunResult:
+        run_dir = str(Path(baseline_dir).resolve()) if in_place else self._clone_project_tree(baseline_dir, runs_root, iteration)
         journal_path = self._journal_path(run_dir)
         self._append_repair_record(journal_path, {
             "iteration": iteration,
-            "stage": "clone",
+            "stage": "in_place_start" if in_place else "clone",
             "baseline_dir": baseline_dir,
             "run_dir": run_dir,
+            "in_place": in_place,
         })
         self._sanitize_project_locally(run_dir)
         self._append_repair_record(journal_path, {
@@ -1344,7 +1352,13 @@ class RustRepairAgent:
             timed_out=timed_out,
         )
 
-    def repair_project(self, project_path: str, runs_root: Optional[str] = None, apply_best: bool = True) -> RepairRunResult:
+    def repair_project(
+        self,
+        project_path: str,
+        runs_root: Optional[str] = None,
+        apply_best: bool = False,
+        in_place: bool = True,
+    ) -> RepairRunResult:
         project_path = str(Path(project_path).resolve())
         runs_root = runs_root or os.path.join(os.path.dirname(project_path), "repair_runs")
         baseline_dir = project_path
@@ -1368,14 +1382,20 @@ class RustRepairAgent:
             previous_best_signature = self.best_result.error_signature if self.best_result else ""
             previous_best_metrics = self.best_result.frontier_metrics if self.best_result else {}
             previous_best_output = self.best_result.output if self.best_result else ""
-            result = self._run_single_iteration(baseline_dir, runs_root, iteration, handoff_summary=handoff_summary)
+            result = self._run_single_iteration(
+                baseline_dir,
+                runs_root,
+                iteration,
+                handoff_summary=handoff_summary,
+                in_place=in_place,
+            )
             print(f"run_dir: {result.run_dir}")
             print(f"check_passed: {result.check_passed}")
             print(f"test_passed: {result.test_passed}")
             print(f"error_count: {result.error_count}")
 
             accepted_as_best, accept_reason = self._should_accept_result(self.best_result, result)
-            if accepted_as_best:
+            if accepted_as_best or in_place:
                 self.best_result = result
                 baseline_dir = result.run_dir
 
@@ -1407,7 +1427,7 @@ class RustRepairAgent:
             if result.check_passed and result.test_passed:
                 break
 
-        if apply_best and self.best_result and self.best_result.run_dir != project_path:
+        if not in_place and apply_best and self.best_result and self.best_result.run_dir != project_path:
             if os.path.exists(project_path):
                 shutil.rmtree(project_path)
             shutil.copytree(self.best_result.run_dir, project_path)
@@ -1421,7 +1441,8 @@ def main():
     parser.add_argument("--config-file", default=str(Path(__file__).parent.parent.parent / "local_config.json"))
     parser.add_argument("--max-iterations", type=int, default=15)
     parser.add_argument("--runs-root", default="")
-    parser.add_argument("--no-apply-best", action="store_true", help="不把最佳结果回写到原项目目录")
+    parser.add_argument("--copy-runs", action="store_true", help="使用旧模式：每轮复制项目到 runs 目录中修复")
+    parser.add_argument("--apply-best", action="store_true", help="仅在 --copy-runs 模式下，把最佳结果回写到原项目目录")
     args = parser.parse_args()
 
     config = Config(config_path=args.config_file)
@@ -1429,7 +1450,8 @@ def main():
     result = agent.repair_project(
         project_path=args.project_path,
         runs_root=args.runs_root or None,
-        apply_best=not args.no_apply_best,
+        apply_best=args.apply_best,
+        in_place=not args.copy_runs,
     )
 
     print("\n=== Repair Summary ===")

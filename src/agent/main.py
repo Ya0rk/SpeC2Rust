@@ -28,9 +28,41 @@ from agent.rust_agent import RustAgent
 from agent.alternatives.stable_rust_agent import StableRustAgent
 from agent.alternatives.growth_rust_agent import GrowthRustAgent
 from agent.code_fixer_agent import CodeFixer, TestFixer
+from agent.rust_repair_agent import RustRepairAgent
 from agent.unfinished_code_agent import UnfinishedCodeAgent
 from config.config import Config
 from utils.fmtpr import prGreen, prRed, prBlue, prYellow
+
+
+def run_optional_rust_repair_agent(args, config: Config, rust_project_path: str):
+    """
+    可选运行独立 RustRepairAgent。
+    主流程中默认原地修复当前 Rust 项目，不再创建新的修复项目作为最终产物。
+    """
+    if not getattr(args, "use_rust_repair_agent", False):
+        return None
+
+    prBlue("\n" + "=" * 80)
+    prYellow("步骤 4.5: RustRepairAgent 深度修复")
+    prBlue("=" * 80)
+
+    repair_agent = RustRepairAgent(
+        config=config,
+        max_iterations=getattr(args, "rust_repair_max_iterations", 15),
+    )
+    result = repair_agent.repair_project(
+        project_path=rust_project_path,
+        in_place=True,
+        apply_best=False,
+    )
+
+    if result.check_passed and result.test_passed:
+        prGreen("\n✓ RustRepairAgent 修复后 cargo check/test 通过")
+    elif result.check_passed:
+        prYellow("\n⚠ RustRepairAgent 修复后 cargo check 通过，但测试仍未完全通过")
+    else:
+        prRed(f"\n⚠ RustRepairAgent 修复后仍有 {result.error_count} 个错误")
+    return result
 
 
 def main():
@@ -118,6 +150,17 @@ def main():
         help="跳过测试修复步骤"
     )
     parser.add_argument(
+        "--use-rust-repair-agent",
+        action="store_true",
+        help="可选开启 RustRepairAgent，在主流程末尾对当前 Rust 项目做原地深度修复"
+    )
+    parser.add_argument(
+        "--rust-repair-max-iterations",
+        type=int,
+        default=15,
+        help="RustRepairAgent 最大修复迭代次数（默认：15）"
+    )
+    parser.add_argument(
         "--continue",
         dest="continue_run",
         action="store_true",
@@ -171,6 +214,8 @@ def main():
     prYellow(f"Spec JSON 中间层：{'开启' if args.use_spec_json_agent else '关闭'}")
     prYellow(f"PointerAgent：{'开启' if args.use_pointer_agent else '关闭'}")
     prYellow(f"最大修复迭代次数：{args.max_fix_iterations}")
+    prYellow(f"RustRepairAgent：{'开启' if args.use_rust_repair_agent else '关闭'}")
+    prYellow(f"RustRepairAgent 最大迭代次数：{args.rust_repair_max_iterations}")
     prBlue("=" * 80)
 
     if args.use_stable_rust_agent and args.use_growth_rust_agent:
@@ -412,6 +457,8 @@ def main():
             prRed("\n⚠ 测试修复失败，但项目可能仍可使用")
     else:
         prRed("\n⊘ 跳过测试修复步骤")
+
+    run_optional_rust_repair_agent(args, config, rust_project_path)
 
     # =========================================================================
     # 完成
