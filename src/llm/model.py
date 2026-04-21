@@ -1,11 +1,12 @@
 import sys
 from pathlib import Path
 
+sys.path.append(str(Path(__file__).parent.parent))
+
 from .custom_api import CustomApiGen
 from .openai.oai import OpenAiGen
 from .qianwen.qianwen_gen import QwenLocalGen
-
-sys.path.append(str(Path(__file__).parent.parent))
+from utils.translation_metrics import translation_metrics
 from config.config import Config
 
 
@@ -16,6 +17,7 @@ class Model:
         self.llm = self._get_model(config)
 
     def generate(self, prompt: str):
+        translation_metrics.increment_llm_requests()
         return self.llm.get_response(prompt)
 
     def set_request_label(self, label: str):
