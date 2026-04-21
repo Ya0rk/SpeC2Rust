@@ -41,7 +41,8 @@ class SpecAgent:
             config: 配置对象
         """
         # 加载配置
-        self.llm = Model(config)
+        self.config = config or Config()
+        self.llm = Model(self.config)
         
         # 初始化工具
         self.parser = CCodeAnalyzer()
@@ -101,6 +102,89 @@ class SpecAgent:
         done = "<CGR_DONE>" in text
         return text.replace("<CGR_DONE>", "").strip(), done
 
+    def _strip_outer_markdown_fence(self, content: str) -> str:
+        text = (content or "").strip()
+        fenced = re.match(r"^```(?:markdown|md)?\s*\n(.*)\n```$", text, re.DOTALL | re.IGNORECASE)
+        if fenced:
+            return fenced.group(1).strip()
+        return text
+
+    def _markdown_list_item_key(self, line: str) -> str:
+        stripped = (line or "").strip()
+        if not stripped:
+            return ""
+
+        bullet_match = re.match(r"^(?:[-*+]|(?:\d+[.)]))\s+(.*)$", stripped)
+        if not bullet_match:
+            return ""
+
+        body = bullet_match.group(1).strip()
+        body = re.sub(r"`([^`]+)`", r"\1", body)
+        return self._collapse_whitespace(body).lower()
+
+    def _postprocess_generated_markdown(self, content: str) -> str:
+        """
+        对 LLM 生成的 markdown 做轻量去重和包装清洗。
+        这里只做确定性、低风险的压缩，不改写业务语义。
+        """
+        text = self._strip_outer_markdown_fence(content).replace("\r\n", "\n").replace("\r", "\n")
+        if not text:
+            return ""
+
+        output_lines: List[str] = []
+        in_code_block = False
+        seen_list_items_in_section: Set[str] = set()
+        previous_nonempty = ""
+        previous_heading = ""
+
+        for raw_line in text.split("\n"):
+            line = raw_line.rstrip()
+            stripped = line.strip()
+
+            if stripped.startswith("```"):
+                in_code_block = not in_code_block
+                output_lines.append(line)
+                previous_nonempty = stripped
+                continue
+
+            if in_code_block:
+                output_lines.append(line)
+                continue
+
+            if not stripped:
+                if output_lines and output_lines[-1] == "":
+                    continue
+                output_lines.append("")
+                continue
+
+            if stripped.startswith("#"):
+                heading_key = self._collapse_whitespace(stripped).lower()
+                if heading_key == previous_heading:
+                    continue
+                previous_heading = heading_key
+                seen_list_items_in_section = set()
+                output_lines.append(line)
+                previous_nonempty = heading_key
+                continue
+
+            list_key = self._markdown_list_item_key(line)
+            if list_key:
+                if list_key in seen_list_items_in_section:
+                    continue
+                seen_list_items_in_section.add(list_key)
+
+            normalized_line = self._collapse_whitespace(stripped)
+            if normalized_line == previous_nonempty:
+                continue
+
+            output_lines.append(line)
+            previous_nonempty = normalized_line
+
+        while output_lines and output_lines[-1] == "":
+            output_lines.pop()
+
+        return "\n".join(output_lines).strip()
+
     def _generate_markdown_with_continuation(
         self,
         system_prompt: str,
@@ -136,7 +220,7 @@ class SpecAgent:
                 accumulated += chunk
 
             if done:
-                return accumulated.strip()
+                return self._postprocess_generated_markdown(accumulated)
 
             if round_index == max_rounds:
                 break
@@ -150,7 +234,7 @@ class SpecAgent:
                 }
             ]
 
-        return accumulated.strip()
+        return self._postprocess_generated_markdown(accumulated)
 
     def _normalize_struct_entries(self, structs: List) -> List[Dict]:
         # 接口文档阶段统一把结构体条目变成 dict，避免后续 prompt 拼接逻辑分支过多。
@@ -766,6 +850,446 @@ class SpecAgent:
         )
 
         return "\n".join(lines)
+
+    def _classify_source_file_role(self, rel_path: str) -> str:
+        """
+        对源码文件做项目无关的角色分类，用于控制迁移范围。
+        """
+        normalized = self._normalize_path(rel_path).lower()
+        basename = os.path.basename(normalized)
+        path_parts = [part for part in normalized.split("/") if part]
+
+        if normalized.endswith(".h"):
+            return "header"
+        if any(part in {"test", "tests", "spec", "specs"} for part in path_parts):
+            return "test"
+        if re.search(r"(^|[_\-.])test(s)?([_\-.]|$)", basename):
+            return "test"
+        if any(part in {"example", "examples", "demo", "demos", "sample", "samples"} for part in path_parts):
+            return "example"
+        if re.search(r"(^|[_\-.])(example|demo|sample)(s)?([_\-.]|$)", basename):
+            return "example"
+        if normalized.endswith(".c"):
+            return "source"
+        return "support"
+
+    def _safe_rust_module_stem(self, rel_path_or_name: str) -> str:
+        """
+        将 C 文件名或模块名转换为保守的 Rust 文件 stem。
+        """
+        normalized = self._normalize_path(rel_path_or_name)
+        stem = os.path.splitext(os.path.basename(normalized))[0] or normalized
+        stem = re.sub(r"[^A-Za-z0-9]+", "_", stem).strip("_").lower()
+        if not stem:
+            stem = "module"
+        if re.match(r"^\d", stem):
+            stem = f"module_{stem}"
+        return stem
+
+    def _infer_project_kind(self, project_info: Dict, project_analysis: Dict) -> str:
+        """
+        粗略区分 library / cli / mixed，不把测试或示例 main 当成 CLI 证据。
+        """
+        production_mains = []
+        example_mains = []
+        test_mains = []
+        for func in project_analysis.get("functions", []):
+            if func.get("name") != "main":
+                continue
+            role = self._classify_source_file_role(func.get("file", ""))
+            if role == "source":
+                production_mains.append(func)
+            elif role == "example":
+                example_mains.append(func)
+            elif role == "test":
+                test_mains.append(func)
+
+        if production_mains and project_info.get("h_files"):
+            return "mixed"
+        if production_mains:
+            return "cli"
+        return "library"
+
+    def _read_project_file(self, project_path: str, rel_path: str) -> str:
+        try:
+            with open(Path(project_path) / rel_path, "r", encoding="utf-8", errors="ignore") as f:
+                return f.read()
+        except Exception:
+            return ""
+
+    def _line_number_for_offset(self, text: str, offset: int) -> int:
+        return text.count("\n", 0, max(0, offset)) + 1
+
+    def _extract_header_function_declarations(self, project_path: str, header_files: List[str]) -> Dict[str, Dict]:
+        """
+        从头文件中提取函数声明。该逻辑是启发式的，但只作为角色分类信号使用。
+        """
+        declarations: Dict[str, Dict] = {}
+        declaration_pattern = re.compile(
+            r"(?m)^\s*(?!typedef\b)(?!#)(?:[A-Za-z_][\w\s\*\(\),]*?\s+)"
+            r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*\([^;{}]*\)\s*;"
+        )
+
+        for header in header_files:
+            content = self._read_project_file(project_path, header)
+            if not content:
+                continue
+            for match in declaration_pattern.finditer(content):
+                name = match.group("name")
+                declaration = self._collapse_whitespace(match.group(0))
+                declarations.setdefault(
+                    name,
+                    {
+                        "name": name,
+                        "declared_in": self._normalize_path(header),
+                        "source": declaration,
+                        "line": self._line_number_for_offset(content, match.start()),
+                    },
+                )
+        return declarations
+
+    def _extract_struct_fields_from_body(self, body: str) -> List[Dict]:
+        fields = []
+        for raw_line in body.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("//") or line.startswith("/*") or line.startswith("*"):
+                continue
+            line = line.split("//", 1)[0].strip()
+            if not line.endswith(";") or "(" in line:
+                continue
+            line = line.rstrip(";").strip()
+            # 支持简单字段、指针字段和数组字段；复杂声明保留 raw。
+            match = re.match(r"(?P<c_type>.+?)\s+(?P<name>\*?[A-Za-z_][A-Za-z0-9_]*)(?:\s*\[[^\]]+\])?$", line)
+            if not match:
+                fields.append({"name": "", "c_type": "", "raw": line})
+                continue
+            name = match.group("name").lstrip("*")
+            c_type = match.group("c_type").strip()
+            if match.group("name").startswith("*"):
+                c_type = f"{c_type} *"
+            fields.append({"name": name, "c_type": self._collapse_whitespace(c_type), "raw": line})
+        return fields
+
+    def _extract_header_type_records(self, project_path: str, header_files: List[str], project_analysis: Dict) -> List[Dict]:
+        """
+        提取头文件中的 struct/typedef struct 事实，并按名称与位置去重。
+        """
+        records = []
+        seen = set()
+
+        typedef_pattern = re.compile(
+            r"typedef\s+struct(?:\s+(?P<tag>[A-Za-z_][A-Za-z0-9_]*))?\s*\{(?P<body>.*?)\}\s*(?P<alias>[A-Za-z_][A-Za-z0-9_]*)\s*;",
+            re.DOTALL,
+        )
+        struct_pattern = re.compile(
+            r"(?<!typedef\s)struct\s+(?P<tag>[A-Za-z_][A-Za-z0-9_]*)\s*\{(?P<body>.*?)\}\s*;",
+            re.DOTALL,
+        )
+
+        for header in header_files:
+            content = self._read_project_file(project_path, header)
+            if not content:
+                continue
+
+            for pattern in (typedef_pattern, struct_pattern):
+                for match in pattern.finditer(content):
+                    name = match.groupdict().get("alias") or match.groupdict().get("tag") or "anonymous"
+                    if name == "anonymous":
+                        continue
+                    start_line = self._line_number_for_offset(content, match.start())
+                    end_line = self._line_number_for_offset(content, match.end())
+                    key = (self._normalize_path(header), start_line, end_line, name)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    records.append(
+                        {
+                            "id": f"TYPE-{name}",
+                            "name": name,
+                            "source": self._format_source_location(header, start_line, end_line),
+                            "file": self._normalize_path(header),
+                            "start_line": start_line,
+                            "end_line": end_line,
+                            "fields": self._extract_struct_fields_from_body(match.group("body")),
+                            "declaration": self._trim_inline(match.group(0), 500),
+                        }
+                    )
+
+        for struct in project_analysis.get("structs", []):
+            normalized = self._normalize_struct_entries([struct])[0]
+            name = normalized.get("name", "")
+            if not name or name == "anonymous":
+                continue
+            file_path = self._normalize_path(normalized.get("file", ""))
+            start_line = int(normalized.get("start_line", 0) or 0)
+            end_line = int(normalized.get("end_line", 0) or 0)
+            key = (file_path, start_line, end_line, name)
+            if key in seen:
+                continue
+            seen.add(key)
+            records.append(
+                {
+                    "id": f"TYPE-{name}",
+                    "name": name,
+                    "source": self._format_source_location(file_path, start_line, end_line),
+                    "file": file_path,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "fields": [],
+                    "declaration": self._trim_inline(normalized.get("source", ""), 500),
+                }
+            )
+
+        records.sort(key=lambda item: (item["file"], item["start_line"], item["name"]))
+        return records
+
+    def _classify_function_role(self, func: Dict, header_declarations: Dict[str, Dict]) -> str:
+        name = func.get("name", "")
+        file_role = self._classify_source_file_role(func.get("file", ""))
+
+        if file_role == "test":
+            if name == "main" or name in {"all_tests", "run_tests"}:
+                return "test_runner"
+            if name.startswith(("test_", "unit_test_", "integration_test_")) or "test" in name.lower():
+                return "test_case"
+            return "test_helper"
+        if file_role == "example":
+            return "example_entry" if name == "main" else "example_helper"
+        if name in header_declarations:
+            return "public_api"
+        if name == "main":
+            return "entrypoint"
+        return "internal_helper"
+
+    def _derive_allowed_rust_files(self, project_info: Dict, project_kind: str) -> List[str]:
+        """
+        按 C 文件角色推导默认 Rust 文件边界。只根据通用文件角色和源文件 stem，不使用项目特例。
+        """
+        allowed = ["Cargo.toml"]
+        if project_kind in {"cli", "mixed"}:
+            allowed.append("src/main.rs")
+            if project_info.get("h_files") or project_kind == "mixed":
+                allowed.append("src/lib.rs")
+        else:
+            allowed.append("src/lib.rs")
+
+        for rel_path in sorted(project_info.get("c_files", [])):
+            if self._classify_source_file_role(rel_path) != "source":
+                continue
+            stem = self._safe_rust_module_stem(rel_path)
+            if stem in {"main", "lib"}:
+                continue
+            candidate = f"src/{stem}.rs"
+            if candidate not in allowed:
+                allowed.append(candidate)
+
+        allowed.append("README.md")
+        return allowed
+
+    def _build_translation_contract(
+        self,
+        project_path: str,
+        project_info: Dict,
+        project_analysis: Dict,
+        module_units: List[Dict],
+    ) -> Dict:
+        """
+        构建机器可读迁移契约，作为 Rust 生成阶段的范围上限。
+        """
+        header_files = sorted(self._normalize_path(path) for path in project_info.get("h_files", []))
+        header_declarations = self._extract_header_function_declarations(project_path, header_files)
+        project_kind = self._infer_project_kind(project_info, project_analysis)
+
+        files = []
+        for rel_path in sorted(
+            list(project_info.get("c_files", []))
+            + list(project_info.get("h_files", []))
+            + list(project_info.get("other_files", []))
+        ):
+            files.append(
+                {
+                    "path": self._normalize_path(rel_path),
+                    "role": self._classify_source_file_role(rel_path),
+                }
+            )
+
+        functions = []
+        for func in sorted(
+            project_analysis.get("functions", []),
+            key=lambda item: (
+                self._normalize_path(item.get("file", "")),
+                int(item.get("start_line", item.get("startLine", 0)) or 0),
+                item.get("name", ""),
+            ),
+        ):
+            name = func.get("name") or func.get("func_defid", "").rsplit(":", 1)[-1]
+            file_path = self._normalize_path(func.get("file") or func.get("filename") or "")
+            start_line = int(func.get("start_line", func.get("startLine", 0)) or 0)
+            end_line = int(func.get("end_line", func.get("endLine", 0)) or 0)
+            declaration = self._extract_declaration_excerpt(func.get("source", ""))
+            header_decl = header_declarations.get(name, {})
+            functions.append(
+                {
+                    "id": f"FN-{name}",
+                    "name": name,
+                    "role": self._classify_function_role(func, header_declarations),
+                    "file": file_path,
+                    "source": self._format_source_location(file_path, start_line, end_line),
+                    "signature": header_decl.get("source") or declaration,
+                    "declared_in": header_decl.get("declared_in", ""),
+                    "line_count": func.get("line_count", func.get("num_lines", 0)) or 0,
+                }
+            )
+
+        macros = []
+        for macro in project_analysis.get("macros", []):
+            file_path = self._normalize_path(macro.get("filename", macro.get("file", "")))
+            name = macro.get("name", "unknown")
+            macros.append(
+                {
+                    "id": f"MACRO-{name}",
+                    "name": name,
+                    "file": file_path,
+                    "source": self._format_source_location(
+                        file_path,
+                        macro.get("startLine", macro.get("start_line", 0)),
+                        macro.get("endLine", macro.get("end_line", 0)),
+                    ),
+                    "definition": self._trim_inline(macro.get("source", ""), 240),
+                }
+            )
+
+        types = self._extract_header_type_records(project_path, header_files, project_analysis)
+        allow_tests = bool(getattr(self.config, "generate_tests", False))
+        allow_examples = bool(getattr(self.config, "generate_examples", False))
+        allow_benches = bool(getattr(self.config, "generate_benches", False))
+
+        contract = {
+            "schema_version": 1,
+            "project": {
+                "name": project_info.get("project_name", Path(project_path).name),
+                "kind": project_kind,
+                "build_system": project_info.get("build_system", "unknown"),
+            },
+            "files": files,
+            "module_units": [
+                {
+                    "name": module.get("name", "unknown"),
+                    "category": module.get("category", "unknown"),
+                    "files": [self._normalize_path(path) for path in module.get("files", [])],
+                }
+                for module in module_units
+            ],
+            "generation_boundary": {
+                "allowed_rust_files": self._derive_allowed_rust_files(project_info, project_kind),
+                "allow_tests": allow_tests,
+                "allow_examples": allow_examples,
+                "allow_benches": allow_benches,
+                "allow_ffi": False,
+                "dependency_policy": "std_only_by_default",
+                "allowed_dependencies": [],
+            },
+            "forbidden_without_evidence": [
+                "serde",
+                "criterion",
+                "proptest",
+                "thread_safe_api",
+                "recovery_mechanism",
+                "crates_io_release",
+                "ffi",
+                "range_query",
+                "batch_operation",
+            ],
+            "types": types,
+            "functions": functions,
+            "macros": macros,
+        }
+        return contract
+
+    def _generate_translation_contract(
+        self,
+        project_path: str,
+        project_info: Dict,
+        project_analysis: Dict,
+        module_units: List[Dict],
+        output_dir: str,
+    ) -> Dict:
+        print("生成 translation_contract.json - 迁移范围契约...")
+        contract = self._build_translation_contract(project_path, project_info, project_analysis, module_units)
+        rewrite_context_dir = Path(output_dir) / "docs" / "rewrite-context"
+        rewrite_context_dir.mkdir(parents=True, exist_ok=True)
+        contract_path = rewrite_context_dir / "translation_contract.json"
+        with open(contract_path, "w", encoding="utf-8") as f:
+            json.dump(contract, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        print(f"✓ translation_contract.json 已生成：{contract_path}")
+        return contract
+
+    def _lint_generated_docs(self, output_dir: str, contract: Dict) -> List[Dict]:
+        """
+        对生成文档做轻量范围检查。该 lint 只报告问题，不阻断生成流程。
+        """
+        boundary = contract.get("generation_boundary", {}) if isinstance(contract, dict) else {}
+        allowed_files = set(self._normalize_path(path) for path in boundary.get("allowed_rust_files", []))
+        allow_ffi = bool(boundary.get("allow_ffi", False))
+        findings = []
+
+        banned_patterns = [
+            (re.compile(r"\bPhase\s+(?:8|9|10)\b", re.IGNORECASE), "发现越界阶段"),
+            (re.compile(r"\bP(?:8|9|10)-\d+\b", re.IGNORECASE), "发现越界任务编号"),
+            (re.compile(r"crates\.io|CHANGELOG|PERFORMANCE\.md|发布到", re.IGNORECASE), "发现发布相关内容"),
+            (re.compile(r"线程安全|Send\s+和\s+Sync|recovery mechanism|恢复机制", re.IGNORECASE), "发现无证据高级能力"),
+            (re.compile(r"\bserde\b|\bcriterion\b|\bproptest\b", re.IGNORECASE), "发现未授权依赖或测试框架"),
+        ]
+        if not allow_ffi:
+            banned_patterns.append((re.compile(r"\bFFI\b|extern\s+\"C\"|include/[A-Za-z0-9_.\-/]+\.h", re.IGNORECASE), "发现未授权 FFI 内容"))
+
+        path_pattern = re.compile(
+            r"(?:(?:src|tests|examples|benches|include)/[A-Za-z0-9_.\-/]+|Cargo\.toml|README\.md|CHANGELOG\.md|PERFORMANCE\.md|LICENSE)"
+        )
+
+        root = Path(output_dir)
+        if not root.exists():
+            return []
+
+        for doc_path in root.rglob("*.md"):
+            rel_doc = self._normalize_path(str(doc_path.relative_to(root)))
+            try:
+                content = doc_path.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+
+            for pattern, label in banned_patterns:
+                for match in pattern.finditer(content):
+                    findings.append(
+                        {
+                            "path": rel_doc,
+                            "kind": "scope_expansion",
+                            "message": f"{label}: {match.group(0)}",
+                        }
+                    )
+
+            for match in path_pattern.finditer(content):
+                candidate = self._normalize_path(match.group(0)).strip("`'\"")
+                if candidate in {"Cargo.toml", "README.md"}:
+                    continue
+                if allowed_files and candidate not in allowed_files and candidate.startswith(("src/", "tests/", "examples/", "benches/", "include/")):
+                    findings.append(
+                        {
+                            "path": rel_doc,
+                            "kind": "out_of_scope_file",
+                            "message": f"发现 contract 外文件路径: {candidate}",
+                        }
+                    )
+
+        if findings:
+            lint_path = Path(output_dir) / "docs" / "rewrite-context" / "translation_lint.json"
+            lint_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(lint_path, "w", encoding="utf-8") as f:
+                json.dump({"findings": findings}, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+            print(f"⚠ 文档范围 lint 发现 {len(findings)} 个问题，已写入：{lint_path}")
+        return findings
         
     def _collect_project_info(self, project_path: str) -> Dict:
         """
@@ -1829,6 +2353,13 @@ class SpecAgent:
         print("\n[步骤 6/9] 生成其他文档...")
         self.project_analysis['project_name'] = project_info['project_name']
         interfaces_doc = self._generate_interfaces_docs(self.project_analysis, output_dir)
+        translation_contract = self._generate_translation_contract(
+            project_path=project_path,
+            project_info=project_info,
+            project_analysis=self.project_analysis,
+            module_units=self.module_units,
+            output_dir=output_dir,
+        )
         behaviors_doc = self._generate_behaviors_docs(project_path, module_analyses, output_dir)
         # self._generate_gaps_and_risks(project_path, module_analyses, output_dir)
         self._generate_constitution(project_path, project_info, interfaces_doc, behaviors_doc, output_dir)
@@ -1850,6 +2381,7 @@ class SpecAgent:
             self._write_module_auxiliary_notes(module, output_dir, i)
 
         self._generate_auxiliary_risk_summary(output_dir)
+        self._lint_generated_docs(output_dir, translation_contract)
         
         print("\n" + "=" * 60)
         print("✓ SpecAgent 完成！")
@@ -1863,6 +2395,7 @@ class SpecAgent:
         print("    ├── 01_subsystems/*.md")
         print("    ├── 02_interfaces/001_public_interfaces.md")
         print("    ├── 03_behaviors/001_behavior_specification.md")
+        print("    ├── translation_contract.json")
         if self.pointer_notes_enabled or self.macro_notes_enabled:
             print("    └── 04_gaps_and_risks/001_pointer_macro_summary.md")
         print("  .specify/memory/constitution.md")

@@ -642,11 +642,11 @@ class RustAgentPrompts:
     @staticmethod
     def generate_project_structure_prompt(project_name: str, all_docs: str) -> str:
         """生成项目结构设计的 prompt"""
-        return f"""请根据以下项目文档，设计一个地道的 Rust 项目结构。
+        return f"""请根据以下项目文档，设计一个地道但严格受约束的 Rust 项目结构。
 
 {all_docs}
 
-请设计一个符合 Rust 最佳实践的项目结构，包括：
+请设计一个符合 Rust 惯用法、且不超出迁移范围的项目结构，包括：
 1. 项目名称：{project_name}
 2. 项目目录文件结构（**重要**：必须使用 tree 命令格式展示，并严格使用<project_file>标签包裹）
 例如：
@@ -668,9 +668,13 @@ class RustAgentPrompts:
 6. 错误处理策略
 
 额外要求：
+- 如果上下文中提供了“迁移契约”或 allowed_rust_files，它是硬边界；目录树只能落在这些文件内
 - 如果上下文中已经提供了 C 源码片段、函数体或接口事实，这些源码事实优先于摘要性描述
-- 不要凭空创造原 C 项目中不存在的核心模块、指令集、状态机或协议
+- 不要凭空创造原 C 项目中不存在的核心模块、指令集、状态机、协议、线程模型或恢复机制
 - 如果原项目明显是工具/CLI/可执行程序，Rust 项目结构必须保留对应的入口与对外使用方式，不要擅自改成纯库项目
+- 不要为了“更 Rust”而额外拆出大量新模块；只有当输入中已有明确职责边界时才拆分
+- 默认依赖策略是 std-only；如果上下文没有明确证据，不要引入第三方 crate
+- 不要输出 tests/examples/benches/ffi/release 相关目录，除非上下文明确要求且迁移契约允许
 """
     
     @staticmethod
@@ -679,11 +683,11 @@ class RustAgentPrompts:
         return """你是一个 Rust 架构设计专家，擅长根据需求文档设计地道的 Rust 项目结构。
         
 设计原则：
-1. 遵循 Rust 惯用法和最佳实践
+1. 遵循 Rust 惯用法，但迁移范围优先于“最佳实践发挥”
 2. 合理使用所有权和借用，避免二次可变借用和不可变借用冲突
-3. 合理使用 trait 进行抽象，也可以使用 struct 进行实现，trait 不是必须的，根据实际情况选择
-4. 完善的错误处理
-5. 清晰的模块划分
+3. 只有在输入证据支持时才引入 trait 或额外抽象，默认保持简单直接
+4. 错误处理要克制，不擅自引入复杂错误体系
+5. 清晰的模块划分，但不要扩展出输入中不存在的能力边界
 """
     
     @staticmethod
@@ -710,9 +714,14 @@ class RustAgentPrompts:
 - 减少 unsafe 的使用
 
 约束：
+- 新的文件顺序只能重排 `files_to_generate` 中已有的文件，不能新增额外文件
+- 默认只使用 Rust 标准库；只有在上下文明确给出证据时才允许建议第三方 crate
 - 如果上下文中提供了 C 源码函数体、源码片段或接口事实，计划必须以这些事实为准
 - 对工具类项目，必须明确保留命令行入口、参数语义、输出行为和退出方式的迁移方案
 - 不要把只有源码位置但未给出实现依据的部分擅自扩写成复杂新设计
+- 不要规划线程安全封装、恢复机制、序列化、FFI、benchmark、属性测试、发布流程，除非上下文明确要求
+- 计划应尽量去重：不要把同一事实在 Summary、Technical Context、Implementation Phases 中反复重写
+- Phase 数量保持克制，优先使用 3-5 个阶段表达，不要无限拆分
 
 请使用<implementation_plan>标签包裹实现计划。"""
     
@@ -725,7 +734,8 @@ class RustAgentPrompts:
 1. 由简到繁，分析需要的生成函数依赖关系，自底向上，逐步实现
 2. 减少 unsafe 使用
 3. 优先使用 safe 的 Rust 标准库
-4. 遵循 Rust 编码规范"""
+4. 遵循 Rust 编码规范
+5. 不扩写输入中没有证据支持的技术能力或工程设施"""
     
     @staticmethod
     def generate_code_prompt(file_path: str, context: str, implementation_plan: str) -> str:
@@ -753,6 +763,10 @@ class RustAgentPrompts:
 10. 如果上下文中已经提供了 C 源码片段、函数体、宏、全局变量或接口事实，必须优先按照这些源码事实实现，不要自行脑补
 11. 如果原项目是工具/CLI，必须保持对外使用接口一致，不要擅自改变参数形式、入口方式、输出通道或退出语义
 12. 如果当前 Rust 文件与某个 C 函数/模块明显对应，应尽量贴着对应源码迁移，而不是只根据模块摘要重写成另一套逻辑
+13. 只能实现当前文件职责范围内的代码；不要顺手加入与当前文件无关的新类型、新 trait、新模块协议
+14. 默认只使用 std；如果上下文没有明确允许，不要使用 serde、tokio、anyhow、thiserror、clap、rand、regex 等外部依赖
+15. 不要引入线程安全封装、恢复机制、FFI、benchmark、属性测试、发布脚本或“更完整”的附加工程设施
+16. 如证据不足，保持实现最小且保守；不要为了显得完善而扩大功能边界
 
 请直接输出代码内容，不要包含其他说明文字。使用```rust 代码块包裹代码。"""
     
@@ -765,7 +779,8 @@ class RustAgentPrompts:
 1. 使用 Rust 惯用法
 2. 清晰的命名
 3. 合理的抽象
-4. 高效的实现"""
+4. 高效的实现
+5. 抽象必须克制，不能超出输入中已有能力范围"""
 
 
 # ============================================================================
@@ -1146,13 +1161,17 @@ Rust 项目分支：{branch_name}
 - 成功标准应该是可测量的，例如"能够处理相同的输入"、"产生相同的输出"等
 - 使用 spec-kit 的 spec-template.md 格式
 - 标题、正文、说明全部使用简体中文；不要输出英文章节名
+- 避免把“文件列表/函数列表/结构体列表”在多个章节逐项复述；只保留后续 Rust 迁移真正需要的事实
+- 每条 requirement 必须能追溯到输入中的文件、函数、类型或行为摘要；没有证据就标注缺失
+- 不要扩写输入中没有证据的能力，如线程安全封装、恢复机制、序列化、FFI、benchmark、发布流程
+- 不要把“Rust 最佳实践”写成新增功能需求；spec 只描述必须迁移的行为边界
 
 **输出格式**：使用标准的 spec-kit spec 文档格式，包含所有必要的章节和标记，但标题和正文统一使用简体中文。"""
     
     @staticmethod
     def generate_spec_system_prompt() -> str:
         """生成 spec 文档的系统 prompt"""
-        return '你是一个 spec-kit 专家，擅长创建用于指导 C 到 Rust 项目转换的功能规格文档。输出必须统一使用简体中文。'
+        return '你是一个严格的 spec-kit 规格作者。只保留迁移必需的功能与行为事实，禁止把缺失信息扩写成新需求。输出必须统一使用简体中文。'
     
     @staticmethod
     def generate_plan(project_name: str, branch_name: str, all_analyses: str) -> str:
@@ -1182,19 +1201,22 @@ Rust 项目分支：{branch_name}
 4. **Implementation Phases**: 分阶段实现计划
 
 **重要指导原则**：
-- 技术选型应该考虑 Rust 的最佳实践和生态系统
-- 项目结构应该符合 Rust 的标准约定（src/, tests/, Cargo.toml 等）
+- 技术选型默认从 Rust 标准库开始；只有输入中有明确证据时才建议第三方 crate
+- 项目结构应该符合 Rust 的标准约定，但不要因此新增原项目没有证据支持的模块或工程设施
 - 实现计划应该分阶段，从基础到复杂
 - 考虑 C 到 Rust 的映射：C 的结构体→Rust 的 struct/enum，C 的函数→Rust 的函数等
 - 特别注意内存管理、错误处理、并发模型的转换
 - 标题、正文、说明全部使用简体中文；不要输出英文章节名
+- 不要规划线程安全封装、恢复机制、序列化、FFI、benchmark、发布到 crates.io 等无证据扩展
+- 避免和 spec/接口文档重复抄写同一批函数事实；plan 只保留迁移步骤、文件映射和必要技术决策
+- 阶段数量保持克制，优先 3-5 个阶段
 
 **输出格式**：使用 spec-kit 的 plan-template.md 格式，但标题和正文统一使用简体中文。"""
     
     @staticmethod
     def generate_plan_system_prompt() -> str:
         """生成 plan 文档的系统 prompt"""
-        return '你是一个 Rust 架构师，擅长制定从 C 到 Rust 的详细实现计划。输出必须统一使用简体中文。'
+        return '你是一个克制的 Rust 架构师。计划必须以迁移范围为边界，不得为追求完整性而扩写新能力。输出必须统一使用简体中文。'
     
     @staticmethod
     def generate_tasks(project_name: str, branch_name: str, all_analyses: str) -> str:
@@ -1226,13 +1248,17 @@ Rust 项目分支：{branch_name}
 - 考虑 C 到 Rust 的转换顺序：先数据结构，再核心逻辑，最后接口
 - 标记任务之间的依赖关系
 - 标题、正文、说明全部使用简体中文；不要输出英文章节名
+- 不要为同一项工作创建重复任务；任务应直接对应一个明确的迁移动作
+- Phase 数量保持克制，避免扩展到 Phase 8/9/10 之类的尾部工程化阶段
+- 不要加入无证据的线程安全、恢复机制、序列化、FFI、benchmark、发布流程任务
+- 文件路径只写输入中可推导出的 Rust 目标文件，不要凭空新增大批支撑文件
 
 **输出格式**：使用 spec-kit 的 tasks-template.md 格式，但标题和正文统一使用简体中文。"""
     
     @staticmethod
     def generate_tasks_system_prompt() -> str:
         """生成 tasks 文档的系统 prompt"""
-        return '你是一个 Rust 开发专家，擅长创建详细的 C 到 Rust 转换任务列表。输出必须统一使用简体中文。'
+        return '你是一个严格控制范围的 Rust 开发专家。任务列表必须可执行、去重，并且不得超出迁移边界。输出必须统一使用简体中文。'
     
     @staticmethod
     def generate_module_summary(module_name: str, module_category: str, 
@@ -1338,13 +1364,16 @@ Rust 项目分支：{branch_name}
 - 关键实体应该描述模块中的核心数据结构
 - 成功标准应该是可测量的
 - 使用 spec-kit 的 spec-template.md 格式
+- 不要把函数清单、文件清单、类型清单在每个章节反复重写；同一事实只保留一次
+- 每条 requirement 和 success criteria 都必须能回溯到输入中的模块文件、函数或类型
+- 不要扩写本模块没有证据支持的新能力、新公共 API、线程安全承诺、序列化、恢复机制、FFI 或 benchmark
 
 **输出格式**：使用标准的 spec-kit spec 文档格式，但标题和正文统一使用简体中文。"""
     
     @staticmethod
     def generate_module_spec_system_prompt() -> str:
         """生成模块 spec 文档的系统 prompt"""
-        return '你是一个 spec-kit 专家，擅长为单个 C 模块创建功能规格文档。输出必须统一使用简体中文。'
+        return '你是一个严格的模块规格作者。模块 spec 只描述证据充分的功能边界，禁止重复罗列和臆造扩展能力。输出必须统一使用简体中文。'
     
     @staticmethod
     def generate_module_plan(project_name: str, module_name: str,
@@ -1395,17 +1424,20 @@ Rust 项目分支：{branch_name}
 5. **Implementation Phases**: 分阶段实现计划
 
 **重要指导原则**：
-- 技术选型考虑 Rust 最佳实践
-- 项目结构符合 Rust 标准约定
+- 技术选型默认使用 Rust 标准库；只有在输入中有明确证据时才建议第三方 crate
+- 项目结构符合 Rust 标准约定，但不要为“更优雅”而扩写更多模块或配套设施
 - 考虑 C 到 Rust 的映射
 - 特别注意内存管理、错误处理
+- 不要把 spec 中的功能描述整段搬运到 plan；plan 只保留技术决策、文件映射和迁移顺序
+- Phase 数量保持克制，优先 3-5 个阶段
+- 不要规划线程安全封装、恢复机制、序列化、FFI、benchmark、发布流程等无证据工作项
 
 **输出格式**：使用 spec-kit 的 plan-template.md 格式，但标题和正文统一使用简体中文。"""
     
     @staticmethod
     def generate_module_plan_system_prompt() -> str:
         """生成模块 plan 文档的系统 prompt"""
-        return '你是一个 Rust 架构师，擅长为单个 C 模块制定 Rust 实现计划。输出必须统一使用简体中文。'
+        return '你是一个克制的 Rust 架构师。模块 plan 必须围绕现有文件和函数迁移，不得扩写额外能力。输出必须统一使用简体中文。'
     
     @staticmethod
     def generate_module_tasks(project_name: str, module_name: str,
@@ -1445,15 +1477,19 @@ Rust 项目分支：{branch_name}
 **重要指导原则**：
 - 先实现数据结构，再实现函数
 - 相关函数分组实现
-- 包含测试任务
+- 仅在输入明确需要时包含测试任务
 - 标记可并行的任务
+- 不要重复拆分同一项工作，也不要把一个函数在多个阶段反复安排
+- 文件路径只允许使用从输入文件可直接推导出的 Rust 目标文件
+- Phase 数量保持克制，避免出现与当前模块无关的后期工程化阶段
+- 不要加入线程安全、恢复机制、序列化、FFI、benchmark、发布流程等无证据任务
 
 **输出格式**：使用 spec-kit 的 tasks-template.md 格式，但标题和正文统一使用简体中文。"""
     
     @staticmethod
     def generate_module_tasks_system_prompt() -> str:
         """生成模块 tasks 文档的系统 prompt"""
-        return '你是一个 Rust 开发专家，擅长为单个 C 模块创建详细任务列表。输出必须统一使用简体中文。'
+        return '你是一个严格控制范围的 Rust 开发专家。模块 tasks 必须去重、贴近文件迁移动作，并且不得扩展出无证据任务。输出必须统一使用简体中文。'
 
 
 # ============================================================================

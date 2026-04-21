@@ -52,6 +52,10 @@ class RustAgent:
         self.source_context_summary: str = ""
         self.tool_interface_constraints: str = ""
         self.source_interface_summary: str = ""
+        self.translation_contract: Dict = {}
+        self.allowed_rust_files: List[str] = []
+        self.allowed_dependencies: set[str] = set()
+        self.dependency_policy: str = ""
 
     def _clip_document_content(self, doc_path: str, content: str) -> str:
         """
@@ -295,6 +299,115 @@ class RustAgent:
         signals.append("- 如果需要额外的库层封装，可以新增内部模块，但不能破坏原工具的外部使用方式。")
         signals.append("- 对 main/入口调度、解析流程、错误退出路径，应优先参考原 C 源码，而不是仅根据摘要重写。")
         return self._truncate_text("\n".join(signals), max_chars)
+
+    def _normalize_contract_file_list(self, file_paths: List[str]) -> List[str]:
+        normalized_files = []
+        seen = set()
+        for item in file_paths or []:
+            normalized = self._normalize_rel_path(str(item))
+            if not normalized or normalized.startswith("../") or "/../" in normalized:
+                continue
+            if normalized not in seen:
+                seen.add(normalized)
+                normalized_files.append(normalized)
+        return normalized_files
+
+    def _apply_translation_contract(self, contract: Dict):
+        """
+        将迁移契约加载到 RustAgent 的本地硬边界中。
+        """
+        if not isinstance(contract, dict):
+            return
+        self.translation_contract = contract
+        boundary = contract.get("generation_boundary", {}) if isinstance(contract.get("generation_boundary", {}), dict) else {}
+        self.allowed_rust_files = self._normalize_contract_file_list(boundary.get("allowed_rust_files", []))
+        self.dependency_policy = str(boundary.get("dependency_policy", "") or "")
+        allowed_dependencies = boundary.get("allowed_dependencies", [])
+        if isinstance(allowed_dependencies, list):
+            self.allowed_dependencies = {str(item).strip() for item in allowed_dependencies if str(item).strip()}
+        else:
+            self.allowed_dependencies = set()
+
+    def _load_translation_contract_file(self, contract_path: str) -> bool:
+        try:
+            with open(contract_path, "r", encoding="utf-8", errors="ignore") as f:
+                contract = json.load(f)
+            self._apply_translation_contract(contract)
+            print(f"加载迁移契约：{contract_path}")
+            return True
+        except Exception as e:
+            print(f"加载迁移契约失败 {contract_path}: {e}")
+            return False
+
+    def _maybe_load_translation_contract_from_path(self, path: str):
+        normalized = self._normalize_rel_path(path)
+        if os.path.isfile(path) and os.path.basename(normalized) == "translation_contract.json":
+            self._load_translation_contract_file(path)
+            return
+        if not os.path.isdir(path):
+            return
+
+        candidates = [
+            os.path.join(path, "docs", "rewrite-context", "translation_contract.json"),
+            os.path.join(path, "rewrite-context", "translation_contract.json"),
+            os.path.join(path, "translation_contract.json"),
+        ]
+        for candidate in candidates:
+            if os.path.exists(candidate):
+                self._load_translation_contract_file(candidate)
+                return
+
+    def _contract_planned_files(self) -> List[str]:
+        return list(self.allowed_rust_files or [])
+
+    def _build_translation_contract_context(self, max_chars: int = 8000) -> str:
+        if not self.translation_contract:
+            return ""
+        boundary = self.translation_contract.get("generation_boundary", {})
+        functions = self.translation_contract.get("functions", [])
+        types = self.translation_contract.get("types", [])
+        parts = [
+            "迁移契约（最高优先级）：",
+            f"- 项目类型：{self.translation_contract.get('project', {}).get('kind', 'unknown')}",
+            f"- 允许生成文件：{', '.join(self.allowed_rust_files) if self.allowed_rust_files else '未限制'}",
+            f"- 依赖策略：{boundary.get('dependency_policy', 'unspecified')}",
+            f"- 允许测试文件：{bool(boundary.get('allow_tests', False))}",
+            f"- 允许示例文件：{bool(boundary.get('allow_examples', False))}",
+            f"- 允许 benchmark：{bool(boundary.get('allow_benches', False))}",
+            f"- 允许 FFI：{bool(boundary.get('allow_ffi', False))}",
+            "",
+            "函数角色摘要：",
+        ]
+        for item in functions[:80]:
+            parts.append(
+                f"- {item.get('id', '')} {item.get('name', 'unknown')} "
+                f"[{item.get('role', 'unknown')}] {item.get('source', '')}"
+            )
+        if types:
+            parts.append("")
+            parts.append("类型事实摘要：")
+            for item in types[:40]:
+                field_names = ", ".join(field.get("name", "") for field in item.get("fields", [])[:8] if field.get("name"))
+                parts.append(f"- {item.get('id', '')} {item.get('name', 'unknown')} {item.get('source', '')}: {field_names or '字段待回查'}")
+        forbidden = self.translation_contract.get("forbidden_without_evidence", [])
+        if forbidden:
+            parts.append("")
+            parts.append(f"未获证据禁止生成：{', '.join(str(item) for item in forbidden[:30])}")
+        text = "\n".join(parts).strip()
+        return self._truncate_text(text, max_chars)
+
+    def _contract_scope_instructions(self) -> str:
+        if not self.translation_contract:
+            return ""
+        allowed = ", ".join(self.allowed_rust_files) if self.allowed_rust_files else "契约未列出 allowed_rust_files"
+        return (
+            "硬性迁移边界：\n"
+            f"- 只能生成或规划这些文件：{allowed}\n"
+            "- 只能实现迁移契约中列出的 C 源码事实、公共接口、必要内部辅助逻辑。\n"
+            "- 不得新增没有 C 证据支持的高级 API、线程安全封装、恢复机制、序列化、属性测试、性能基准、FFI 或发布流程。\n"
+            "- 地道 Rust 只体现在所有权、模块组织、命名和错误表达上，不能扩大功能范围。\n"
+            "- 若迁移契约、Markdown 文档和模型计划冲突，迁移契约优先级最高。\n"
+        )
 
     def _extract_record_call_tokens(self, record: Dict) -> set[str]:
         """
@@ -753,6 +866,10 @@ class RustAgent:
         normalized = file_path.replace("\\", "/").lower()
         file_name = os.path.basename(normalized)
 
+        if self.allowed_rust_files:
+            allowed = {path.lower() for path in self.allowed_rust_files}
+            return normalized in allowed
+
         if file_name in {"cargo.toml", "readme.md", ".gitignore", "build.rs"}:
             return True
         if normalized.startswith("src/") and normalized.endswith(".rs"):
@@ -1199,9 +1316,133 @@ edition = "2021"
             sanitized = self._remove_toml_array_table_blocks(sanitized, "bench")
             sanitized = re.sub(r'(?m)^\s*criterion\s*=\s*".*?"\s*\n?', '', sanitized)
 
+        if self.translation_contract and (
+            self.dependency_policy == "std_only_by_default" or self.allowed_dependencies
+        ):
+            sanitized = self._sanitize_cargo_dependencies_for_contract(sanitized)
+
         # 简单收缩多余空行，保持 Cargo.toml 可读。
         sanitized = re.sub(r'\n{3,}', '\n\n', sanitized).strip() + "\n"
         return sanitized
+
+    def _sanitize_cargo_dependencies_for_contract(self, content: str) -> str:
+        """
+        根据迁移契约裁剪 Cargo.toml 依赖段。默认 std_only 时删除所有未授权依赖。
+        """
+        allowed = set(self.allowed_dependencies or [])
+        lines = content.splitlines()
+        kept = []
+        current_section = ""
+        dep_sections = {"dependencies", "dev-dependencies", "build-dependencies"}
+        for line in lines:
+            stripped = line.strip()
+            section_match = re.match(r"^\[([A-Za-z0-9_.-]+)\]\s*$", stripped)
+            if section_match:
+                current_section = section_match.group(1)
+                kept.append(line)
+                continue
+
+            if current_section in dep_sections:
+                dep_match = re.match(r"^([A-Za-z0-9_-]+)\s*=", stripped)
+                if dep_match and dep_match.group(1) not in allowed:
+                    continue
+            kept.append(line)
+        return "\n".join(kept)
+
+    def _lint_generated_code_against_contract(self, file_path: str, content: str) -> List[str]:
+        """
+        在写入前做轻量 contract 检查，拦截常见的无证据扩写。
+        """
+        if not self.translation_contract:
+            return []
+
+        findings: List[str] = []
+        boundary = self.translation_contract.get("generation_boundary", {}) if isinstance(self.translation_contract, dict) else {}
+        normalized_path = self._normalize_rel_path(file_path).lower()
+        text = content or ""
+        lowered = text.lower()
+
+        if normalized_path.endswith(".rs"):
+            if self.dependency_policy == "std_only_by_default" and not self.allowed_dependencies:
+                forbidden_deps = [
+                    "serde", "serde_json", "thiserror", "anyhow", "clap", "tokio",
+                    "async_std", "futures", "rand", "regex", "lazy_static", "criterion", "proptest",
+                ]
+                for dep in forbidden_deps:
+                    dep_pattern = dep.replace("_", "[-_]")
+                    if re.search(rf"\b(?:use|extern\s+crate)\s+{dep_pattern}\b", lowered) or re.search(rf"\b{dep_pattern}::", lowered):
+                        findings.append(f"发现未授权外部依赖引用：{dep}")
+
+            if not bool(boundary.get("allow_ffi", False)):
+                ffi_patterns = [
+                    (r'extern\s+"c"', 'extern "C"'),
+                    (r"#\s*\[\s*no_mangle\s*\]", "#[no_mangle]"),
+                    (r"\blibc::", "libc::"),
+                ]
+                for pattern, label in ffi_patterns:
+                    if re.search(pattern, lowered):
+                        findings.append(f"发现未授权 FFI 内容：{label}")
+
+            forbidden_without_evidence = {
+                str(item).strip().lower()
+                for item in self.translation_contract.get("forbidden_without_evidence", [])
+                if str(item).strip()
+            }
+
+            if "thread_safe_api" in forbidden_without_evidence:
+                thread_patterns = [
+                    (r"\barc<", "Arc"),
+                    (r"\buse\s+std::sync::\{[^}]*\barc\b", "std::sync::Arc"),
+                    (r"\bmutex<", "Mutex"),
+                    (r"\buse\s+std::sync::\{[^}]*\bmutex\b", "std::sync::Mutex"),
+                    (r"\brwlock<", "RwLock"),
+                    (r"\buse\s+std::sync::\{[^}]*\brwlock\b", "std::sync::RwLock"),
+                    (r"\batomic[a-z0-9_]*", "Atomic*"),
+                    (r"\bimpl\s+send\b", "impl Send"),
+                    (r"\bimpl\s+sync\b", "impl Sync"),
+                ]
+                for pattern, label in thread_patterns:
+                    if re.search(pattern, lowered):
+                        findings.append(f"发现未获证据的线程安全扩写：{label}")
+
+            if "recovery_mechanism" in forbidden_without_evidence:
+                recovery_patterns = [
+                    (r"\brecover(?:y)?\b", "recover/recovery"),
+                    (r"\brecover[a-z0-9_]*\b", "recover*"),
+                    (r"\brollback\b", "rollback"),
+                    (r"\bsnapshot\b", "snapshot"),
+                    (r"\brestore\b", "restore"),
+                ]
+                for pattern, label in recovery_patterns:
+                    if re.search(pattern, lowered):
+                        findings.append(f"发现未获证据的恢复机制：{label}")
+
+            if "serde" in forbidden_without_evidence and re.search(r"\bserde\b|serialize|deserialize", lowered):
+                findings.append("发现未获证据的序列化相关实现")
+
+            if "criterion" in forbidden_without_evidence and re.search(r"\bcriterion\b", lowered):
+                findings.append("发现未获证据的 benchmark 依赖")
+
+            if "proptest" in forbidden_without_evidence and re.search(r"\bproptest\b", lowered):
+                findings.append("发现未获证据的属性测试依赖")
+
+        elif self._is_cargo_toml(file_path):
+            if self.dependency_policy == "std_only_by_default" and not self.allowed_dependencies:
+                for line in text.splitlines():
+                    stripped = line.strip()
+                    if not stripped or stripped.startswith("#") or stripped.startswith("["):
+                        continue
+                    match = re.match(r"^([A-Za-z0-9_-]+)\s*=", stripped)
+                    if match:
+                        findings.append(f"Cargo.toml 出现未授权依赖：{match.group(1)}")
+
+        deduped: List[str] = []
+        seen = set()
+        for item in findings:
+            if item not in seen:
+                seen.add(item)
+                deduped.append(item)
+        return deduped
 
     def _get_file_specific_generation_requirements(self, file_path: str) -> str:
         """
@@ -1374,8 +1615,11 @@ cargo test
         self.doc_contents = {}
         
         for doc_path in doc_paths:
+            self._maybe_load_translation_contract_from_path(doc_path)
             if os.path.isfile(doc_path):
                 # 单个文件
+                if os.path.basename(self._normalize_rel_path(doc_path)) == "translation_contract.json":
+                    continue
                 try:
                     with open(doc_path, 'r', encoding='utf-8', errors='ignore') as f:
                         content = f.read()
@@ -1388,6 +1632,9 @@ cargo test
                 # 目录，加载目录下所有 markdown 文件
                 for root, dirs, files in os.walk(doc_path):
                     for file in files:
+                        if file == "translation_contract.json":
+                            self._load_translation_contract_file(os.path.join(root, file))
+                            continue
                         if file.endswith('.md'):
                             file_path = os.path.join(root, file)
                             try:
@@ -1426,6 +1673,10 @@ cargo test
             parts.append(f"项目结构：\n{project_structure}")
         if implementation_plan:
             parts.append(f"实现计划：\n{implementation_plan}")
+
+        contract_context = self._build_translation_contract_context()
+        if contract_context:
+            parts.append(contract_context)
 
         api_contract_context = self._build_api_contract_context()
         if api_contract_context:
@@ -1515,6 +1766,11 @@ cargo test
         
         # 构建文档内容
         all_docs = ""
+        contract_context = self._build_translation_contract_context()
+        if contract_context:
+            all_docs += f"\n=== 迁移契约（最高优先级） ===\n{contract_context}\n"
+            all_docs += self._contract_scope_instructions() + "\n"
+
         for path, content in self.doc_contents.items():
             all_docs += f"\n=== 文档：{path} ===\n"
             all_docs += content
@@ -1576,6 +1832,10 @@ cargo test
         prompt = prompt_manager.get('rust_agent', 'generate_implementation_plan_prompt',
                                    project_structure=project_structure,
                                    files_to_generate=files_to_generate)
+
+        contract_context = self._build_translation_contract_context()
+        if contract_context:
+            prompt += f"\n\n迁移契约（最高优先级）：\n{contract_context}\n{self._contract_scope_instructions()}\n"
 
         if self.source_context_summary:
             prompt += f"\n\n补充的原始 C 源码摘要：\n{self.source_context_summary}\n"
@@ -1665,6 +1925,9 @@ cargo test
                                        file_path=file_path,
                                        context=context,
                                        implementation_plan=implementation_plan)
+            contract_scope = self._contract_scope_instructions()
+            if contract_scope:
+                prompt += f"\n\n{contract_scope}\n"
             source_context = self._build_relevant_source_context_for_file(file_path)
             if source_context:
                 prompt += f"\n\n最相关的原始 C 源码片段：\n{source_context}\n"
@@ -2108,6 +2371,9 @@ cargo test
                 cleaned_paths.append(normalized)
 
         if not cleaned_paths:
+            contract_files = self._contract_planned_files()
+            if contract_files:
+                return contract_files
             return ["Cargo.toml", "src/lib.rs", "README.md"]
 
         return cleaned_paths
@@ -2259,6 +2525,16 @@ cargo test
         for crate_name in common_deps.keys():
             if f"use {crate_name}" in context or f"extern crate {crate_name}" in context:
                 detected_deps[crate_name] = common_deps[crate_name]
+
+        if self.translation_contract:
+            if self.dependency_policy == "std_only_by_default" and not self.allowed_dependencies:
+                return {}
+            if self.allowed_dependencies:
+                detected_deps = {
+                    name: version
+                    for name, version in detected_deps.items()
+                    if name in self.allowed_dependencies
+                }
         
         return detected_deps
 
@@ -2268,7 +2544,8 @@ cargo test
         """
         merged: List[str] = []
         seen = set()
-        for item in (base_files or []) + (planned_files or []):
+        seed_files = self._contract_planned_files() if self.allowed_rust_files else []
+        for item in seed_files + (base_files or []) + (planned_files or []):
             normalized = self._clean_relative_project_path(str(item), "")
             if not normalized:
                 continue
@@ -2340,6 +2617,26 @@ cargo test
         if self._is_readme(file_path) and self._looks_like_invalid_readme(code):
             print("检测到生成的 README.md 内容异常，回退到最小说明文档")
             code = self._build_fallback_readme()
+
+        contract_findings = self._lint_generated_code_against_contract(file_path, code)
+        if contract_findings:
+            print(f"检测到 contract 越界内容，尝试重新生成：{file_path}")
+            for finding in contract_findings:
+                print(f"  - {finding}")
+
+            repair_context = file_context + "\n\n=== 上一次生成违反迁移契约，必须修正以下问题 ===\n"
+            repair_context += "\n".join(f"- {item}" for item in contract_findings)
+            repair_context += "\n- 保持当前文件职责不变，只删除越界能力并回到已有源码事实。\n"
+            regenerated = self._generate_code(file_path, repair_context, implementation_plan)
+            if regenerated and str(regenerated).strip():
+                code = regenerated
+                if self._is_cargo_toml(file_path):
+                    code = self._sanitize_cargo_toml_for_config(code)
+                contract_findings = self._lint_generated_code_against_contract(file_path, code)
+
+            if contract_findings:
+                self._mark_generation_status(file_path, "failed", "contract_scope_violation")
+                return False, ""
 
         if self._should_detect_dependencies(file_path):
             deps = self._detect_dependencies(code)
@@ -2425,6 +2722,10 @@ cargo test
             f"项目结构：\n{project_structure}",
             f"实现计划：\n{implementation_plan}",
         ]
+        contract_context = self._build_translation_contract_context()
+        if contract_context:
+            context_parts.append(contract_context)
+            context_parts.append(self._contract_scope_instructions())
         if self.source_context_summary:
             context_parts.append(f"原始 C 源码摘要：\n{self.source_context_summary}")
         if self.source_interface_summary:
