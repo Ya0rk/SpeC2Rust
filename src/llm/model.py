@@ -1,4 +1,6 @@
+import inspect
 import sys
+import time
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent.parent))
@@ -7,6 +9,7 @@ from .custom_api import CustomApiGen
 from .openai.oai import OpenAiGen
 from .qianwen.qianwen_gen import QwenLocalGen
 from utils.translation_metrics import translation_metrics
+from utils.round_logger import RoundLogger
 from config.config import Config
 
 
@@ -15,14 +18,86 @@ class Model:
         self.config = config
         self.model_name = config.model_name
         self.llm = self._get_model(config)
+        self._current_request_label = ""
+        self.round_logger = RoundLogger(base_dir=getattr(config, "round_log_dir", ""))
 
     def generate(self, prompt: str):
         translation_metrics.increment_llm_requests()
-        return self.llm.get_response(prompt)
+        started_at = time.time()
+        call_stack = self._capture_generate_stack()
+        reply = None
+        error = None
+        try:
+            reply = self.llm.get_response(prompt)
+            return reply
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
+            raise
+        finally:
+            if self._round_log_enabled():
+                self._safe_log_round(
+                    request=prompt,
+                    reply=reply,
+                    error=error,
+                    call_stack=call_stack,
+                    duration_seconds=time.time() - started_at,
+                )
 
     def set_request_label(self, label: str):
+        self._current_request_label = (label or "").strip()
         if hasattr(self.llm, "set_request_label"):
             self.llm.set_request_label(label)
+
+    def _round_log_enabled(self) -> bool:
+        return bool(getattr(self.config, "round_log_enabled", True))
+
+    def _infer_objective(self, request) -> str:
+        if self._current_request_label:
+            return self._current_request_label
+        if isinstance(request, list):
+            for message in request:
+                if not isinstance(message, dict):
+                    continue
+                content = str(message.get("content") or "").strip()
+                if content:
+                    return content.splitlines()[0][:120]
+        return "unnamed request"
+
+    def _capture_generate_stack(self):
+        repo_root = Path(__file__).resolve().parents[2]
+        frames = []
+        for frame in inspect.stack():
+            path = Path(frame.filename)
+            try:
+                file_name = str(path.resolve().relative_to(repo_root))
+            except Exception:
+                file_name = str(path)
+            frames.append(
+                {
+                    "file": file_name.replace("\\", "/"),
+                    "line": frame.lineno,
+                    "function": frame.function,
+                    "code_context": (frame.code_context[0].strip() if frame.code_context else ""),
+                }
+            )
+        return frames
+
+    def _safe_log_round(self, request, reply, error, call_stack, duration_seconds: float):
+        try:
+            logger = getattr(self, "round_logger", None) or RoundLogger()
+            logger.log_round(
+                request=request,
+                reply=reply,
+                objective=self._infer_objective(request),
+                model_name=self.model_name,
+                backend_name=type(self.llm).__name__,
+                call_stack=call_stack,
+                error=error,
+                duration_seconds=round(duration_seconds, 3),
+                token_usage=getattr(self.llm, "last_usage", None),
+            )
+        except Exception as log_error:
+            print(f"Round log write failed: {log_error}")
 
     def _get_model(self, config: Config):
         model_name = config.model_name

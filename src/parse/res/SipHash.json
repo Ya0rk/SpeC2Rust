@@ -1,0 +1,30 @@
+[
+  {
+    "func_defid": "halfsiphash.c:halfsiphash",
+    "span": "halfsiphash.c:82:1:166:2",
+    "pieces": [
+      "halfsiphash.c:82:1:166:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 85,
+    "source": "int halfsiphash(const void *in, const size_t inlen, const void *k, uint8_t *out,\n                const size_t outlen) {\n\n    const unsigned char *ni = (const unsigned char *)in;\n    const unsigned char *kk = (const unsigned char *)k;\n\n    assert((outlen == 4) || (outlen == 8));\n    uint32_t v0 = 0;\n    uint32_t v1 = 0;\n    uint32_t v2 = UINT32_C(0x6c796765);\n    uint32_t v3 = UINT32_C(0x74656462);\n    uint32_t k0 = U8TO32_LE(kk);\n    uint32_t k1 = U8TO32_LE(kk + 4);\n    uint32_t m;\n    int i;\n    const unsigned char *end = ni + inlen - (inlen % sizeof(uint32_t));\n    const int left = inlen & 3;\n    uint32_t b = ((uint32_t)inlen) << 24;\n    v3 ^= k1;\n    v2 ^= k0;\n    v1 ^= k1;\n    v0 ^= k0;\n\n    if (outlen == 8)\n        v1 ^= 0xee;\n\n    for (; ni != end; ni += 4) {\n        m = U8TO32_LE(ni);\n        v3 ^= m;\n\n        TRACE;\n        for (i = 0; i < cROUNDS; ++i)\n            SIPROUND;\n\n        v0 ^= m;\n    }\n\n    switch (left) {\n    case 3:\n        b |= ((uint32_t)ni[2]) << 16;\n        /* FALLTHRU */\n    case 2:\n        b |= ((uint32_t)ni[1]) << 8;\n        /* FALLTHRU */\n    case 1:\n        b |= ((uint32_t)ni[0]);\n        break;\n    case 0:\n        break;\n    }\n\n    v3 ^= b;\n\n    TRACE;\n    for (i = 0; i < cROUNDS; ++i)\n        SIPROUND;\n\n    v0 ^= b;\n\n    if (outlen == 8)\n        v2 ^= 0xee;\n    else\n        v2 ^= 0xff;\n\n    TRACE;\n    for (i = 0; i < dROUNDS; ++i)\n        SIPROUND;\n\n    b = v1 ^ v3;\n    U32TO8_LE(out, b);\n\n    if (outlen == 4)\n        return 0;\n\n    v1 ^= 0xdd;\n\n    TRACE;\n    for (i = 0; i < dROUNDS; ++i)\n        SIPROUND;\n\n    b = v1 ^ v3;\n    U32TO8_LE(out + 4, b);\n\n    return 0;\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "siphash.c:siphash",
+    "span": "siphash.c:89:1:185:2",
+    "pieces": [
+      "siphash.c:89:1:185:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 97,
+    "source": "int siphash(const void *in, const size_t inlen, const void *k, uint8_t *out,\n            const size_t outlen) {\n\n    const unsigned char *ni = (const unsigned char *)in;\n    const unsigned char *kk = (const unsigned char *)k;\n\n    assert((outlen == 8) || (outlen == 16));\n    uint64_t v0 = UINT64_C(0x736f6d6570736575);\n    uint64_t v1 = UINT64_C(0x646f72616e646f6d);\n    uint64_t v2 = UINT64_C(0x6c7967656e657261);\n    uint64_t v3 = UINT64_C(0x7465646279746573);\n    uint64_t k0 = U8TO64_LE(kk);\n    uint64_t k1 = U8TO64_LE(kk + 8);\n    uint64_t m;\n    int i;\n    const unsigned char *end = ni + inlen - (inlen % sizeof(uint64_t));\n    const int left = inlen & 7;\n    uint64_t b = ((uint64_t)inlen) << 56;\n    v3 ^= k1;\n    v2 ^= k0;\n    v1 ^= k1;\n    v0 ^= k0;\n\n    if (outlen == 16)\n        v1 ^= 0xee;\n\n    for (; ni != end; ni += 8) {\n        m = U8TO64_LE(ni);\n        v3 ^= m;\n\n        TRACE;\n        for (i = 0; i < cROUNDS; ++i)\n            SIPROUND;\n\n        v0 ^= m;\n    }\n\n    switch (left) {\n    case 7:\n        b |= ((uint64_t)ni[6]) << 48;\n        /* FALLTHRU */\n    case 6:\n        b |= ((uint64_t)ni[5]) << 40;\n        /* FALLTHRU */\n    case 5:\n        b |= ((uint64_t)ni[4]) << 32;\n        /* FALLTHRU */\n    case 4:\n        b |= ((uint64_t)ni[3]) << 24;\n        /* FALLTHRU */\n    case 3:\n        b |= ((uint64_t)ni[2]) << 16;\n        /* FALLTHRU */\n    case 2:\n        b |= ((uint64_t)ni[1]) << 8;\n        /* FALLTHRU */\n    case 1:\n        b |= ((uint64_t)ni[0]);\n        break;\n    case 0:\n        break;\n    }\n\n    v3 ^= b;\n\n    TRACE;\n    for (i = 0; i < cROUNDS; ++i)\n        SIPROUND;\n\n    v0 ^= b;\n\n    if (outlen == 16)\n        v2 ^= 0xee;\n    else\n        v2 ^= 0xff;\n\n    TRACE;\n    for (i = 0; i < dROUNDS; ++i)\n        SIPROUND;\n\n    b = v0 ^ v1 ^ v2 ^ v3;\n    U64TO8_LE(out, b);\n\n    if (outlen == 8)\n        return 0;\n\n    v1 ^= 0xdd;\n\n    TRACE;\n    for (i = 0; i < dROUNDS; ++i)\n        SIPROUND;\n\n    b = v0 ^ v1 ^ v2 ^ v3;\n    U64TO8_LE(out + 8, b);\n\n    return 0;\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  }
+]

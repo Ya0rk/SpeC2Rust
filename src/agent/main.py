@@ -27,12 +27,43 @@ from agent.spec_json_agent import SpecJsonAgent
 from agent.rust_agent import RustAgent
 from agent.alternatives.stable_rust_agent import StableRustAgent
 from agent.alternatives.growth_rust_agent import GrowthRustAgent
+from agent.alternatives.contextual_rust_agent import ContextualRustAgent
 from agent.code_fixer_agent import CodeFixer, TestFixer
 from agent.rust_repair_agent import RustRepairAgent
 from agent.unfinished_code_agent import UnfinishedCodeAgent
 from config.config import Config
 from utils.fmtpr import prGreen, prRed, prBlue, prYellow
 from utils.translation_metrics import translation_metrics
+
+
+def c_docs_writable(args) -> bool:
+    return not getattr(args, "freeze_c_docs", False)
+
+
+def should_run_primary_c_analysis(args) -> bool:
+    return not args.skip_c_analysis and c_docs_writable(args)
+
+
+def should_run_spec_json_stage(args) -> bool:
+    return args.use_spec_agent and args.use_spec_json_agent and c_docs_writable(args)
+
+
+def should_run_pointer_stage(args) -> bool:
+    return args.use_pointer_agent and not args.use_spec_agent and c_docs_writable(args)
+
+
+def should_run_macro_stage(args) -> bool:
+    return args.use_macro_agent and not args.use_spec_agent and c_docs_writable(args)
+
+
+def selected_rust_agent_mode(args) -> str:
+    if getattr(args, "use_contextual_rust_agent", False):
+        return "ContextualRustAgent"
+    if getattr(args, "use_growth_rust_agent", False):
+        return "GrowthRustAgent"
+    if getattr(args, "use_stable_rust_agent", False):
+        return "StableRustAgent"
+    return "RustAgent"
 
 
 def run_optional_rust_repair_agent(args, config: Config, rust_project_path: str):
@@ -89,6 +120,11 @@ def main():
         help="跳过 C 项目分析步骤"
     )
     parser.add_argument(
+        "--freeze-c-docs",
+        action="store_true",
+        help="完全禁止产生任何新的 c_docs 文件，只复用已有文档"
+    )
+    parser.add_argument(
         "--use-spec-agent",
         action="store_true",
         help="使用 SpecAgent 作为可选分析路径"
@@ -117,6 +153,11 @@ def main():
         "--use-growth-rust-agent",
         action="store_true",
         help="使用可选的 GrowthRustAgent，按主树干最小可编译集逐步生长式生成代码"
+    )
+    parser.add_argument(
+        "--use-contextual-rust-agent",
+        action="store_true",
+        help="使用可选的 ContextualRustAgent，按需读取 spec/source/Rust 上下文并维护符号表"
     )
     parser.add_argument(
         "--use-error-organizer-agent",
@@ -184,9 +225,10 @@ def main():
         # 创建输出目录
         os.makedirs(args.output_dir, exist_ok=True)
 
-        # 创建临时目录存放 C 项目文档
         c_doc_dir = os.path.join(args.output_dir, "c_docs")
-        os.makedirs(c_doc_dir, exist_ok=True)
+        if c_docs_writable(args):
+            # 创建临时目录存放 C 项目文档
+            os.makedirs(c_doc_dir, exist_ok=True)
 
         # 加载配置
         config = Config(config_path=args.config_file)
@@ -208,31 +250,40 @@ def main():
         prYellow(f"模型名称：{config.model_name}")
         prYellow(f"远程模型：{config.api_model or '(default)'}")
         prYellow(f"分析路径：{'SpecAgent' if args.use_spec_agent else 'CDocAgent'}")
-        rust_agent_mode = "RustAgent"
-        if args.use_growth_rust_agent:
-            rust_agent_mode = "GrowthRustAgent"
-        elif args.use_stable_rust_agent:
-            rust_agent_mode = "StableRustAgent"
+        rust_agent_mode = selected_rust_agent_mode(args)
         prYellow(f"代码生成路径：{rust_agent_mode}")
         prYellow(f"续跑模式：{'开启' if args.continue_run else '关闭（默认全量重建）'}")
         prYellow(f"未完成实现检查：{'关闭' if args.skip_unfinished_check else '开启'}")
         prYellow(f"未完成实现最大续写轮数：{args.unfinished_max_passes}")
         prYellow(f"Spec JSON 中间层：{'开启' if args.use_spec_json_agent else '关闭'}")
         prYellow(f"PointerAgent：{'开启' if args.use_pointer_agent else '关闭'}")
+        prYellow(f"冻结 c_docs：{'开启' if args.freeze_c_docs else '关闭'}")
         prYellow(f"最大修复迭代次数：{args.max_fix_iterations}")
         prBlue("=" * 80)
 
-        if args.use_stable_rust_agent and args.use_growth_rust_agent:
-            prRed("\n✗ 错误：--use-stable-rust-agent 与 --use-growth-rust-agent 不能同时开启")
+        rust_agent_flag_count = sum(
+            1
+            for enabled in [
+                args.use_stable_rust_agent,
+                args.use_growth_rust_agent,
+                args.use_contextual_rust_agent,
+            ]
+            if enabled
+        )
+        if rust_agent_flag_count > 1:
+            prRed("\n✗ 错误：--use-stable-rust-agent、--use-growth-rust-agent、--use-contextual-rust-agent 只能开启一个")
             return 1
 
         if args.use_spec_json_agent and not args.use_spec_agent:
             prYellow("提示：Spec JSON 中间层仅对 SpecAgent 路径生效，当前将忽略该开关。")
 
+        if args.freeze_c_docs:
+            prYellow("提示：--freeze-c-docs 已开启，将跳过所有会写入 c_docs 的步骤，只读取已有文档。")
+
         # =========================================================================
         # 步骤 1: 分析 C 项目并生成文档
         # =========================================================================
-        if not args.skip_c_analysis:
+        if should_run_primary_c_analysis(args):
             prBlue("\n" + "=" * 80)
             prYellow("步骤 1: 分析 C 项目并生成文档")
             prBlue("=" * 80)
@@ -251,15 +302,17 @@ def main():
 
             prGreen("\n✓ C 项目分析完成")
             prGreen(f"  文档保存在：{c_doc_dir}")
-        else:
+        elif args.skip_c_analysis:
             prRed("\n⊘ 跳过 C 项目分析步骤")
+        else:
+            prRed("\n⊘ 已冻结 c_docs，跳过 C 项目分析步骤")
 
         spec_json_path = os.path.join(c_doc_dir, "spec_json", "spec_context.json")
         pointer_markdown_path = os.path.join(c_doc_dir, "pointer_guidance.md")
         macro_markdown_path = os.path.join(c_doc_dir, "macro_guidance.md")
 
         # 可选步骤 1.5: 将 SpecAgent 产出的文档压缩为机器友好的 JSON
-        if args.use_spec_agent and args.use_spec_json_agent:
+        if should_run_spec_json_stage(args):
             prBlue("\n" + "=" * 80)
             prYellow("步骤 1.5: 压缩 Spec 文档为 JSON 中间层")
             prBlue("=" * 80)
@@ -271,7 +324,7 @@ def main():
             prGreen(f"  JSON 路径：{spec_json_path}")
 
         # 可选步骤 1.6: 分析 C 项目中的指针用法，生成 Rust 翻译指导
-        if args.use_pointer_agent and not args.use_spec_agent:
+        if should_run_pointer_stage(args):
             prBlue("\n" + "=" * 80)
             prYellow("步骤 1.6: 生成指针翻译指导文档")
             prBlue("=" * 80)
@@ -285,7 +338,7 @@ def main():
 
         # 收集生成的文档路径
         # 可选步骤 1.7: 分析 C 项目中的宏定义，生成 Rust 迁移指导
-        if args.use_macro_agent and not args.use_spec_agent:
+        if should_run_macro_stage(args):
             prBlue("\n" + "=" * 80)
             prYellow("步骤 1.7: 生成宏迁移指导文档")
             prBlue("=" * 80)
@@ -303,8 +356,8 @@ def main():
                 doc_paths.append(spec_json_path)
             else:
                 candidate_paths = [
-                    os.path.join(c_doc_dir, "docs", "rewrite-context"),
                     os.path.join(c_doc_dir, ".specify", "memory"),
+                    os.path.join(c_doc_dir, "docs", "rewrite-context"),
                     os.path.join(c_doc_dir, "specs"),
                 ]
                 for doc_path in candidate_paths:
@@ -359,7 +412,9 @@ def main():
         prYellow("步骤 2: 根据文档生成 Rust 代码")
         prBlue("=" * 80)
 
-        if args.use_growth_rust_agent:
+        if args.use_contextual_rust_agent:
+            rust_agent = ContextualRustAgent(config=config)
+        elif args.use_growth_rust_agent:
             rust_agent = GrowthRustAgent(config=config)
         elif args.use_stable_rust_agent:
             rust_agent = StableRustAgent(config=config)
@@ -469,7 +524,7 @@ def main():
         prBlue("=" * 80)
         prGreen(f"Rust 项目路径：{rust_project_path}")
         prGreen("\n生成的文件：")
-        prGreen(f"  - C 项目文档：{c_doc_dir}/")
+        prGreen(f"  - C 项目文档：{c_doc_dir}/{'（只读复用）' if args.freeze_c_docs else ''}")
         prGreen(f"  - Rust 项目：{rust_project_path}/")
         prBlue("=" * 80 + "\n")
         return 0

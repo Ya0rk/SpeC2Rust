@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "path": "specs/001-generic-rust-port/tasks.md",
+      "kind": "scope_expansion",
+      "message": "发现越界阶段: Phase 8"
+    },
+    {
+      "path": "specs/001-generic-rust-port/tasks.md",
+      "kind": "scope_expansion",
+      "message": "发现无证据高级能力: recovery mechanism"
+    },
+    {
+      "path": "specs/001-generic-rust-port/tasks.md",
+      "kind": "out_of_scope_file",
+      "message": "发现 contract 外文件路径: src/sync.rs"
+    }
+  ]
+}

@@ -49,6 +49,7 @@ conda run --no-capture-output -n tcode python src/agent/main.py --c_project_path
 | `--rust-project-name` | 生成的 Rust 项目名称，默认 `rust_implementation` |
 | `--config-file` | 配置文件路径，默认读取仓库根目录的 `local_config.json` |
 | `--skip-c-analysis` | 跳过 C 项目分析步骤 |
+| `--freeze-c-docs` | 完全禁止产生任何新的 `c_docs` 文件，只复用已有文档 |
 | `--use-spec-agent` | 使用 `SpecAgent` 作为分析路径 |
 | `--use-spec-json-agent` | 在 `SpecAgent` 后增加 JSON 压缩中间层 |
 | `--use-stable-rust-agent` | 使用 `alternatives/stable_rust_agent.py` 作为可选 Rust 生成器 |
@@ -204,6 +205,24 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 - 如果同时开启 `--use-spec-json-agent`，程序会优先读取 `output/c_docs/spec_json/spec_context.json`
 - 如果同时开启 `SpecAgent + PointerAgent/MacroAgent`，程序还会额外读取 `output/c_docs/docs/rewrite-context/04_gaps_and_risks/001_pointer_macro_summary.md`
 
+注意：
+
+- `--skip-c-analysis` 只跳过主分析步骤
+- 如果你同时开启了 `--use-spec-json-agent`、`--use-pointer-agent`、`--use-macro-agent`，这些中间层在默认实现下仍然可能继续生成新的文档
+
+### 4.1 完全冻结 c_docs，只读复用已有文档
+
+```bash
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --freeze-c-docs
+```
+
+说明：
+
+- 该参数会禁止所有会写入 `output/c_docs/` 的步骤
+- 包括主分析步骤、`SpecJsonAgent`、非 `SpecAgent` 路径下的 `PointerAgent` 与 `MacroAgent`
+- 程序只会读取现有 `output/c_docs/` 中已经存在的文档
+- 如果当前 `output/c_docs/` 不完整或不存在，后续会因为缺少输入文档而报错
+
 ### 5. 只生成代码，不做修复
 
 ```bash
@@ -245,7 +264,9 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
   "generate_tests": false,
   "generate_examples": false,
   "generate_benches": false,
-  "skeleton_first": true
+  "skeleton_first": true,
+  "round_log_enabled": true,
+  "round_log_dir": ""
 }
 ```
 
@@ -266,6 +287,42 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 - `generate_examples`：是否生成示例
 - `generate_benches`：是否生成 benchmark
 - `skeleton_first`：是否启用骨架优先生成
+- `round_log_enabled`：是否记录每一轮 LLM request/reply，默认开启
+- `round_log_dir`：round log 输出目录，默认写入 `log/round_logs/<运行时间>/`
+
+## Round Log
+
+底层 `Model.generate()` 会为每一组 LLM 请求和回复写一个独立 JSON 文件，用于观察每一轮对话上下文和生成目标。
+
+默认位置：
+
+```text
+log/round_logs/<运行时间>/<轮次>-<目标>.json
+```
+
+每个文件包含：
+
+- `objective`：本轮实现目标，优先使用 agent 设置的 request label
+- `request`：发送给模型的完整 messages 上下文
+- `reply`：模型返回内容
+- `error`：如果本轮调用失败，记录异常类型和信息
+- `call_stack`：执行 `Model.generate()` 时的 Python 函数栈，便于追踪是哪一个 agent / 函数触发了本轮请求
+
+也可以通过配置改目录或关闭：
+
+```json
+{
+  "round_log_enabled": true,
+  "round_log_dir": "log/round_logs"
+}
+```
+
+或者用环境变量覆盖本次运行目录：
+
+```powershell
+$env:CGR_ROUND_LOG_DIR = "E:\\tmp\\cgr-rounds"
+$env:CGR_ROUND_LOG_RUN = "quadtree-debug"
+```
 
 ## 当前 Rust 生成策略
 

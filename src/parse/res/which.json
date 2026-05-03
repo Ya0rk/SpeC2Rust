@@ -1,0 +1,792 @@
+[
+  {
+    "func_defid": "bash.c:uidget",
+    "span": "bash.c:81:1:102:2",
+    "pieces": [
+      "bash.c:81:1:102:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 22,
+    "source": "int\nuidget ()\n{\n  uid_t u;\n\n  u = getuid ();\n  if (current_user.uid != u)\n    {\n      FREE (current_user.user_name);\n      FREE (current_user.shell);\n      FREE (current_user.home_dir);\n      current_user.user_name = current_user.shell = current_user.home_dir = (char *)NULL;\n    }\n  current_user.uid = u;\n  current_user.gid = getgid ();\n  current_user.euid = geteuid ();\n  current_user.egid = getegid ();\n\n  /* See whether or not we are running setuid or setgid. */\n  return (current_user.uid != current_user.euid) ||\n           (current_user.gid != current_user.egid);\n}",
+    "calls": [
+      {
+        "caller": "which.c:main",
+        "span": "which.c:503:3:503:11",
+        "source": "uidget();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "bash.c:getmaxgroups",
+    "span": "bash.c:120:1:146:2",
+    "pieces": [
+      "bash.c:120:1:146:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 27,
+    "source": "int\ngetmaxgroups ()\n{\n  static int maxgroups = -1;\n\n  if (maxgroups > 0)\n    return maxgroups;\n\n#if defined (HAVE_SYSCONF) && defined (_SC_NGROUPS_MAX)\n  maxgroups = sysconf (_SC_NGROUPS_MAX);\n#else\n#  if defined (NGROUPS_MAX)\n  maxgroups = NGROUPS_MAX;\n#  else /* !NGROUPS_MAX */\n#    if defined (NGROUPS)\n  maxgroups = NGROUPS;\n#    else /* !NGROUPS */\n  maxgroups = DEFAULT_MAXGROUPS;\n#    endif /* !NGROUPS */\n#  endif /* !NGROUPS_MAX */\n#endif /* !HAVE_SYSCONF || !SC_NGROUPS_MAX */\n\n  if (maxgroups <= 0)\n    maxgroups = DEFAULT_MAXGROUPS;\n\n  return maxgroups;\n}",
+    "calls": [
+      {
+        "caller": "bash.c:initialize_group_array",
+        "span": "bash.c:155:17:155:32",
+        "source": "maxgroups = getmaxgroups ();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "bash.c:initialize_group_array",
+    "span": "bash.c:149:1:199:2",
+    "pieces": [
+      "bash.c:149:1:199:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 51,
+    "source": "static void\ninitialize_group_array ()\n{\n  register int i;\n\n  if (maxgroups == 0)\n    maxgroups = getmaxgroups ();\n\n  ngroups = 0;\n  group_array = (GETGROUPS_T *)xrealloc (group_array, maxgroups * sizeof (GETGROUPS_T));\n\n#if defined (HAVE_GETGROUPS)\n  ngroups = getgroups (maxgroups, group_array);\n#endif\n\n  /* If getgroups returns nothing, or the OS does not support getgroups(),\n     make sure the groups array includes at least the current gid. */\n  if (ngroups == 0)\n    {\n      group_array[0] = current_user.gid;\n      ngroups = 1;\n    }\n\n  /* If the primary group is not in the groups array, add it as group_array[0]\n     and shuffle everything else up 1, if there's room. */\n  for (i = 0; i < ngroups; i++)\n    if (current_user.gid == (GID_T)group_array[i])\n      break;\n  if (i == ngroups && ngroups < maxgroups)\n    {\n      for (i = ngroups; i > 0; i--)\n        group_array[i] = group_array[i - 1];\n      group_array[0] = current_user.gid;\n      ngroups++;\n    }\n\n  /* If the primary group is not group_array[0], swap group_array[0] and\n     whatever the current group is.  The vast majority of systems should\n     not need this; a notable exception is Linux. */\n  if (group_array[0] != current_user.gid)\n    {\n      for (i = 0; i < ngroups; i++)\n        if (group_array[i] == current_user.gid)\n          break;\n      if (i < ngroups)\n        {\n          group_array[i] = group_array[0];\n          group_array[0] = current_user.gid;\n        }\n    }\n}",
+    "calls": [
+      {
+        "caller": "bash.c:group_member",
+        "span": "bash.c:221:5:221:30",
+        "source": "initialize_group_array ();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "bash.c:group_member",
+    "span": "bash.c:205:1:234:2",
+    "pieces": [
+      "bash.c:205:1:234:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 30,
+    "source": "group_member (GID_T gid)\n#else\ngroup_member (gid)\n     GID_T gid;\n#endif /* !__STDC__ && !_MINIX */\n{\n#if defined (HAVE_GETGROUPS)\n  register int i;\n#endif\n\n  /* Short-circuit if possible, maybe saving a call to getgroups(). */\n  if (gid == current_user.gid || gid == current_user.egid)\n    return (1);\n\n#if defined (HAVE_GETGROUPS)\n  if (ngroups == 0)\n    initialize_group_array ();\n\n  /* In case of error, the user loses. */\n  if (ngroups <= 0)\n    return (0);\n\n  /* Search through the list looking for GID. */\n  for (i = 0; i < ngroups; i++)\n    if (gid == (GID_T)group_array[i])\n      return (1);\n#endif\n\n  return (0);\n}",
+    "calls": [
+      {
+        "caller": "bash.c:file_status",
+        "span": "bash.c:305:12:305:39",
+        "source": "else if (group_member (finfo.st_gid))"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "bash.c:file_status",
+    "span": "bash.c:241:1:324:2",
+    "pieces": [
+      "bash.c:241:1:324:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 84,
+    "source": "int\nfile_status (char const* name)\n{\n  struct stat finfo;\n  int r;\n\n  /* Determine whether this file exists or not. */\n  if (stat (name, &finfo) < 0)\n    return (0);\n\n  /* If the file is a directory, then it is not \"executable\" in the\n     sense of the shell. */\n  if (S_ISDIR (finfo.st_mode))\n    return (FS_EXISTS|FS_DIRECTORY);\n\n  r = FS_EXISTS;\n\n#if defined (HAVE_EACCESS)\n  /* Use eaccess(2) if we have it to take things like ACLs and other\n     file access mechanisms into account.  eaccess uses the effective\n     user and group IDs, not the real ones.  We could use sh_eaccess,\n     but we don't want any special treatment for /dev/fd. */\n  if (eaccess (name, X_OK) == 0)\n    r |= FS_EXECABLE;\n  if (eaccess (name, R_OK) == 0)\n    r |= FS_READABLE;\n\n  return r;\n#elif defined (AFS)\n  /* We have to use access(2) to determine access because AFS does not\n     support Unix file system semantics.  This may produce wrong\n     answers for non-AFS files when ruid != euid.  I hate AFS. */\n  if (access (name, X_OK) == 0)\n    r |= FS_EXECABLE;\n  if (access (name, R_OK) == 0)\n    r |= FS_READABLE;\n\n  return r;\n#else /* !AFS */\n\n  /* Find out if the file is actually executable.  By definition, the\n     only other criteria is that the file has an execute bit set that\n     we can use.  The same with whether or not a file is readable. */\n\n  /* Root only requires execute permission for any of owner, group or\n     others to be able to exec a file, and can read any file. */\n  if (current_user.euid == (uid_t)0)\n    {\n      r |= FS_READABLE;\n      if (finfo.st_mode & S_IXUGO)\n\tr |= FS_EXECABLE;\n      return r;\n    }\n\n  /* If we are the owner of the file, the owner bits apply. */\n  if (current_user.euid == finfo.st_uid)\n    {\n      if (finfo.st_mode & S_IXUSR)\n\tr |= FS_EXECABLE;\n      if (finfo.st_mode & S_IRUSR)\n\tr |= FS_READABLE;\n    }\n\n  /* If we are in the owning group, the group permissions apply. */\n  else if (group_member (finfo.st_gid))\n    {\n      if (finfo.st_mode & S_IXGRP)\n\tr |= FS_EXECABLE;\n      if (finfo.st_mode & S_IRGRP)\n\tr |= FS_READABLE;\n    }\n\n  /* Else we check whether `others' have permission to execute the file */\n  else\n    {\n      if (finfo.st_mode & S_IXOTH)\n\tr |= FS_EXECABLE;\n      if (finfo.st_mode & S_IROTH)\n\tr |= FS_READABLE;\n    }\n\n  return r;\n#endif /* !AFS */\n}",
+    "calls": [
+      {
+        "caller": "which.c:find_command_in_path",
+        "span": "which.c:151:14:151:36",
+        "source": "status = file_status(full_path);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "bash.c:absolute_program",
+    "span": "bash.c:330:1:334:2",
+    "pieces": [
+      "bash.c:330:1:334:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 5,
+    "source": "int\nabsolute_program (char const* string)\n{\n  return ((char *)strchr (string, '/') != (char *)NULL);\n}",
+    "calls": [
+      {
+        "caller": "which.c:find_command_in_path",
+        "span": "which.c:84:8:84:30",
+        "source": "if (!absolute_program(name))"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "bash.c:substring",
+    "span": "bash.c:339:1:350:2",
+    "pieces": [
+      "bash.c:339:1:350:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 12,
+    "source": "char *\nsubstring (char const* string, int start, int end)\n{\n  register int len;\n  register char *result;\n\n  len = end - start;\n  result = (char *)xmalloc (len + 1);\n  memcpy (result, string + start, len);\n  result[len] = '\\0';\n  return (result);\n}",
+    "calls": [
+      {
+        "caller": "bash.c:extract_colon_unit",
+        "span": "bash.c:393:13:393:41",
+        "source": "value = substring (string, start, i);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "bash.c:extract_colon_unit",
+    "span": "bash.c:356:1:396:2",
+    "pieces": [
+      "bash.c:356:1:396:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 41,
+    "source": "char*\nextract_colon_unit (char const* string, int* p_index)\n{\n  int i, start, len;\n  char *value;\n\n  if (string == 0)\n    return NULL;\n\n  len = strlen (string);\n  if (*p_index >= len)\n    return ((char *)NULL);\n\n  i = *p_index;\n\n  /* Each call to this routine leaves the index pointing at a colon if\n     there is more to the path.  If I is > 0, then increment past the\n     `:'.  If I is 0, then the path has a leading colon.  Trailing colons\n     are handled OK by the `else' part of the if statement; an empty\n     string is returned in that case. */\n  if (i && string[i] == ':')\n    i++;\n\n  for (start = i; string[i] && string[i] != ':'; i++)\n    ;\n\n  *p_index = i;\n\n  if (i == start)\n    {\n      if (string[i])\n        (*p_index)++;\n      /* Return \"\" in the case of a trailing `:'. */\n      value = (char *)xmalloc (1);\n      value[0] = '\\0';\n    }\n  else\n    value = substring (string, start, i);\n\n  return (value);\n}",
+    "calls": [
+      {
+        "caller": "bash.c:get_next_path_element",
+        "span": "bash.c:408:10:408:60",
+        "source": "path = extract_colon_unit (path_list, path_index_pointer);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "bash.c:get_next_path_element",
+    "span": "bash.c:403:1:420:2",
+    "pieces": [
+      "bash.c:403:1:420:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 18,
+    "source": "char*\nget_next_path_element (char const* path_list, int* path_index_pointer)\n{\n  char* path;\n\n  path = extract_colon_unit (path_list, path_index_pointer);\n\n  if (path == 0)\n    return (path);\n\n  if (*path == '\\0')\n    {\n      free (path);\n      path = savestring (\".\");\n    }\n\n  return (path);\n}",
+    "calls": [
+      {
+        "caller": "which.c:find_command_in_path",
+        "span": "which.c:122:14:122:58",
+        "source": "path = get_next_path_element(path_list, path_index);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "bash.c:make_full_pathname",
+    "span": "bash.c:425:1:437:2",
+    "pieces": [
+      "bash.c:425:1:437:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 13,
+    "source": "char *\nmake_full_pathname (const char *path, const char *name, int name_len)\n{\n  char *full_path;\n  int path_len;\n\n  path_len = strlen (path);\n  full_path = (char *) xmalloc (2 + path_len + name_len);\n  strcpy (full_path, path);\n  full_path[path_len] = '/';\n  strcpy (full_path + path_len + 1, name);\n  return (full_path);\n}",
+    "calls": [
+      {
+        "caller": "which.c:find_command_in_path",
+        "span": "which.c:148:17:148:57",
+        "source": "full_path = make_full_pathname(path, name, name_len);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "bash.c:get_current_user_info",
+    "span": "bash.c:440:1:470:2",
+    "pieces": [
+      "bash.c:440:1:470:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 31,
+    "source": "void\nget_current_user_info ()\n{\n  struct passwd *entry;\n\n  /* Don't fetch this more than once. */\n  if (current_user.user_name == 0)\n    {\n#if defined (__TANDEM)\n      entry = getpwnam (getlogin ());\n#else\n      entry = getpwuid (current_user.uid);\n#endif\n      if (entry)\n        {\n          current_user.user_name = savestring (entry->pw_name);\n          current_user.shell = (entry->pw_shell && entry->pw_shell[0])\n                                ? savestring (entry->pw_shell)\n                                : savestring (\"/bin/sh\");\n          current_user.home_dir = savestring (entry->pw_dir);\n        }\n      else\n        {\n          current_user.user_name = \"I have no name!\";\n          current_user.user_name = savestring (current_user.user_name);\n          current_user.shell = savestring (\"/bin/sh\");\n          current_user.home_dir = savestring (\"/\");\n        }\n      endpwent ();\n    }\n}",
+    "calls": [
+      {
+        "caller": "bash.c:sh_get_home_dir",
+        "span": "bash.c:481:5:481:28",
+        "source": "get_current_user_info();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "bash.c:sh_get_env_value",
+    "span": "bash.c:473:1:476:2",
+    "pieces": [
+      "bash.c:473:1:476:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 4,
+    "source": "char* sh_get_env_value (const char* v)\n{\n  return getenv(v);\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "bash.c:sh_get_home_dir",
+    "span": "bash.c:478:1:483:2",
+    "pieces": [
+      "bash.c:478:1:483:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 6,
+    "source": "char* sh_get_home_dir(void)\n{\n  if (current_user.home_dir == NULL)\n    get_current_user_info();\n  return current_user.home_dir;\n}",
+    "calls": [
+      {
+        "caller": "which.c:main",
+        "span": "which.c:513:11:513:28",
+        "source": "h = sh_get_home_dir();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "getopt.c:store_args_and_env",
+    "span": "getopt.c:273:1:281:2",
+    "pieces": [
+      "getopt.c:273:1:281:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "static void\n__attribute__ ((unused))\nstore_args_and_env (int argc, char *const *argv)\n{\n  /* XXX This is no good solution.  We should rather copy the args so\n     that we can compare them later.  But we must not use malloc(3).  */\n  original_argc = argc;\n  original_argv = argv;\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "getopt.c:exchange",
+    "span": "getopt.c:308:1:386:2",
+    "pieces": [
+      "getopt.c:308:1:386:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 79,
+    "source": "static void\nexchange (argv)\n     char **argv;\n{\n  int bottom = first_nonopt;\n  int middle = last_nonopt;\n  int top = optind;\n  char *tem;\n\n  /* Exchange the shorter segment with the far end of the longer segment.\n     That puts the shorter segment into the right place.\n     It leaves the longer segment in the right place overall,\n     but it consists of two parts that need to be swapped next.  */\n\n#ifdef _LIBC\n  /* First make sure the handling of the `__getopt_nonoption_flags'\n     string can work normally.  Our top argument must be in the range\n     of the string.  */\n  if (nonoption_flags_len > 0 && top >= nonoption_flags_max_len)\n    {\n      /* We must extend the array.  The user plays games with us and\n\t presents new arguments.  */\n      char *new_str = malloc (top + 1);\n      if (new_str == NULL)\n\tnonoption_flags_len = nonoption_flags_max_len = 0;\n      else\n\t{\n\t  memcpy (new_str, __getopt_nonoption_flags, nonoption_flags_max_len);\n\t  memset (&new_str[nonoption_flags_max_len], '\\0',\n\t\t  top + 1 - nonoption_flags_max_len);\n\t  nonoption_flags_max_len = top + 1;\n\t  __getopt_nonoption_flags = new_str;\n\t}\n    }\n#endif\n\n  while (top > middle && middle > bottom)\n    {\n      if (top - middle > middle - bottom)\n\t{\n\t  /* Bottom segment is the short one.  */\n\t  int len = middle - bottom;\n\t  register int i;\n\n\t  /* Swap it with the top part of the top segment.  */\n\t  for (i = 0; i < len; i++)\n\t    {\n\t      tem = argv[bottom + i];\n\t      argv[bottom + i] = argv[top - (middle - bottom) + i];\n\t      argv[top - (middle - bottom) + i] = tem;\n\t      SWAP_FLAGS (bottom + i, top - (middle - bottom) + i);\n\t    }\n\t  /* Exclude the moved bottom segment from further swapping.  */\n\t  top -= len;\n\t}\n      else\n\t{\n\t  /* Top segment is the short one.  */\n\t  int len = top - middle;\n\t  register int i;\n\n\t  /* Swap it with the bottom part of the bottom segment.  */\n\t  for (i = 0; i < len; i++)\n\t    {\n\t      tem = argv[bottom + i];\n\t      argv[bottom + i] = argv[middle + i];\n\t      argv[middle + i] = tem;\n\t      SWAP_FLAGS (bottom + i, middle + i);\n\t    }\n\t  /* Exclude the moved top segment from further swapping.  */\n\t  bottom += len;\n\t}\n    }\n\n  /* Update records for the slots the non-options now occupy.  */\n\n  first_nonopt += (optind - last_nonopt);\n  last_nonopt = optind;\n}",
+    "calls": [
+      {
+        "caller": "getopt.c:_getopt_internal",
+        "span": "getopt.c:566:6:566:31",
+        "source": "exchange ((char **) argv);"
+      },
+      {
+        "caller": "getopt.c:_getopt_internal",
+        "span": "getopt.c:588:6:588:31",
+        "source": "exchange ((char **) argv);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "getopt.c:_getopt_internal",
+    "span": "getopt.c:518:1:970:2",
+    "pieces": [
+      "getopt.c:518:1:970:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 453,
+    "source": "int\n_getopt_internal (argc, argv, optstring, longopts, longind, long_only)\n     int argc;\n     char *const *argv;\n     const char *optstring;\n     const struct option *longopts;\n     int *longind;\n     int long_only;\n{\n  optarg = NULL;\n\n  if (optind == 0 || !__getopt_initialized)\n    {\n      if (optind == 0)\n\toptind = 1;\t/* Don't scan ARGV[0], the program name.  */\n      optstring = _getopt_initialize (argc, argv, optstring);\n      __getopt_initialized = 1;\n    }\n\n  /* Test whether ARGV[optind] points to a non-option argument.\n     Either it does not have option syntax, or there is an environment flag\n     from the shell indicating it is not an option.  The later information\n     is only used when the used in the GNU libc.  */\n#ifdef _LIBC\n#define NONOPTION_P (argv[optind][0] != '-' || argv[optind][1] == '\\0'\t      \\\n\t\t     || (optind < nonoption_flags_len\t\t\t      \\\n\t\t\t && __getopt_nonoption_flags[optind] == '1'))\n#else\n#define NONOPTION_P (argv[optind][0] != '-' || argv[optind][1] == '\\0')\n#endif\n\n  if (nextchar == NULL || *nextchar == '\\0')\n    {\n      /* Advance to the next ARGV-element.  */\n\n      /* Give FIRST_NONOPT & LAST_NONOPT rational values if OPTIND has been\n\t moved back by the user (who may also have changed the arguments).  */\n      if (last_nonopt > optind)\n\tlast_nonopt = optind;\n      if (first_nonopt > optind)\n\tfirst_nonopt = optind;\n\n      if (ordering == PERMUTE)\n\t{\n\t  /* If we have just processed some options following some non-options,\n\t     exchange them so that the options come first.  */\n\n\t  if (first_nonopt != last_nonopt && last_nonopt != optind)\n\t    exchange ((char **) argv);\n\t  else if (last_nonopt != optind)\n\t    first_nonopt = optind;\n\n\t  /* Skip any additional non-options\n\t     and extend the range of non-options previously skipped.  */\n\n\t  while (optind < argc && NONOPTION_P)\n\t    optind++;\n\t  last_nonopt = optind;\n\t}\n\n      /* The special ARGV-element `--' means premature end of options.\n\t Skip it like a null option,\n\t then exchange with previous non-options as if it were an option,\n\t then skip everything else like a non-option.  */\n\n      if (optind != argc && !strcmp (argv[optind], \"--\"))\n\t{\n\t  optind++;\n\n\t  if (first_nonopt != last_nonopt && last_nonopt != optind)\n\t    exchange ((char **) argv);\n\t  else if (first_nonopt == last_nonopt)\n\t    first_nonopt = optind;\n\t  last_nonopt = argc;\n\n\t  optind = argc;\n\t}\n\n      /* If we have done all the ARGV-elements, stop the scan\n\t and back over any non-options that we skipped and permuted.  */\n\n      if (optind == argc)\n\t{\n\t  /* Set the next-arg-index to point at the non-options\n\t     that we previously skipped, so the caller will digest them.  */\n\t  if (first_nonopt != last_nonopt)\n\t    optind = first_nonopt;\n\t  return -1;\n\t}\n\n      /* If we have come to a non-option and did not permute it,\n\t either stop the scan or describe it to the caller and pass it by.  */\n\n      if (NONOPTION_P)\n\t{\n\t  if (ordering == REQUIRE_ORDER)\n\t    return -1;\n\t  optarg = argv[optind++];\n\t  return 1;\n\t}\n\n      /* We have found another option-ARGV-element.\n\t Skip the initial punctuation.  */\n\n      nextchar = (argv[optind] + 1\n\t\t  + (longopts != NULL && argv[optind][1] == '-'));\n    }\n\n  /* Decode the current option-ARGV-element.  */\n\n  /* Check whether the ARGV-element is a long option.\n\n     If long_only and the ARGV-element has the form \"-f\", where f is\n     a valid short option, don't consider it an abbreviated form of\n     a long option that starts with f.  Otherwise there would be no\n     way to give the -f short option.\n\n     On the other hand, if there's a long option \"fubar\" and\n     the ARGV-element is \"-fu\", do consider that an abbreviation of\n     the long option, just like \"--fu\", and not \"-f\" with arg \"u\".\n\n     This distinction seems to be the most useful approach.  */\n\n  if (longopts != NULL\n      && (argv[optind][1] == '-'\n\t  || (long_only && (argv[optind][2] || !my_index (optstring, argv[optind][1])))))\n    {\n      char *nameend;\n      const struct option *p;\n      const struct option *pfound = NULL;\n      int exact = 0;\n      int ambig = 0;\n      int indfound = -1;\n      int option_index;\n\n      for (nameend = nextchar; *nameend && *nameend != '='; nameend++)\n\t/* Do nothing.  */ ;\n\n      /* Test all long options for either exact match\n\t or abbreviated matches.  */\n      for (p = longopts, option_index = 0; p->name; p++, option_index++)\n\tif (!strncmp (p->name, nextchar, nameend - nextchar))\n\t  {\n\t    if ((unsigned int) (nameend - nextchar)\n\t\t== (unsigned int) strlen (p->name))\n\t      {\n\t\t/* Exact match found.  */\n\t\tpfound = p;\n\t\tindfound = option_index;\n\t\texact = 1;\n\t\tbreak;\n\t      }\n\t    else if (pfound == NULL)\n\t      {\n\t\t/* First nonexact match found.  */\n\t\tpfound = p;\n\t\tindfound = option_index;\n\t      }\n\t    else\n\t      /* Second or later nonexact match found.  */\n\t      ambig = 1;\n\t  }\n\n      if (ambig && !exact)\n\t{\n\t  if (opterr)\n\t    fprintf (stderr, _(\"%s: option `%s' is ambiguous\\n\"),\n\t\t     argv[0], argv[optind]);\n\t  nextchar += strlen (nextchar);\n\t  optind++;\n\t  optopt = 0;\n\t  return '?';\n\t}\n\n      if (pfound != NULL)\n\t{\n\t  option_index = indfound;\n\t  optind++;\n\t  if (*nameend)\n\t    {\n\t      /* Don't test has_arg with >, because some C compilers don't\n\t\t allow it to be used on enums.  */\n\t      if (pfound->has_arg)\n\t\toptarg = nameend + 1;\n\t      else\n\t\t{\n\t\t  if (opterr)\n\t\t   if (argv[optind - 1][1] == '-')\n\t\t    /* --option */\n\t\t    fprintf (stderr,\n\t\t     _(\"%s: option `--%s' doesn't allow an argument\\n\"),\n\t\t     argv[0], pfound->name);\n\t\t   else\n\t\t    /* +option or -option */\n\t\t    fprintf (stderr,\n\t\t     _(\"%s: option `%c%s' doesn't allow an argument\\n\"),\n\t\t     argv[0], argv[optind - 1][0], pfound->name);\n\n\t\t  nextchar += strlen (nextchar);\n\n\t\t  optopt = pfound->val;\n\t\t  return '?';\n\t\t}\n\t    }\n\t  else if (pfound->has_arg == 1)\n\t    {\n\t      if (optind < argc)\n\t\toptarg = argv[optind++];\n\t      else\n\t\t{\n\t\t  if (opterr)\n\t\t    fprintf (stderr,\n\t\t\t   _(\"%s: option `%s' requires an argument\\n\"),\n\t\t\t   argv[0], argv[optind - 1]);\n\t\t  nextchar += strlen (nextchar);\n\t\t  optopt = pfound->val;\n\t\t  return optstring[0] == ':' ? ':' : '?';\n\t\t}\n\t    }\n\t  nextchar += strlen (nextchar);\n\t  if (longind != NULL)\n\t    *longind = option_index;\n\t  if (pfound->flag)\n\t    {\n\t      *(pfound->flag) = pfound->val;\n\t      return 0;\n\t    }\n\t  return pfound->val;\n\t}\n\n      /* Can't find it as a long option.  If this is not getopt_long_only,\n\t or the option starts with '--' or is not a valid short\n\t option, then it's an error.\n\t Otherwise interpret it as a short option.  */\n      if (!long_only || argv[optind][1] == '-'\n\t  || my_index (optstring, *nextchar) == NULL)\n\t{\n\t  if (opterr)\n\t    {\n\t      if (argv[optind][1] == '-')\n\t\t/* --option */\n\t\tfprintf (stderr, _(\"%s: unrecognized option `--%s'\\n\"),\n\t\t\t argv[0], nextchar);\n\t      else\n\t\t/* +option or -option */\n\t\tfprintf (stderr, _(\"%s: unrecognized option `%c%s'\\n\"),\n\t\t\t argv[0], argv[optind][0], nextchar);\n\t    }\n\t  nextchar = (char *) \"\";\n\t  optind++;\n\t  optopt = 0;\n\t  return '?';\n\t}\n    }\n\n  /* Look at and handle the next short option-character.  */\n\n  {\n    char c = *nextchar++;\n    char *temp = my_index (optstring, c);\n\n    /* Increment `optind' when we start to process its last character.  */\n    if (*nextchar == '\\0')\n      ++optind;\n\n    if (temp == NULL || c == ':')\n      {\n\tif (opterr)\n\t  {\n\t    if (posixly_correct)\n\t      /* 1003.2 specifies the format of this message.  */\n\t      fprintf (stderr, _(\"%s: illegal option -- %c\\n\"),\n\t\t       argv[0], c);\n\t    else\n\t      fprintf (stderr, _(\"%s: invalid option -- %c\\n\"),\n\t\t       argv[0], c);\n\t  }\n\toptopt = c;\n\treturn '?';\n      }\n    /* Convenience. Treat POSIX -W foo same as long option --foo */\n    if (temp[0] == 'W' && temp[1] == ';')\n      {\n\tchar *nameend;\n\tconst struct option *p;\n\tconst struct option *pfound = NULL;\n\tint exact = 0;\n\tint ambig = 0;\n\tint indfound = 0;\n\tint option_index;\n\n\t/* This is an option that requires an argument.  */\n\tif (*nextchar != '\\0')\n\t  {\n\t    optarg = nextchar;\n\t    /* If we end this ARGV-element by taking the rest as an arg,\n\t       we must advance to the next element now.  */\n\t    optind++;\n\t  }\n\telse if (optind == argc)\n\t  {\n\t    if (opterr)\n\t      {\n\t\t/* 1003.2 specifies the format of this message.  */\n\t\tfprintf (stderr, _(\"%s: option requires an argument -- %c\\n\"),\n\t\t\t argv[0], c);\n\t      }\n\t    optopt = c;\n\t    if (optstring[0] == ':')\n\t      c = ':';\n\t    else\n\t      c = '?';\n\t    return c;\n\t  }\n\telse\n\t  /* We already incremented `optind' once;\n\t     increment it again when taking next ARGV-elt as argument.  */\n\t  optarg = argv[optind++];\n\n\t/* optarg is now the argument, see if it's in the\n\t   table of longopts.  */\n\n\tfor (nextchar = nameend = optarg; *nameend && *nameend != '='; nameend++)\n\t  /* Do nothing.  */ ;\n\n\t/* Test all long options for either exact match\n\t   or abbreviated matches.  */\n\tfor (p = longopts, option_index = 0; p->name; p++, option_index++)\n\t  if (!strncmp (p->name, nextchar, nameend - nextchar))\n\t    {\n\t      if ((unsigned int) (nameend - nextchar) == strlen (p->name))\n\t\t{\n\t\t  /* Exact match found.  */\n\t\t  pfound = p;\n\t\t  indfound = option_index;\n\t\t  exact = 1;\n\t\t  break;\n\t\t}\n\t      else if (pfound == NULL)\n\t\t{\n\t\t  /* First nonexact match found.  */\n\t\t  pfound = p;\n\t\t  indfound = option_index;\n\t\t}\n\t      else\n\t\t/* Second or later nonexact match found.  */\n\t\tambig = 1;\n\t    }\n\tif (ambig && !exact)\n\t  {\n\t    if (opterr)\n\t      fprintf (stderr, _(\"%s: option `-W %s' is ambiguous\\n\"),\n\t\t       argv[0], argv[optind]);\n\t    nextchar += strlen (nextchar);\n\t    optind++;\n\t    return '?';\n\t  }\n\tif (pfound != NULL)\n\t  {\n\t    option_index = indfound;\n\t    if (*nameend)\n\t      {\n\t\t/* Don't test has_arg with >, because some C compilers don't\n\t\t   allow it to be used on enums.  */\n\t\tif (pfound->has_arg)\n\t\t  optarg = nameend + 1;\n\t\telse\n\t\t  {\n\t\t    if (opterr)\n\t\t      fprintf (stderr, _(\"\\\n%s: option `-W %s' doesn't allow an argument\\n\"),\n\t\t\t       argv[0], pfound->name);\n\n\t\t    nextchar += strlen (nextchar);\n\t\t    return '?';\n\t\t  }\n\t      }\n\t    else if (pfound->has_arg == 1)\n\t      {\n\t\tif (optind < argc)\n\t\t  optarg = argv[optind++];\n\t\telse\n\t\t  {\n\t\t    if (opterr)\n\t\t      fprintf (stderr,\n\t\t\t       _(\"%s: option `%s' requires an argument\\n\"),\n\t\t\t       argv[0], argv[optind - 1]);\n\t\t    nextchar += strlen (nextchar);\n\t\t    return optstring[0] == ':' ? ':' : '?';\n\t\t  }\n\t      }\n\t    nextchar += strlen (nextchar);\n\t    if (longind != NULL)\n\t      *longind = option_index;\n\t    if (pfound->flag)\n\t      {\n\t\t*(pfound->flag) = pfound->val;\n\t\treturn 0;\n\t      }\n\t    return pfound->val;\n\t  }\n\t  nextchar = NULL;\n\t  return 'W';\t/* Let the application handle it.   */\n      }\n    if (temp[1] == ':')\n      {\n\tif (temp[2] == ':')\n\t  {\n\t    /* This is an option that accepts an argument optionally.  */\n\t    if (*nextchar != '\\0')\n\t      {\n\t\toptarg = nextchar;\n\t\toptind++;\n\t      }\n\t    else\n\t      optarg = NULL;\n\t    nextchar = NULL;\n\t  }\n\telse\n\t  {\n\t    /* This is an option that requires an argument.  */\n\t    if (*nextchar != '\\0')\n\t      {\n\t\toptarg = nextchar;\n\t\t/* If we end this ARGV-element by taking the rest as an arg,\n\t\t   we must advance to the next element now.  */\n\t\toptind++;\n\t      }\n\t    else if (optind == argc)\n\t      {\n\t\tif (opterr)\n\t\t  {\n\t\t    /* 1003.2 specifies the format of this message.  */\n\t\t    fprintf (stderr,\n\t\t\t   _(\"%s: option requires an argument -- %c\\n\"),\n\t\t\t   argv[0], c);\n\t\t  }\n\t\toptopt = c;\n\t\tif (optstring[0] == ':')\n\t\t  c = ':';\n\t\telse\n\t\t  c = '?';\n\t      }\n\t    else\n\t      /* We already incremented `optind' once;\n\t\t increment it again when taking next ARGV-elt as argument.  */\n\t      optarg = argv[optind++];\n\t    nextchar = NULL;\n\t  }\n      }\n    return c;\n  }\n}",
+    "calls": [
+      {
+        "caller": "getopt.c:getopt",
+        "span": "getopt.c:978:10:981:9",
+        "source": "return _getopt_internal (argc, argv, optstring,"
+      },
+      {
+        "caller": "getopt1.c:getopt_long",
+        "span": "getopt1.c:75:10:75:76",
+        "source": "return _getopt_internal (argc, argv, options, long_options, opt_index, 0);"
+      },
+      {
+        "caller": "getopt1.c:getopt_long_only",
+        "span": "getopt1.c:91:10:91:76",
+        "source": "return _getopt_internal (argc, argv, options, long_options, opt_index, 1);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "getopt.c:getopt",
+    "span": "getopt.c:972:1:982:2",
+    "pieces": [
+      "getopt.c:972:1:982:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 11,
+    "source": "int\ngetopt (argc, argv, optstring)\n     int argc;\n     char *const *argv;\n     const char *optstring;\n{\n  return _getopt_internal (argc, argv, optstring,\n\t\t\t   (const struct option *) 0,\n\t\t\t   (int *) 0,\n\t\t\t   0);\n}",
+    "calls": [
+      {
+        "caller": "getopt.c:main",
+        "span": "getopt.c:1004:11:1004:50",
+        "source": "c = getopt (argc, argv, \"abc:d:0123456789\");"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "getopt.c:main",
+    "span": "getopt.c:992:1:1055:2",
+    "pieces": [
+      "getopt.c:992:1:1055:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 64,
+    "source": "int\nmain (argc, argv)\n     int argc;\n     char **argv;\n{\n  int c;\n  int digit_optind = 0;\n\n  while (1)\n    {\n      int this_option_optind = optind ? optind : 1;\n\n      c = getopt (argc, argv, \"abc:d:0123456789\");\n      if (c == -1)\n\tbreak;\n\n      switch (c)\n\t{\n\tcase '0':\n\tcase '1':\n\tcase '2':\n\tcase '3':\n\tcase '4':\n\tcase '5':\n\tcase '6':\n\tcase '7':\n\tcase '8':\n\tcase '9':\n\t  if (digit_optind != 0 && digit_optind != this_option_optind)\n\t    printf (\"digits occur in two different argv-elements.\\n\");\n\t  digit_optind = this_option_optind;\n\t  printf (\"option %c\\n\", c);\n\t  break;\n\n\tcase 'a':\n\t  printf (\"option a\\n\");\n\t  break;\n\n\tcase 'b':\n\t  printf (\"option b\\n\");\n\t  break;\n\n\tcase 'c':\n\t  printf (\"option c with value `%s'\\n\", optarg);\n\t  break;\n\n\tcase '?':\n\t  break;\n\n\tdefault:\n\t  printf (\"?? getopt returned character code 0%o ??\\n\", c);\n\t}\n    }\n\n  if (optind < argc)\n    {\n      printf (\"non-option ARGV-elements: \");\n      while (optind < argc)\n\tprintf (\"%s \", argv[optind++]);\n      printf (\"\\n\");\n    }\n\n  exit (0);\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "getopt1.c:getopt_long",
+    "span": "getopt1.c:67:1:76:2",
+    "pieces": [
+      "getopt1.c:67:1:76:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 10,
+    "source": "int\ngetopt_long (argc, argv, options, long_options, opt_index)\n     int argc;\n     char *const *argv;\n     const char *options;\n     const struct option *long_options;\n     int *opt_index;\n{\n  return _getopt_internal (argc, argv, options, long_options, opt_index, 0);\n}",
+    "calls": [
+      {
+        "caller": "getopt1.c:main",
+        "span": "getopt1.c:125:11:126:38",
+        "source": "c = getopt_long (argc, argv, \"abc:d:0123456789\","
+      },
+      {
+        "caller": "which.c:main",
+        "span": "which.c:451:26:451:73",
+        "source": "while ((short_option = getopt_long(argc, argv, \"aivV\", longopts, NULL)) != -1)"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "getopt1.c:getopt_long_only",
+    "span": "getopt1.c:83:1:92:2",
+    "pieces": [
+      "getopt1.c:83:1:92:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 10,
+    "source": "int\ngetopt_long_only (argc, argv, options, long_options, opt_index)\n     int argc;\n     char *const *argv;\n     const char *options;\n     const struct option *long_options;\n     int *opt_index;\n{\n  return _getopt_internal (argc, argv, options, long_options, opt_index, 1);\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "getopt1.c:main",
+    "span": "getopt1.c:102:1:188:2",
+    "pieces": [
+      "getopt1.c:102:1:188:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 87,
+    "source": "int\nmain (argc, argv)\n     int argc;\n     char **argv;\n{\n  int c;\n  int digit_optind = 0;\n\n  while (1)\n    {\n      int this_option_optind = optind ? optind : 1;\n      int option_index = 0;\n      static struct option long_options[] =\n      {\n\t{\"add\", 1, 0, 0},\n\t{\"append\", 0, 0, 0},\n\t{\"delete\", 1, 0, 0},\n\t{\"verbose\", 0, 0, 0},\n\t{\"create\", 0, 0, 0},\n\t{\"file\", 1, 0, 0},\n\t{0, 0, 0, 0}\n      };\n\n      c = getopt_long (argc, argv, \"abc:d:0123456789\",\n\t\t       long_options, &option_index);\n      if (c == -1)\n\tbreak;\n\n      switch (c)\n\t{\n\tcase 0:\n\t  printf (\"option %s\", long_options[option_index].name);\n\t  if (optarg)\n\t    printf (\" with arg %s\", optarg);\n\t  printf (\"\\n\");\n\t  break;\n\n\tcase '0':\n\tcase '1':\n\tcase '2':\n\tcase '3':\n\tcase '4':\n\tcase '5':\n\tcase '6':\n\tcase '7':\n\tcase '8':\n\tcase '9':\n\t  if (digit_optind != 0 && digit_optind != this_option_optind)\n\t    printf (\"digits occur in two different argv-elements.\\n\");\n\t  digit_optind = this_option_optind;\n\t  printf (\"option %c\\n\", c);\n\t  break;\n\n\tcase 'a':\n\t  printf (\"option a\\n\");\n\t  break;\n\n\tcase 'b':\n\t  printf (\"option b\\n\");\n\t  break;\n\n\tcase 'c':\n\t  printf (\"option c with value `%s'\\n\", optarg);\n\t  break;\n\n\tcase 'd':\n\t  printf (\"option d with value `%s'\\n\", optarg);\n\t  break;\n\n\tcase '?':\n\t  break;\n\n\tdefault:\n\t  printf (\"?? getopt returned character code 0%o ??\\n\", c);\n\t}\n    }\n\n  if (optind < argc)\n    {\n      printf (\"non-option ARGV-elements: \");\n      while (optind < argc)\n\tprintf (\"%s \", argv[optind++]);\n      printf (\"\\n\");\n    }\n\n  exit (0);\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "which.c:print_usage",
+    "span": "which.c:28:1:51:2",
+    "pieces": [
+      "which.c:28:1:51:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 24,
+    "source": "static void print_usage(FILE *out)\n{\n  fprintf(out, \"Usage: %s [options] [--] COMMAND [...]\\n\", progname);\n  fprintf(out, \"Write the full path of COMMAND(s) to standard output.\\n\\n\");\n  fprintf(out, \"  --version, -[vV] Print version and exit successfully.\\n\");\n  fprintf(out, \"  --help,          Print this help and exit successfully.\\n\");\n  fprintf(out, \"  --skip-dot       Skip directories in PATH that start with a dot.\\n\");\n  fprintf(out, \"  --skip-tilde     Skip directories in PATH that start with a tilde.\\n\");\n  fprintf(out, \"  --show-dot       Don't expand a dot to current directory in output.\\n\");\n  fprintf(out, \"  --show-tilde     Output a tilde for HOME directory for non-root.\\n\");\n  fprintf(out, \"  --tty-only       Stop processing options on the right if not on tty.\\n\");\n  fprintf(out, \"  --all, -a        Print all matches in PATH, not just the first\\n\");\n  fprintf(out, \"  --read-alias, -i Read list of aliases from stdin.\\n\");\n  fprintf(out, \"  --skip-alias     Ignore option --read-alias; don't read stdin.\\n\");\n  fprintf(out, \"  --read-functions Read shell functions from stdin.\\n\");\n  fprintf(out, \"  --skip-functions Ignore option --read-functions; don't read stdin.\\n\\n\");\n  fprintf(out, \"Recommended use is to write the output of (alias; declare -f) to standard\\n\");\n  fprintf(out, \"input, so that which can show aliases and shell functions. See which(1) for\\n\");\n  fprintf(out, \"examples.\\n\\n\");\n  fprintf(out, \"If the options --read-alias and/or --read-functions are specified then the\\n\");\n  fprintf(out, \"output can be a full alias or function definition, optionally followed by\\n\");\n  fprintf(out, \"the full path of each command used inside of those.\\n\\n\");\n  fprintf(out, \"Report bugs to <which-bugs@gnu.org>.\\n\");\n}",
+    "calls": [
+      {
+        "caller": "which.c:main",
+        "span": "which.c:459:6:459:25",
+        "source": "print_usage(stdout);"
+      },
+      {
+        "caller": "which.c:main",
+        "span": "which.c:536:5:536:24",
+        "source": "print_usage(stderr);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "which.c:print_version",
+    "span": "which.c:53:1:59:2",
+    "pieces": [
+      "which.c:53:1:59:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 7,
+    "source": "static void print_version(void)\n{\n  fprintf(stdout, \"GNU which v\" VERSION \", Copyright (C) 1999 - 2015 Carlo Wood.\\n\");\n  fprintf(stdout, \"GNU which comes with ABSOLUTELY NO WARRANTY;\\n\");\n  fprintf(stdout, \"This program is free software; your freedom to use, change\\n\");\n  fprintf(stdout, \"and distribute this program is protected by the GPL.\\n\");\n}",
+    "calls": [
+      {
+        "caller": "which.c:main",
+        "span": "which.c:462:6:462:21",
+        "source": "print_version();"
+      },
+      {
+        "caller": "which.c:main",
+        "span": "which.c:498:2:498:17",
+        "source": "print_version();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "which.c:print_fail",
+    "span": "which.c:61:1:64:2",
+    "pieces": [
+      "which.c:61:1:64:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 4,
+    "source": "static void print_fail(const char *name, const char *path_list)\n{\n  fprintf(stderr, \"%s: no %s in (%s)\\n\", progname, name, path_list);\n}",
+    "calls": [
+      {
+        "caller": "which.c:main",
+        "span": "which.c:669:7:669:116",
+        "source": "print_fail(absolute_path_given ? strrchr(*argv, '/') + 1 : *argv, absolute_path_given ? abs_path : path_list);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "which.c:find_command_in_path",
+    "span": "which.c:77:1:163:2",
+    "pieces": [
+      "which.c:77:1:163:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 87,
+    "source": "static char *find_command_in_path(const char *name, const char *path_list, int *path_index)\n{\n  char *found = NULL, *full_path;\n  int status, name_len;\n\n  name_len = strlen(name);\n\n  if (!absolute_program(name))\n    absolute_path_given = 0;\n  else\n  {\n    char *p;\n    absolute_path_given = 1;\n\n    if (abs_path)\n      free(abs_path);\n\n    if (*name != '.' && *name != '/' && *name != '~')\n    {\n      abs_path = (char *)xmalloc(3 + name_len);\n      strcpy(abs_path, \"./\");\n      strcat(abs_path, name);\n    }\n    else\n    {\n      abs_path = (char *)xmalloc(1 + name_len);\n      strcpy(abs_path, name);\n    }\n\n    path_list = abs_path;\n    p = strrchr(abs_path, '/');\n    *p++ = 0;\n    name = p;\n  }\n\n  while (path_list && path_list[*path_index])\n  {\n    char *path;\n\n    if (absolute_path_given)\n    {\n      path = savestring(path_list);\n      *path_index = strlen(path);\n    }\n    else\n      path = get_next_path_element(path_list, path_index);\n\n    if (!path)\n      break;\n\n    if (*path == '~')\n    {\n      char *t = tilde_expand(path);\n      free(path);\n      path = t;\n\n      if (skip_tilde)\n      {\n\tfree(path);\n\tcontinue;\n      }\n    }\n\n    if (skip_dot && *path != '/')\n    {\n      free(path);\n      continue;\n    }\n\n    found_path_starts_with_dot = (*path == '.');\n\n    full_path = make_full_pathname(path, name, name_len);\n    free(path);\n\n    status = file_status(full_path);\n\n    if ((status & FS_EXISTS) && (status & FS_EXECABLE))\n    {\n      found = full_path;\n      break;\n    }\n\n    free(full_path);\n  }\n\n  return (found);\n}",
+    "calls": [
+      {
+        "caller": "which.c:path_search",
+        "span": "which.c:300:16:300:65",
+        "source": "result = find_command_in_path(cmd, path_list, &path_index);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "which.c:get_current_working_directory",
+    "span": "which.c:168:1:193:2",
+    "pieces": [
+      "which.c:168:1:193:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 26,
+    "source": "static void get_current_working_directory(void)\n{\n  if (cwdlen)\n    return;\n\n  if (!getcwd(cwd, sizeof(cwd)))\n  {\n    const char *pwd = getenv(\"PWD\");\n    if (pwd && strlen(pwd) < sizeof(cwd))\n      strcpy(cwd, pwd);\n  }\n\n  if (*cwd != '/')\n  {\n    fprintf(stderr, \"Can't get current working directory\\n\");\n    exit(-1);\n  }\n\n  cwdlen = strlen(cwd);\n\n  if (cwd[cwdlen - 1] != '/')\n  {\n    cwd[cwdlen++] = '/';\n    cwd[cwdlen] = 0;\n  }\n}",
+    "calls": [
+      {
+        "caller": "which.c:path_clean_up",
+        "span": "which.c:206:5:206:36",
+        "source": "get_current_working_directory();"
+      },
+      {
+        "caller": "which.c:main",
+        "span": "which.c:506:5:506:36",
+        "source": "get_current_working_directory();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "which.c:path_clean_up",
+    "span": "which.c:195:1:245:2",
+    "pieces": [
+      "which.c:195:1:245:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 51,
+    "source": "static char *path_clean_up(const char *path)\n{\n  static char result[256];\n\n  const char *p1 = path;\n  char *p2 = result;\n\n  int saw_slash = 0, saw_slash_dot = 0, saw_slash_dot_dot = 0;\n\n  if (*p1 != '/')\n  {\n    get_current_working_directory();\n    strcpy(result, cwd);\n    saw_slash = 1;\n    p2 = &result[cwdlen];\n  }\n\n  do\n  {\n    /*\n     * Two leading slashes are allowed, having an OS implementation-defined meaning.\n     * See http://www.opengroup.org/onlinepubs/009695399/basedefs/xbd_chap04.html#tag_04_11\n     */\n    if (!saw_slash || *p1 != '/' || (p1 == path + 1 && p1[1] != '/'))\n      *p2++ = *p1;\n    if (saw_slash_dot && (*p1 == '/'))\n      p2 -= 2;\n    if (saw_slash_dot_dot && (*p1 == '/'))\n    {\n      int cnt = 0;\n      do\n      {\n\tif (--p2 < result)\n\t{\n\t  strcpy(result, path);\n\t  return result;\n\t}\n\tif (*p2 == '/')\n\t  ++cnt;\n      }\n      while (cnt != 3);\n      ++p2;\n    }\n    saw_slash_dot_dot = saw_slash_dot && (*p1 == '.');\n    saw_slash_dot = saw_slash && (*p1 == '.');\n    saw_slash = (*p1 == '/');\n  }\n  while (*p1++);\n\n  return result;\n}",
+    "calls": [
+      {
+        "caller": "which.c:path_search",
+        "span": "which.c:303:26:303:47",
+        "source": "const char *full_path = path_clean_up(result);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "which.c:func_search",
+    "span": "which.c:262:1:286:2",
+    "pieces": [
+      "which.c:262:1:286:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 25,
+    "source": "int func_search(int indent, const char *cmd, struct function_st *func_list, int function_start_type)\n{\n  int i;\n  for (i = 0; i < func_count; ++i)\n  {\n    if (!strcmp(functions[i].name, cmd))\n    {\n      int j;\n      if (indent)\n        fputc('\\t', stdout);\n      if (function_start_type == 1)\n\tfprintf(stdout, \"%s () {\\n\", cmd);\n      else\n\tfprintf(stdout, \"%s ()\\n\", cmd);\n      for (j = 0; j < functions[i].line_count; ++j)\n      {\n\tif (indent)\n\t  fputc('\\t', stdout);\n        fputs(functions[i].lines[j], stdout);\n      }\n      return 1;\n    }\n  }\n  return 0;\n}",
+    "calls": [
+      {
+        "caller": "which.c:process_alias",
+        "span": "which.c:391:17:391:68",
+        "source": "found = func_search(1, cmd, functions, function_start_type);"
+      },
+      {
+        "caller": "which.c:main",
+        "span": "which.c:665:25:665:78",
+        "source": "found_something = func_search(0, *argv, functions, function_start_type);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "which.c:path_search",
+    "span": "which.c:288:1:337:2",
+    "pieces": [
+      "which.c:288:1:337:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 50,
+    "source": "int path_search(int indent, const char *cmd, const char *path_list)\n{\n  char *result = NULL;\n  int found_something = 0;\n\n  if (path_list && *path_list != '\\0')\n  {\n    int next;\n    int path_index = 0;\n    do\n    {\n      next = show_all;\n      result = find_command_in_path(cmd, path_list, &path_index);\n      if (result)\n      {\n\tconst char *full_path = path_clean_up(result);\n\tint in_home = (show_tilde || skip_tilde) && !strncmp(full_path, home, homelen);\n\tif (indent)\n\t  fprintf(stdout, \"\\t\");\n\tif (!(skip_tilde && in_home) && show_dot && found_path_starts_with_dot && !strncmp(full_path, cwd, cwdlen))\n\t{\n\t  full_path += cwdlen;\n\t  fprintf(stdout, \"./\");\n\t}\n\telse if (in_home)\n\t{\n\t  if (skip_tilde)\n\t  {\n\t    next = 1;\n\t    free(result);\n\t    continue;\n\t  }\n\t  if (show_tilde)\n\t  {\n\t    full_path += homelen;\n\t    fprintf(stdout, \"~/\");\n\t  }\n\t}\n\tfprintf(stdout, \"%s\\n\", full_path);\n\tfree(result);\n\tfound_something = 1;\n      }\n      else\n\tbreak;\n    }\n    while (next);\n  }\n\n  return found_something;\n}",
+    "calls": [
+      {
+        "caller": "which.c:process_alias",
+        "span": "which.c:393:2:393:32",
+        "source": "path_search(1, cmd, path_list);"
+      },
+      {
+        "caller": "which.c:main",
+        "span": "which.c:667:44:667:76",
+        "source": "if ((show_all || !found_something) && !path_search(0, *argv, path_list) && !found_something)"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "which.c:process_alias",
+    "span": "which.c:339:1:407:2",
+    "pieces": [
+      "which.c:339:1:407:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 69,
+    "source": "void process_alias(const char *str, int argc, char *argv[], const char *path_list, int function_start_type)\n{\n  const char *p = str;\n  int len = 0;\n\n  while(*p == ' ' || *p == '\\t')\n    ++p;\n  if (!strncmp(\"alias\", p, 5))\n    p += 5;\n  while(*p == ' ' || *p == '\\t')\n    ++p;\n  while(*p && *p != ' ' && *p != '\\t' && *p != '=')\n    ++p, ++len;\n\n  for (; argc > 0; --argc, ++argv)\n  {\n    char q = 0;\n    char *cmd;\n\n    if (!*argv || len != strlen(*argv) || strncmp(*argv, &p[-len], len))\n      continue;\n\n    fputs(str, stdout);\n\n    if (!show_all)\n      *argv = NULL;\n\n    while(*p == ' ' || *p == '\\t')\n      ++p;\n    if (*p == '=')\n      ++p;\n    while(*p == ' ' || *p == '\\t')\n      ++p;\n    if (*p == '\"' || *p == '\\'')\n      q = *p, ++p;\n\n    for(;;)\n    {\n      int found = 0;\n\n      while(*p == ' ' || *p == '\\t')\n\t++p;\n      len = 0;\n      while(*p && *p != ' ' && *p != '\\t' && *p != q && *p != '|' && *p != '&')\n\t++p, ++len;\n\n      cmd = (char *)xmalloc(len + 1);\n      strncpy(cmd, &p[-len], len);\n      cmd[len] = 0;\n      if (*argv && !strcmp(cmd, *argv))\n        *argv = NULL;\n      if (read_functions && !strchr(cmd, '/'))\n        found = func_search(1, cmd, functions, function_start_type);\n      if (show_all || !found)\n\tpath_search(1, cmd, path_list);\n      free(cmd);\n\n      while(*p && (*p != '|' || p[1] == '|') && (*p != '&' || p[1] == '&'))\n        ++p;\n\n      if (!*p)\n        break;\n\n      ++p;\n    }\n\n    break;\n  }\n}",
+    "calls": [
+      {
+        "caller": "which.c:main",
+        "span": "which.c:653:2:653:71",
+        "source": "process_alias(aliases[i], argc, argv, path_list, function_start_type);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "which.c:main",
+    "span": "which.c:429:1:675:2",
+    "pieces": [
+      "which.c:429:1:675:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 247,
+    "source": "int main(int argc, char *argv[])\n{\n  const char *path_list = getenv(\"PATH\");\n  int short_option, fail_count = 0;\n  static int long_option;\n  struct option longopts[] = {\n    {\"help\", 0, &long_option, opt_help},\n    {\"version\", 0, &long_option, opt_version},\n    {\"skip-dot\", 0, &long_option, opt_skip_dot},\n    {\"skip-tilde\", 0, &long_option, opt_skip_tilde},\n    {\"show-dot\", 0, &long_option, opt_show_dot},\n    {\"show-tilde\", 0, &long_option, opt_show_tilde},\n    {\"tty-only\", 0, &long_option, opt_tty_only},\n    {\"all\", 0, NULL, 'a'},\n    {\"read-alias\", 0, NULL, 'i'},\n    {\"skip-alias\", 0, &long_option, opt_skip_alias},\n    {\"read-functions\", 0, &long_option, opt_read_functions},\n    {\"skip-functions\", 0, &long_option, opt_skip_functions},\n    {NULL, 0, NULL, 0}\n  };\n\n  progname = argv[0];\n  while ((short_option = getopt_long(argc, argv, \"aivV\", longopts, NULL)) != -1)\n  {\n    switch (short_option)\n    {\n      case 0:\n\tswitch (long_option)\n\t{\n\t  case opt_help:\n\t    print_usage(stdout);\n\t    return 0;\n\t  case opt_version:\n\t    print_version();\n\t    return 0;\n\t  case opt_skip_dot:\n\t    skip_dot = !tty_only;\n\t    break;\n\t  case opt_skip_tilde:\n\t    skip_tilde = !tty_only;\n\t    break;\n\t  case opt_skip_alias:\n\t    skip_alias = 1;\n\t    break;\n\t  case opt_show_dot:\n\t    show_dot = !tty_only;\n\t    break;\n\t  case opt_show_tilde:\n\t    show_tilde = (!tty_only && geteuid() != superuser);\n\t    break;\n\t  case opt_tty_only:\n\t    tty_only = !isatty(1);\n\t    break;\n\t  case opt_read_functions:\n\t    read_functions = 1;\n\t    break;\n\t  case opt_skip_functions:\n\t    skip_functions = 1;\n\t    break;\n\t}\n\tbreak;\n      case 'a':\n\tshow_all = 1;\n\tbreak;\n      case 'i':\n        read_alias = 1;\n\tbreak;\n      case 'v':\n      case 'V':\n\tprint_version();\n\treturn 0;\n    }\n  }\n\n  uidget();\n\n  if (show_dot)\n    get_current_working_directory();\n\n  if (show_tilde || skip_tilde)\n  {\n    const char *h;\n\n    if (!(h = getenv(\"HOME\")))\n      h = sh_get_home_dir();\n\n    strncpy(home, h, sizeof(home));\n    home[sizeof(home) - 1] = 0;\n    homelen = strlen(home);\n    if (home[homelen - 1] != '/' && homelen < sizeof(home) - 1)\n    {\n      strcat(home, \"/\");\n      ++homelen;\n    }\n  }\n\n  if (skip_alias)\n    read_alias = 0;\n\n  if (skip_functions)\n    read_functions = 0;\n\n  argv += optind;\n  argc -= optind;\n\n  if (argc == 0)\n  {\n    print_usage(stderr);\n    return -1;\n  }\n\n  int function_start_type = 0;\n  if (read_alias || read_functions)\n  {\n    char buf[1024];\n    int processing_aliases = read_alias;\n\n    if (isatty(0))\n    {\n      fprintf(stderr, \"%s: %s: Warning: stdin is a tty.\\n\", progname,\n          (read_functions ? read_alias ? \"--read-functions, --read-alias, -i\" : \"--read-functions\" : \"--read-alias, -i\"));\n    }\n\n    while (fgets(buf, sizeof(buf), stdin))\n    {\n      int looks_like_function_start = 0;\n      int function_start_has_declare;\n      if (read_functions)\n      {\n\t// bash version 2.0.5a and older output a pattern for `str' like\n\t// declare -fx FUNCTION_NAME ()\n\t// {\n\t//   body\n\t// }\n\t//\n\t// bash version 2.0.5b and later output a pattern for `str' like\n\t// FUNCTION_NAME ()\n\t// {\n\t//   body\n\t// }\n\tchar *p = buf + strlen(buf) - 1;\n\twhile (isspace(*p) && p > buf + 2)\n\t  --p;\n\tif (*p == ')' && p[-1] == '(' && p[-2] == ' ')\n\t{\n\t  looks_like_function_start = 1;\n\t  function_start_has_declare = (strncmp(\"declare -\", buf, 9) == 0);\n\t}\n\t// Add some zsh support here.\n\t// zsh does output a pattern for `str' like\n\t// FUNCTION () {\n\t//   body\n\t// }\n\tif (p > buf + 4 && *p == '{' && p[-1] == ' ' &&\n\t    p[-2] == ')' && p[-3] == '(' && p[-4] == ' ')\n\t{\n\t  looks_like_function_start = 1;\n\t  function_start_type = 1;\n\t  function_start_has_declare = 0;\n\t}\n      }\n      if (processing_aliases && !looks_like_function_start)\n      {\n\t// bash version 2.0.5b can throw in lines like \"declare -fx FUNCTION_NAME\", eat them.\n\tif (!strncmp(\"declare -\", buf, 9))\n\t  continue;\n\tif (alias_count == max_alias_count)\n\t{\n\t  max_alias_count += 32;\n\t  aliases = (char **)xrealloc(aliases, max_alias_count * sizeof(char *));\n\t}\n\taliases[alias_count++] = strcpy((char *)xmalloc(strlen(buf) + 1), buf);\n      }\n      else if (read_functions && looks_like_function_start)\n      {\n        struct function_st *function;\n        int max_line_count;\n\n\tconst char *p = buf;\n\tint len = 0;\n\n        processing_aliases = 0;\n\n\t// Eat \"declare -fx \" at start of bash version 2.0.5a and older, if present.\n\tif (function_start_has_declare)\n\t{\n\t  p += 9;\n\t  while(*p && *p++ != ' ');\n\t}\n\n\twhile(*p && *p != ' ')\n\t  ++p, ++len;\n\n\tif (func_count == max_func_count)\n\t{\n\t  max_func_count += 16;\n\t  functions = (struct function_st *)xrealloc(functions, max_func_count * sizeof(struct function_st));\n\t}\n\tfunction = &functions[func_count++];\n\tfunction->name = (char *)xmalloc(len + 1);\n\tstrncpy(function->name, &p[-len], len);\n\tfunction->name[len] = 0;\n\tfunction->len = len;\n\tmax_line_count = 32;\n\tfunction->lines = (char **)xmalloc(max_line_count * sizeof(char *));\n\tfunction->line_count = 0;\n\twhile (fgets(buf, sizeof(buf), stdin))\n\t{\n\t  size_t blen = strlen(buf);\n\t  function->lines[function->line_count++] = strcpy((char *)xmalloc(blen + 1), buf);\n\t  if (!strcmp(buf, \"}\\n\"))\n\t    break;\n          if (function->line_count == max_line_count)\n\t  {\n\t    max_line_count += 32;\n\t    function->lines = (char **)xrealloc(function->lines, max_line_count * sizeof(char *));\n\t  }\n\t}\n      }\n    }\n    if (read_alias)\n    {\n      int i;\n      for (i = 0; i < alias_count; ++i)\n\tprocess_alias(aliases[i], argc, argv, path_list, function_start_type);\n    }\n  }\n\n  for (; argc > 0; --argc, ++argv)\n  {\n    int found_something = 0;\n\n    if (!*argv)\n      continue;\n\n    if (read_functions && !strchr(*argv, '/'))\n      found_something = func_search(0, *argv, functions, function_start_type);\n\n    if ((show_all || !found_something) && !path_search(0, *argv, path_list) && !found_something)\n    {\n      print_fail(absolute_path_given ? strrchr(*argv, '/') + 1 : *argv, absolute_path_given ? abs_path : path_list);\n      ++fail_count;\n    }\n  }\n\n  return fail_count;\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "which.c:xmalloc",
+    "span": "which.c:678:1:687:2",
+    "pieces": [
+      "which.c:678:1:687:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 10,
+    "source": "void *xmalloc(size_t size)\n{\n  void *ptr = malloc(size);\n  if (ptr == NULL)\n  {\n    fprintf(stderr, \"%s: Out of memory\", progname);\n    exit(-1);\n  }\n  return ptr;\n}",
+    "calls": [
+      {
+        "caller": "bash.c:substring",
+        "span": "bash.c:346:20:346:37",
+        "source": "result = (char *)xmalloc (len + 1);"
+      },
+      {
+        "caller": "bash.c:extract_colon_unit",
+        "span": "bash.c:389:23:389:34",
+        "source": "value = (char *)xmalloc (1);"
+      },
+      {
+        "caller": "bash.c:make_full_pathname",
+        "span": "bash.c:432:24:432:57",
+        "source": "full_path = (char *) xmalloc (2 + path_len + name_len);"
+      },
+      {
+        "caller": "which.c:find_command_in_path",
+        "span": "which.c:96:26:96:47",
+        "source": "abs_path = (char *)xmalloc(3 + name_len);"
+      },
+      {
+        "caller": "which.c:find_command_in_path",
+        "span": "which.c:102:26:102:47",
+        "source": "abs_path = (char *)xmalloc(1 + name_len);"
+      },
+      {
+        "caller": "which.c:process_alias",
+        "span": "which.c:385:21:385:37",
+        "source": "cmd = (char *)xmalloc(len + 1);"
+      },
+      {
+        "caller": "which.c:main",
+        "span": "which.c:600:42:600:66",
+        "source": "aliases[alias_count++] = strcpy((char *)xmalloc(strlen(buf) + 1), buf);"
+      },
+      {
+        "caller": "which.c:main",
+        "span": "which.c:628:27:628:43",
+        "source": "function->name = (char *)xmalloc(len + 1);"
+      },
+      {
+        "caller": "which.c:main",
+        "span": "which.c:633:29:633:69",
+        "source": "function->lines = (char **)xmalloc(max_line_count * sizeof(char *));"
+      },
+      {
+        "caller": "which.c:main",
+        "span": "which.c:638:61:638:78",
+        "source": "function->lines[function->line_count++] = strcpy((char *)xmalloc(blen + 1), buf);"
+      },
+      {
+        "caller": "which.c:xrealloc",
+        "span": "which.c:692:12:692:25",
+        "source": "return xmalloc(size);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "which.c:xrealloc",
+    "span": "which.c:689:1:700:2",
+    "pieces": [
+      "which.c:689:1:700:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 12,
+    "source": "void *xrealloc(void *ptr, size_t size)\n{\n  if (!ptr)\n    return xmalloc(size);\n  ptr = realloc(ptr, size);\n  if (size > 0 && ptr == NULL)\n  {\n    fprintf(stderr, \"%s: Out of memory\\n\", progname);\n    exit(-1);\n  }\n  return ptr;\n}",
+    "calls": [
+      {
+        "caller": "bash.c:initialize_group_array",
+        "span": "bash.c:158:32:158:88",
+        "source": "group_array = (GETGROUPS_T *)xrealloc (group_array, maxgroups * sizeof (GETGROUPS_T));"
+      },
+      {
+        "caller": "which.c:main",
+        "span": "which.c:598:23:598:74",
+        "source": "aliases = (char **)xrealloc(aliases, max_alias_count * sizeof(char *));"
+      },
+      {
+        "caller": "which.c:main",
+        "span": "which.c:625:38:625:102",
+        "source": "functions = (struct function_st *)xrealloc(functions, max_func_count * sizeof(struct function_st));"
+      },
+      {
+        "caller": "which.c:main",
+        "span": "which.c:644:33:644:91",
+        "source": "function->lines = (char **)xrealloc(function->lines, max_line_count * sizeof(char *));"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "tilde\\shell.c:get_home_dir",
+    "span": "tilde\\shell.c:59:1:70:2",
+    "pieces": [
+      "tilde\\shell.c:59:1:70:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 12,
+    "source": "char *\nget_home_dir ()\n{\n  char *home_dir;\n  struct passwd *entry;\n\n  home_dir = (char *)NULL;\n  entry = getpwuid (getuid ());\n  if (entry)\n    home_dir = entry->pw_dir;\n  return (home_dir);\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "tilde\\tilde.c:tilde_find_prefix",
+    "span": "tilde\\tilde.c:127:1:158:2",
+    "pieces": [
+      "tilde\\tilde.c:127:1:158:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 32,
+    "source": "static int\ntilde_find_prefix (string, len)\n     const char *string;\n     int *len;\n{\n  register int i, j, string_len;\n  register char **prefixes;\n\n  prefixes = tilde_additional_prefixes;\n\n  string_len = strlen (string);\n  *len = 0;\n\n  if (*string == '\\0' || *string == '~')\n    return (0);\n\n  if (prefixes)\n    {\n      for (i = 0; i < string_len; i++)\n\t{\n\t  for (j = 0; prefixes[j]; j++)\n\t    {\n\t      if (strncmp (string + i, prefixes[j], strlen (prefixes[j])) == 0)\n\t\t{\n\t\t  *len = strlen (prefixes[j]) - 1;\n\t\t  return (i + *len);\n\t\t}\n\t    }\n\t}\n    }\n  return (string_len);\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "tilde\\tilde.c:tilde_find_suffix",
+    "span": "tilde\\tilde.c:162:1:188:2",
+    "pieces": [
+      "tilde\\tilde.c:162:1:188:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 27,
+    "source": "static int\ntilde_find_suffix (string)\n     const char *string;\n{\n  register int i, j, string_len;\n  register char **suffixes;\n\n  suffixes = tilde_additional_suffixes;\n  string_len = strlen (string);\n\n  for (i = 0; i < string_len; i++)\n    {\n#if defined (__MSDOS__)\n      if (string[i] == '/' || string[i] == '\\\\' /* || !string[i] */)\n#else\n      if (string[i] == '/' /* || !string[i] */)\n#endif\n\tbreak;\n\n      for (j = 0; suffixes && suffixes[j]; j++)\n\t{\n\t  if (strncmp (string + i, suffixes[j], strlen (suffixes[j])) == 0)\n\t    return (i);\n\t}\n    }\n  return (i);\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "tilde\\tilde.c:memory_error_and_abort",
+    "span": "tilde\\tilde.c:490:1:495:2",
+    "pieces": [
+      "tilde\\tilde.c:490:1:495:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 6,
+    "source": "static void\nmemory_error_and_abort ()\n{\n  fprintf (stderr, \"readline: out of virtual memory\\n\");\n  abort ();\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  }
+]

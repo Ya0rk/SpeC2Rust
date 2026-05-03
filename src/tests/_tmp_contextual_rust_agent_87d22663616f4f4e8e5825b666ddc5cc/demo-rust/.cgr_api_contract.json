@@ -1,0 +1,20 @@
+{
+  "files": {
+    "src/unsafe_api.rs": {
+      "updated_at": "2026-04-29T20:23:48",
+      "contract": {
+        "public_structs": [],
+        "public_enums": [],
+        "public_traits": [],
+        "public_functions": [
+          "c_new"
+        ],
+        "constructors": [],
+        "accessors": [],
+        "impl_methods": {}
+      }
+    }
+  },
+  "project_name": "demo-rust",
+  "updated_at": "2026-04-29T20:23:48"
+}

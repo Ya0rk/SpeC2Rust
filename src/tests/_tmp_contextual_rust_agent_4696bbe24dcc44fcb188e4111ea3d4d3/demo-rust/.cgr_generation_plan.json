@@ -1,0 +1,43 @@
+{
+  "project_name": "demo-rust",
+  "project_path": "E:\\Code\\C2R-Auto\\cGrcode\\src\\tests\\_tmp_contextual_rust_agent_4696bbe24dcc44fcb188e4111ea3d4d3\\demo-rust",
+  "project_structure": "<contextual_plan>\n1. Cargo.toml\n2. src/core.rs\n   role: core type\n   owns: Core\n3. src/lib.rs\n4. README.md\n</contextual_plan>",
+  "implementation_plan": "ContextualRustAgent: demand-driven context, registry constrained, bottom-up generation.",
+  "planned_files": [
+    "Cargo.toml",
+    "src/core.rs",
+    "src/lib.rs",
+    "README.md"
+  ],
+  "updated_at": "2026-04-29T17:52:06",
+  "files": {
+    "Cargo.toml": {
+      "status": "completed",
+      "updated_at": "2026-04-29T17:52:06",
+      "note": "local_cargo_toml",
+      "size": 86,
+      "sha256": "81afa68e7b5bd10464c7120acecda83e9036107d7cc0458a09394fb2078cb5d3"
+    },
+    "src/core.rs": {
+      "status": "completed",
+      "updated_at": "2026-04-29T17:52:06",
+      "note": "contextual_generation",
+      "size": 18,
+      "sha256": "212d802885f480d8d2a18bfb0744a37ac1659bb5ed0821963c2ff40c2ae25246"
+    },
+    "src/lib.rs": {
+      "status": "completed",
+      "updated_at": "2026-04-29T17:52:06",
+      "note": "local_lib_rs",
+      "size": 172,
+      "sha256": "04fca54069f1fe67763334f0e42ba6b3963a0b64271f270f973933fcbed8ab18"
+    },
+    "README.md": {
+      "status": "completed",
+      "updated_at": "2026-04-29T17:52:06",
+      "note": "contextual_generation",
+      "size": 29,
+      "sha256": "5a0eef663043106e522f5367a6f5085538aec90687c0b3426e76457e1de8a524"
+    }
+  }
+}

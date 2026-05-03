@@ -19,6 +19,8 @@ class Config:
         generate_examples=False,
         generate_benches=False,
         skeleton_first=True,
+        round_log_enabled=True,
+        round_log_dir="",
     ):
         self.api_key = api_key or "tcode-12345"
         self.model_name = model_name
@@ -37,6 +39,8 @@ class Config:
         self.generate_examples = bool(generate_examples)
         self.generate_benches = bool(generate_benches)
         self.skeleton_first = bool(skeleton_first)
+        self.round_log_enabled = bool(round_log_enabled)
+        self.round_log_dir = round_log_dir or ""
 
         if config_path:
             self._load_config(config_path)
@@ -82,5 +86,9 @@ class Config:
                 self.generate_benches = bool(config["generate_benches"])
             if "skeleton_first" in config:
                 self.skeleton_first = bool(config["skeleton_first"])
+            if "round_log_enabled" in config:
+                self.round_log_enabled = bool(config["round_log_enabled"])
+            if "round_log_dir" in config:
+                self.round_log_dir = config["round_log_dir"] or ""
         except Exception as e:
             print(f"加载本地 API 配置失败: {e}")

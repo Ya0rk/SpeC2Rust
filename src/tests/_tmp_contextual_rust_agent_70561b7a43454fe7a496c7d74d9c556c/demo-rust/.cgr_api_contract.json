@@ -1,0 +1,46 @@
+{
+  "files": {
+    "src/unsafe_api.rs": {
+      "updated_at": "2026-04-29T20:47:20",
+      "contract": {
+        "public_structs": [],
+        "public_enums": [],
+        "public_traits": [],
+        "public_functions": [
+          "c_new"
+        ],
+        "constructors": [],
+        "accessors": [],
+        "impl_methods": {},
+        "references": [
+          {
+            "path": "src/unsafe_api.rs",
+            "kind": "function",
+            "name": "c_new",
+            "visibility": "public",
+            "public": true,
+            "owner_type": "",
+            "params": [],
+            "return_type": "*mut i32",
+            "signature": "c_new() -> *mut i32"
+          }
+        ]
+      },
+      "references": [
+        {
+          "path": "src/unsafe_api.rs",
+          "kind": "function",
+          "name": "c_new",
+          "visibility": "public",
+          "public": true,
+          "owner_type": "",
+          "params": [],
+          "return_type": "*mut i32",
+          "signature": "c_new() -> *mut i32"
+        }
+      ]
+    }
+  },
+  "project_name": "demo-rust",
+  "updated_at": "2026-04-29T20:47:20"
+}

@@ -15,6 +15,7 @@ class QwenLocalGen:
         # self.api_url = "http://10.249.42.56:8000/v1/chat/completions"
         self.model = model
         self.api_key = api_key
+        self.last_usage = None
 
     def get_response(self, messages, temperature=0, top_k=1):
         """
@@ -46,6 +47,7 @@ class QwenLocalGen:
         retry_count = 0
         while True:
             try:
+                self.last_usage = None
                 response = requests.post(
                     url=self.api_url,
                     json=payload,
@@ -58,6 +60,7 @@ class QwenLocalGen:
                 
                 # 解析响应：提取所有生成结果（vLLM的choices列表对应top_k个结果）
                 response = response.json()
+                self.last_usage = response.get("usage")
                 # print(json.dumps(response, indent=2, ensure_ascii=False))
                 # pause()
                 # print(response['choices'][0]['message']['content'])

@@ -37,6 +37,7 @@ class CustomApiGen:
         self._last_request_time = 0.0
         self._current_max_tokens = self.max_tokens
         self._current_request_label = ""
+        self.last_usage = None
         self.session = requests.Session()
         # 某些环境会注入 HTTP(S)_PROXY，导致兼容 API 走到不稳定代理链路。
         # 对直连模型服务的场景，默认禁用 requests 对环境代理变量的继承。
@@ -150,6 +151,9 @@ class CustomApiGen:
             except Exception:
                 continue
 
+            if event.get("usage"):
+                self.last_usage = event.get("usage")
+
             choices = event.get("choices") or []
             if not choices:
                 continue
@@ -194,6 +198,7 @@ class CustomApiGen:
         while True:
             try:
                 self._wait_for_min_interval()
+                self.last_usage = None
 
                 payload = {
                     "model": self.model,
@@ -202,6 +207,8 @@ class CustomApiGen:
                     "max_tokens": self._current_max_tokens,
                     "stream": self.stream,
                 }
+                if self.stream:
+                    payload["stream_options"] = {"include_usage": True}
                 response = self.session.post(
                     self.api_url,
                     json=payload,
@@ -228,6 +235,7 @@ class CustomApiGen:
 
                 body = response.json()
                 response_end_prematurely_count = 0
+                self.last_usage = body.get("usage")
                 content = body["choices"][0]["message"]["content"]
                 return [self._repair_mojibake_text(content)]
             except Exception as e:

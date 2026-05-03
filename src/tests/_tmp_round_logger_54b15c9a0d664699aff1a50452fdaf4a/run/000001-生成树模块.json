@@ -1,0 +1,30 @@
+{
+  "round_index": 1,
+  "timestamp": "2026-04-29T16:07:58.325",
+  "objective": "生成树模块",
+  "model_name": "custom_api",
+  "backend_name": "CustomApiGen",
+  "duration_seconds": null,
+  "request": [
+    {
+      "role": "user",
+      "content": "build a tree\\nwith nodes"
+    }
+  ],
+  "reply": [
+    "done\\nnext line"
+  ],
+  "error": null,
+  "call_stack": [
+    {
+      "file": "src/agent/rust_agent.py",
+      "line": 10,
+      "function": "generate_code"
+    },
+    {
+      "file": "src/llm/model.py",
+      "line": 20,
+      "function": "generate"
+    }
+  ]
+}

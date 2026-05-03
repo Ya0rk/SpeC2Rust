@@ -1,0 +1,30 @@
+{
+  "files": {
+    "src/core.rs": {
+      "updated_at": "2026-04-29T18:15:34",
+      "contract": {
+        "public_structs": [],
+        "public_enums": [],
+        "public_traits": [],
+        "public_functions": [],
+        "constructors": [],
+        "accessors": [],
+        "impl_methods": {}
+      }
+    },
+    "src/lib.rs": {
+      "updated_at": "2026-04-29T18:15:34",
+      "contract": {
+        "public_structs": [],
+        "public_enums": [],
+        "public_traits": [],
+        "public_functions": [],
+        "constructors": [],
+        "accessors": [],
+        "impl_methods": {}
+      }
+    }
+  },
+  "project_name": "demo-rust",
+  "updated_at": "2026-04-29T18:15:34"
+}

@@ -1,0 +1,2 @@
+{"iteration": 1, "stage": "in_place_start", "baseline_dir": "E:\\Code\\C2R-Auto\\cGrcode\\src\\tests\\_tmp_rust_repair_agent_5741bf6b747f4840ae8c2e60d4988288\\project", "run_dir": "E:\\Code\\C2R-Auto\\cGrcode\\src\\tests\\_tmp_rust_repair_agent_5741bf6b747f4840ae8c2e60d4988288\\project", "in_place": true}
+{"iteration": 1, "stage": "local_sanitize"}

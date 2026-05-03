@@ -1,0 +1,82 @@
+{
+  "files": {
+    "src/core.rs": {
+      "updated_at": "2026-04-29T20:48:28",
+      "contract": {
+        "public_structs": [],
+        "public_enums": [],
+        "public_traits": [],
+        "public_functions": [],
+        "constructors": [],
+        "accessors": [],
+        "impl_methods": {},
+        "references": [
+          {
+            "path": "src/core.rs",
+            "kind": "type",
+            "name": "Core",
+            "visibility": "public",
+            "public": true,
+            "owner_type": "",
+            "params": [],
+            "return_type": "",
+            "signature": "struct Core"
+          }
+        ]
+      },
+      "references": [
+        {
+          "path": "src/core.rs",
+          "kind": "type",
+          "name": "Core",
+          "visibility": "public",
+          "public": true,
+          "owner_type": "",
+          "params": [],
+          "return_type": "",
+          "signature": "struct Core"
+        }
+      ]
+    },
+    "src/lib.rs": {
+      "updated_at": "2026-04-29T20:48:28",
+      "contract": {
+        "public_structs": [],
+        "public_enums": [],
+        "public_traits": [],
+        "public_functions": [],
+        "constructors": [],
+        "accessors": [],
+        "impl_methods": {},
+        "references": [
+          {
+            "path": "src/lib.rs",
+            "kind": "module",
+            "name": "core",
+            "visibility": "public",
+            "public": true,
+            "owner_type": "",
+            "params": [],
+            "return_type": "",
+            "signature": "core"
+          }
+        ]
+      },
+      "references": [
+        {
+          "path": "src/lib.rs",
+          "kind": "module",
+          "name": "core",
+          "visibility": "public",
+          "public": true,
+          "owner_type": "",
+          "params": [],
+          "return_type": "",
+          "signature": "core"
+        }
+      ]
+    }
+  },
+  "project_name": "demo-rust",
+  "updated_at": "2026-04-29T20:48:28"
+}

@@ -1,0 +1,2559 @@
+import os
+import sys
+import json
+import re
+from pathlib import Path
+from typing import List, Dict, Optional, Sequence, Set, Tuple
+from datetime import datetime
+
+sys.path.append(str(Path(__file__).parent))
+
+from parse.c_ast import CCodeAnalyzer
+from utils.code_analyzer import CodeAnalyzer
+from utils.document_generator import DocumentGenerator
+from config.config import Config
+from config.prompt import prompt_manager
+from llm.model import Model
+from agent.pointer_agent import PointerAgent
+from agent.macro_agent import MacroAgent
+from agent.split import ModuleSplitter
+from agent.alternatives.rust_generation_spec_agent import (
+    RustFilePlan,
+    RustGenerationSpecAgent,
+    RustGenerationSpecPrompts,
+)
+from utils.spec import specify_init
+
+
+class ContextualSpecAgent:
+    """Alternative spec agent built by incrementally refining the base SpecAgent."""
+    # 以下常量主要用于控制 prompt 尺寸，避免本地模型在单次生成时吃到过长上下文。
+    # 这些值不是业务语义的一部分，而是服务于“文档可生成、可汇总、可继续喂给下游模型”。
+    MAX_CONTEXT_CHARS = 12000
+    MAX_BATCH_CHARS = 9000
+    MAX_MODULE_ANALYSIS_CHARS = 1600
+    MAX_CONSTITUTION_DOC_CHARS = 2000
+    MAX_INTERFACE_HEADERS = 12
+    MAX_INTERFACE_FUNCTIONS = 20
+    MAX_INTERFACE_STRUCTS = 20
+    
+    def __init__(self, config: Config = None, enable_c_pipeline: bool = True):
+        """
+        初始化 ContextualSpecAgent
+        
+        Args:
+            config: 配置对象
+        """
+        # 加载配置
+        self.config = config or Config()
+        self.llm = Model(self.config)
+        
+        # C->spec 主流程保留，但改成可懒初始化；作为 Rust context 门面时不需要整套分析器。
+        self.parser = None
+        self.analyzer = None
+        self.doc_generator = None
+        self.module_splitter = None
+        self._c_pipeline_initialized = False
+        if enable_c_pipeline:
+            self._ensure_c_pipeline()
+        
+        # 存储分析结果
+        self.project_analysis = None
+        self.repo_unit = None
+        self.module_units = []
+        self.file_units = []
+        self.cluster_units = []
+        self.dependency_graph = {}
+        self.pointer_findings = []
+        self.macro_findings = []
+        self.pointer_notes_enabled = False
+        self.macro_notes_enabled = False
+        self._rust_context_agent: Optional[RustGenerationSpecAgent] = None
+
+    def _ensure_c_pipeline(self):
+        if self._c_pipeline_initialized:
+            return
+        self.parser = CCodeAnalyzer()
+        self.analyzer = CodeAnalyzer(self.llm)
+        self.doc_generator = DocumentGenerator(self.llm)
+        self.module_splitter = ModuleSplitter()
+        self._c_pipeline_initialized = True
+
+    def _truncate_text(self, text: str, max_chars: int) -> str:
+        # 简单的字符级裁剪器。这里不用 tokenizer，是为了保持依赖轻量且实现简单。
+        # 可优化点：如果后续要更精细地控制上下文预算，可以改成 token 级裁剪，
+        # 并按标题、列表、代码块边界截断，减少把语义片段从中间截开的情况。
+        if not text or len(text) <= max_chars:
+            return text or ""
+        return text[:max_chars].rstrip() + "\n...[truncated]"
+
+    def _chunk_blocks(self, blocks: List[str], max_chars: int) -> List[str]:
+        # 把多个文本块按近似字符预算分批，供多轮 LLM 汇总使用。
+        chunks = []
+        current_blocks = []
+        current_size = 0
+
+        for block in blocks:
+            block_size = len(block)
+            if current_blocks and current_size + block_size + 2 > max_chars:
+                chunks.append("\n\n".join(current_blocks))
+                current_blocks = [block]
+                current_size = block_size
+                continue
+
+            current_blocks.append(block)
+            current_size += block_size + (2 if current_blocks else 0)
+
+        if current_blocks:
+            chunks.append("\n\n".join(current_blocks))
+
+        return chunks
+
+    def _extract_done_marker(self, content: str) -> Tuple[str, bool]:
+        """
+        从长文档续写结果中剥离完成标记。
+        """
+        text = content or ""
+        done = "<CGR_DONE>" in text
+        return text.replace("<CGR_DONE>", "").strip(), done
+
+    def _strip_outer_markdown_fence(self, content: str) -> str:
+        text = (content or "").strip()
+        fenced = re.match(r"^```(?:markdown|md)?\s*\n(.*)\n```$", text, re.DOTALL | re.IGNORECASE)
+        if fenced:
+            return fenced.group(1).strip()
+        return text
+
+    def _markdown_list_item_key(self, line: str) -> str:
+        stripped = (line or "").strip()
+        if not stripped:
+            return ""
+
+        bullet_match = re.match(r"^(?:[-*+]|(?:\d+[.)]))\s+(.*)$", stripped)
+        if not bullet_match:
+            return ""
+
+        body = bullet_match.group(1).strip()
+        body = re.sub(r"`([^`]+)`", r"\1", body)
+        return self._collapse_whitespace(body).lower()
+
+    def _postprocess_generated_markdown(self, content: str) -> str:
+        """
+        对 LLM 生成的 markdown 做轻量去重和包装清洗。
+        这里只做确定性、低风险的压缩，不改写业务语义。
+        """
+        text = self._strip_outer_markdown_fence(content).replace("\r\n", "\n").replace("\r", "\n")
+        if not text:
+            return ""
+
+        output_lines: List[str] = []
+        in_code_block = False
+        seen_list_items_in_section: Set[str] = set()
+        previous_nonempty = ""
+        previous_heading = ""
+
+        for raw_line in text.split("\n"):
+            line = raw_line.rstrip()
+            stripped = line.strip()
+
+            if stripped.startswith("```"):
+                in_code_block = not in_code_block
+                output_lines.append(line)
+                previous_nonempty = stripped
+                continue
+
+            if in_code_block:
+                output_lines.append(line)
+                continue
+
+            if not stripped:
+                if output_lines and output_lines[-1] == "":
+                    continue
+                output_lines.append("")
+                continue
+
+            if stripped.startswith("#"):
+                heading_key = self._collapse_whitespace(stripped).lower()
+                if heading_key == previous_heading:
+                    continue
+                previous_heading = heading_key
+                seen_list_items_in_section = set()
+                output_lines.append(line)
+                previous_nonempty = heading_key
+                continue
+
+            list_key = self._markdown_list_item_key(line)
+            if list_key:
+                if list_key in seen_list_items_in_section:
+                    continue
+                seen_list_items_in_section.add(list_key)
+
+            normalized_line = self._collapse_whitespace(stripped)
+            if normalized_line == previous_nonempty:
+                continue
+
+            output_lines.append(line)
+            previous_nonempty = normalized_line
+
+        while output_lines and output_lines[-1] == "":
+            output_lines.pop()
+
+        return "\n".join(output_lines).strip()
+
+    def _generate_markdown_with_continuation(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_rounds: int = 4,
+        label: str = "",
+    ) -> str:
+        """
+        对长 markdown 文档启用续写式生成，减少单次长响应中断的概率。
+        """
+        accumulated = ""
+        initial_prompt = (
+            user_prompt
+            + "\n\n额外要求：\n"
+            + "1. 如果一次无法写完，请先输出前半部分，并且只有在真正完成时才在末尾追加 <CGR_DONE>\n"
+            + "2. 如果尚未完成，不要输出 <CGR_DONE>\n"
+            + "3. 续写时不要重复前文，要从上一次结尾处直接继续\n"
+            + "4. 只输出 markdown 正文和可能的 <CGR_DONE>，不要输出解释\n"
+        )
+
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': initial_prompt}
+        ]
+
+        for round_index in range(1, max_rounds + 1):
+            self.llm.set_request_label(f"{label or 'Spec 文档生成'} [round {round_index}]")
+            response = self.llm.generate(messages)
+            chunk = response[0]
+            chunk, done = self._extract_done_marker(chunk)
+
+            if chunk:
+                accumulated += chunk
+
+            if done:
+                return self._postprocess_generated_markdown(accumulated)
+
+            if round_index == max_rounds:
+                break
+
+            messages = [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'assistant', 'content': accumulated},
+                {
+                    'role': 'user',
+                    'content': '上一次输出尚未完成，请从刚才最后位置继续，不要重复前文；完成时仅在末尾追加 <CGR_DONE>。'
+                }
+            ]
+
+        return self._postprocess_generated_markdown(accumulated)
+
+    def _normalize_struct_entries(self, structs: List) -> List[Dict]:
+        # 接口文档阶段统一把结构体条目变成 dict，避免后续 prompt 拼接逻辑分支过多。
+        normalized = []
+        for struct in structs:
+            if isinstance(struct, dict):
+                record = dict(struct)
+                if not record.get("file"):
+                    record["file"] = record.get("filename", "unknown")
+                if not record.get("start_line"):
+                    record["start_line"] = record.get("startLine", 0)
+                if not record.get("end_line"):
+                    record["end_line"] = record.get("endLine", 0)
+                normalized.append(record)
+            elif isinstance(struct, str):
+                normalized.append({"name": struct, "file": "unknown"})
+        return normalized
+
+    def _collect_headers_for_module(self, module: Dict, project_analysis: Dict) -> List[str]:
+        # module_units 本身主要是从 .c 文件划出来的，这里额外把同目录头文件挂到模块接口文档上。
+        file_map = project_analysis.get("file_path_map", {})
+        module_dir = module.get("directory", "root")
+        headers = []
+
+        for rel_path in file_map.keys():
+            if not rel_path.endswith(".h"):
+                continue
+            header_dir = os.path.dirname(rel_path) or "root"
+            if header_dir == module_dir:
+                headers.append(rel_path)
+
+        return sorted(headers)
+
+    def _normalize_path(self, path: str) -> str:
+        return (path or "").replace("\\", "/")
+
+    def _format_source_location(self, file_path: str, start_line: int = 0, end_line: int = 0) -> str:
+        normalized = self._normalize_path(file_path) or "unknown"
+        start = int(start_line or 0)
+        end = int(end_line or 0)
+
+        if start > 0 and end > 0 and end != start:
+            return f"[{normalized}:{start}-{end}]"
+        if start > 0:
+            return f"[{normalized}:{start}]"
+        return f"[{normalized}]"
+
+    def _collapse_whitespace(self, text: str) -> str:
+        return re.sub(r"\s+", " ", (text or "").strip())
+
+    def _trim_inline(self, text: str, max_chars: int = 200) -> str:
+        collapsed = self._collapse_whitespace(text)
+        if len(collapsed) <= max_chars:
+            return collapsed
+        return collapsed[: max_chars - 3].rstrip() + "..."
+
+    def _extract_declaration_excerpt(self, source: str, terminator: str = ";", max_chars: int = 220) -> str:
+        if not source:
+            return ""
+
+        snippet = source.split("{", 1)[0].strip()
+        if not snippet:
+            snippet = source.strip().splitlines()[0]
+
+        snippet = self._collapse_whitespace(snippet)
+        if snippet and terminator and not snippet.endswith(terminator):
+            snippet += terminator
+
+        if len(snippet) <= max_chars:
+            return snippet
+        return snippet[: max_chars - 3].rstrip() + "..."
+
+    def _build_directory_summary(self, files: List[str]) -> List[Tuple[str, List[str]]]:
+        grouped = {}
+        for rel_path in sorted(self._normalize_path(path) for path in files):
+            directory = os.path.dirname(rel_path) or "root"
+            grouped.setdefault(directory, []).append(rel_path)
+        return sorted(grouped.items(), key=lambda item: item[0])
+
+    def _resolve_header_reference(self, include_name: str, header_files: List[str]) -> str:
+        normalized = self._normalize_path(include_name)
+        if not normalized:
+            return ""
+
+        header_set = set(header_files)
+        if normalized in header_set:
+            return normalized
+
+        basename = os.path.basename(normalized)
+        matches = [header for header in header_files if os.path.basename(header) == basename]
+        if len(matches) == 1:
+            return matches[0]
+
+        stem = os.path.splitext(basename)[0]
+        stem_matches = [
+            header for header in header_files
+            if os.path.splitext(os.path.basename(header))[0] == stem
+        ]
+        if len(stem_matches) == 1:
+            return stem_matches[0]
+
+        return ""
+
+    def _collect_module_header_records(self, module: Dict, project_analysis: Dict) -> List[Dict]:
+        file_map = {
+            self._normalize_path(rel_path): abs_path
+            for rel_path, abs_path in project_analysis.get("file_path_map", {}).items()
+        }
+        header_files = sorted([path for path in file_map.keys() if path.endswith(".h")])
+        observed = set(self._normalize_path(path) for path in module.get("headers", []))
+        observed.update(self._collect_headers_for_module(module, project_analysis))
+
+        include_graph = self.dependency_graph.get("include_graph", {})
+        for module_file in module.get("files", []):
+            normalized_file = self._normalize_path(module_file)
+            for included in include_graph.get(normalized_file, []):
+                resolved = self._resolve_header_reference(included, header_files)
+                if resolved:
+                    observed.add(resolved)
+
+        for func in module.get("functions", []):
+            func_file = self._normalize_path(func.get("file", ""))
+            if not func_file:
+                continue
+            stem = os.path.splitext(os.path.basename(func_file))[0]
+            stem_matches = [
+                header for header in header_files
+                if os.path.splitext(os.path.basename(header))[0] == stem
+            ]
+            if len(stem_matches) == 1:
+                observed.add(stem_matches[0])
+
+        records = []
+        for header in sorted(path for path in observed if path):
+            records.append(
+                {
+                    "path": header,
+                    "location": self._format_source_location(header),
+                    "absolute_path": file_map.get(header, ""),
+                }
+            )
+
+        return records[:self.MAX_INTERFACE_HEADERS]
+
+    def _collect_module_macros(self, module: Dict, project_analysis: Dict, header_records: List[Dict]) -> List[Dict]:
+        relevant_files = {self._normalize_path(path) for path in module.get("files", [])}
+        relevant_files.update(self._normalize_path(item["path"]) for item in header_records)
+        macros = []
+
+        for macro in project_analysis.get("macros", []):
+            file_path = self._normalize_path(macro.get("filename", ""))
+            if file_path not in relevant_files:
+                continue
+            macros.append(
+                {
+                    "name": macro.get("name", "unknown"),
+                    "file": file_path,
+                    "start_line": macro.get("startLine", 0),
+                    "end_line": macro.get("endLine", 0),
+                    "source": macro.get("source", ""),
+                }
+            )
+
+        macros.sort(key=lambda item: (item["file"], item["start_line"], item["name"]))
+        return macros[:20]
+
+    def _collect_module_globals(self, module: Dict, project_analysis: Dict) -> List[Dict]:
+        relevant_files = {self._normalize_path(path) for path in module.get("files", [])}
+        globals_list = []
+
+        for variable in project_analysis.get("global_vars", []):
+            file_path = self._normalize_path(variable.get("filename", ""))
+            if file_path not in relevant_files:
+                continue
+            globals_list.append(
+                {
+                    "name": variable.get("var_name", "unknown"),
+                    "file": file_path,
+                    "start_line": variable.get("startLine", 0),
+                    "end_line": variable.get("endLine", 0),
+                    "source": variable.get("source", ""),
+                }
+            )
+
+        globals_list.sort(key=lambda item: (item["file"], item["start_line"], item["name"]))
+        return globals_list[:20]
+
+    def _collect_module_struct_records(self, module: Dict, project_analysis: Dict, header_records=None) -> List[Dict]:
+        relevant_files = {self._normalize_path(path) for path in module.get("files", [])}
+        if header_records:
+            relevant_files.update(self._normalize_path(item["path"]) for item in header_records)
+
+        struct_records = []
+        for struct in project_analysis.get("structs", []):
+            normalized = self._normalize_struct_entries([struct])[0]
+            file_path = self._normalize_path(normalized.get("file", ""))
+            if file_path not in relevant_files:
+                continue
+            struct_records.append(normalized)
+
+        struct_records.sort(
+            key=lambda item: (
+                self._normalize_path(item.get("file", "")),
+                int(item.get("start_line", 0) or 0),
+                item.get("name", "unknown"),
+            )
+        )
+        return struct_records[:self.MAX_INTERFACE_STRUCTS]
+
+    def _collect_module_struct_references(self, module: Dict, struct_records: List[Dict]) -> List[str]:
+        defined_names = {record.get("name") for record in struct_records if record.get("name")}
+        referenced = []
+        for item in module.get("structs", []):
+            name = item.get("name") if isinstance(item, dict) else item
+            if not name or name in defined_names:
+                continue
+            referenced.append(name)
+        return sorted(set(referenced))[:20]
+
+    def _build_function_fact_line(self, func: Dict) -> str:
+        name = func.get("name", "unknown")
+        file_path = self._normalize_path(func.get("file", "unknown"))
+        start_line = func.get("start_line", func.get("startLine", 0))
+        end_line = func.get("end_line", func.get("endLine", 0))
+        signature = self._extract_declaration_excerpt(func.get("source", ""))
+        return (
+            f"- `{name}` {self._format_source_location(file_path, start_line, end_line)}: "
+            f"`{signature or 'definition signature unavailable'}`"
+        )
+
+    def _build_struct_fact_line(self, struct: Dict) -> str:
+        name = struct.get("name", "anonymous")
+        file_path = self._normalize_path(struct.get("file", "unknown"))
+        start_line = struct.get("start_line", struct.get("startLine", 0))
+        end_line = struct.get("end_line", struct.get("endLine", 0))
+        declaration = self._extract_declaration_excerpt(
+            struct.get("source", ""),
+            terminator="",
+            max_chars=220,
+        )
+        return (
+            f"- `{name}` {self._format_source_location(file_path, start_line, end_line)}: "
+            f"`{declaration or 'definition excerpt unavailable'}`"
+        )
+
+    def _build_repo_manifest_content(self, project_info: Dict) -> str:
+        project_name = project_info["project_name"]
+        all_files = project_info.get("c_files", []) + project_info.get("h_files", []) + project_info.get("other_files", [])
+        directory_summary = self._build_directory_summary(all_files)
+        header_summary = self._build_directory_summary(project_info.get("h_files", []))
+        # 可优化点：这里目前更偏“人类可读的仓库清单”。
+        # 如果后续要增强给 Rust 生成端的消费能力，可以把入口文件、公共头文件、
+        # 关键模块边界和构建目标额外沉淀为结构化字段，而不只是一份 markdown 概览。
+
+        lines = [
+            f"# {project_name} 仓库清单",
+            "",
+            "该文档只记录当前仓库扫描阶段直接观察到的事实，不补写缺失目录树，不猜测尚未出现的产物文件。",
+            "",
+            "## 快照",
+            f"- 项目名称：`{project_name}`",
+            f"- 构建系统：`{project_info.get('build_system', 'unknown')}`",
+            f"- C 文件数：{len(project_info.get('c_files', []))}",
+            f"- 头文件数：{len(project_info.get('h_files', []))}",
+            f"- 其他文件数：{len(project_info.get('other_files', []))}",
+            f"- 构建文件：{', '.join(project_info.get('build_files', [])) or '无'}",
+            f"- 入口文件：{', '.join(project_info.get('entry_files', [])[:10]) or '无'}",
+            f"- 仓库根目录下观察到的可执行文件：{', '.join(project_info.get('executables', [])) or '无'}",
+            f"- 仓库根目录下观察到的库文件：{', '.join(project_info.get('libraries', [])) or '无'}",
+            "",
+            "## 目录清单",
+        ]
+
+        for directory, files in directory_summary:
+            c_count = sum(1 for path in files if path.endswith(".c"))
+            h_count = sum(1 for path in files if path.endswith(".h"))
+            other_count = len(files) - c_count - h_count
+            sample = ", ".join(files[:6])
+            lines.append(
+                f"- `{directory}`：共 {len(files)} 个文件"
+                f"（{c_count} 个 C 文件，{h_count} 个头文件，{other_count} 个其他文件）。"
+                f"示例：{sample}"
+            )
+
+        lines.extend(["", "## 源文件清单"])
+        for source_file in project_info.get("c_files", []):
+            entry_tag = "（入口候选）" if source_file in project_info.get("entry_files", []) else ""
+            lines.append(f"- `{self._normalize_path(source_file)}`{entry_tag}")
+
+        lines.extend(["", "## 按目录划分的头文件清单"])
+        if header_summary:
+            for directory, headers in header_summary:
+                lines.append(f"### `{directory}`")
+                for header in headers[:40]:
+                    lines.append(f"- `{header}`")
+        else:
+            lines.append("- 当前没有观察到头文件。")
+
+        lines.extend(
+            [
+                "",
+                "## README 摘录",
+                self._truncate_text(project_info.get("readme_content", "") or "当前没有找到 README 文件。", 2000),
+                "",
+                "## 证据边界",
+                "- 该清单来自文件系统扫描，不代表最终安装布局。",
+                "- 未发现的可执行文件、库文件或生成目录不会被推断为存在。",
+                "- 文件职责和模块行为需要结合后续 `01_subsystems` / `03_behaviors` 文档理解。",
+                "",
+            ]
+        )
+
+        return "\n".join(lines)
+
+    def _build_interface_doc_content(
+        self,
+        module: Dict,
+        header_records: List[Dict],
+        functions: List[Dict],
+        structs: List[Dict],
+        referenced_structs: List[str],
+        macros: List[Dict],
+        globals_list: List[Dict],
+    ) -> str:
+        lines = [
+            f"# 接口事实：{module['name']}",
+            "",
+            "该文档面向后续 Rust 仓库级重写，只保留当前源码分析阶段直接观察到的接口事实。",
+            "没有在当前解析结果中出现的头文件、宏、错误码、配置项不会被补写或假设。",
+            "",
+            "## 模块范围",
+            f"- 模块类别：`{module.get('category', 'unknown')}`",
+            f"- 所在目录：`{self._normalize_path(module.get('directory', 'root'))}`",
+            f"- 文件列表：{', '.join(self._normalize_path(path) for path in module.get('files', [])) or '无'}",
+            f"- 候选头文件：{', '.join(item['path'] for item in header_records) or '无'}",
+            f"- 观察到的导出函数数量：{len(functions)}",
+            f"- 观察到的结构体定义数量：{len(structs)}",
+            f"- 引用但未在本地定义的类型名数量：{len(referenced_structs)}",
+            f"- 相关文件中观察到的宏数量：{len(macros)}",
+            f"- 观察到的全局变量数量：{len(globals_list)}",
+            "",
+            "## 头文件证据",
+        ]
+
+        if header_records:
+            for header in header_records:
+                lines.append(f"- `{header['path']}` {header['location']}")
+        else:
+            lines.append("- 当前没有从目录、include 图或文件名证据中关联到项目头文件。")
+
+        lines.extend(["", "## 函数"])
+        if functions:
+            for func in functions:
+                name = func.get("name", "unknown")
+                file_path = self._normalize_path(func.get("file", "unknown"))
+                start_line = func.get("start_line", func.get("startLine", 0))
+                end_line = func.get("end_line", func.get("endLine", 0))
+                signature = self._extract_declaration_excerpt(func.get("source", ""))
+                lines.extend(
+                    [
+                        f"### `{name}`",
+                        f"- 定义位置：{self._format_source_location(file_path, start_line, end_line)}",
+                        f"- 源文件：`{file_path}`",
+                        f"- 观察到的声明：`{signature or '当前 parser 输出中不可用'}`",
+                        f"- 近似函数体长度：{func.get('line_count', func.get('num_lines', 0)) or '未知'} 行",
+                    ]
+                )
+        else:
+            lines.append("- 当前模块没有观察到函数定义。")
+
+        lines.extend(["", "## 结构体与类型"])
+        if structs:
+            for struct in structs:
+                name = struct.get("name", "anonymous")
+                file_path = self._normalize_path(struct.get("file", "unknown"))
+                start_line = struct.get("start_line", struct.get("startLine", 0))
+                end_line = struct.get("end_line", struct.get("endLine", 0))
+                declaration = self._extract_declaration_excerpt(struct.get("source", ""), terminator="", max_chars=220)
+                lines.extend(
+                    [
+                        f"### `{name}`",
+                        f"- 定义位置：{self._format_source_location(file_path, start_line, end_line)}",
+                        f"- 源文件：`{file_path}`",
+                        f"- 观察到的定义前缀：`{declaration or '当前 parser 输出中不可用'}`",
+                    ]
+                )
+        else:
+            lines.append("- 当前模块切片中没有观察到结构体定义。")
+
+        lines.extend(["", "## 被引用的外部类型"])
+        if referenced_structs:
+            for struct_name in referenced_structs:
+                lines.append(
+                    f"- `{struct_name}`：该名称来自聚类元数据或邻近调用分析，但在当前模块文件中没有观察到本地定义。"
+                )
+        else:
+            lines.append("- 当前没有记录到本地定义之外的外部结构体或类型引用。")
+
+        lines.extend(["", "## 宏与常量"])
+        if macros:
+            for macro in macros:
+                snippet = self._trim_inline(macro.get("source", ""), 180)
+                lines.append(
+                    f"- `{macro['name']}` {self._format_source_location(macro['file'], macro['start_line'], macro['end_line'])}: `{snippet or '定义内容不可用'}`"
+                )
+        else:
+            lines.append("- 当前模块文件及相关头文件中没有观察到宏或常量定义。")
+
+        lines.extend(["", "## 全局变量"])
+        if globals_list:
+            for variable in globals_list:
+                declaration = self._extract_declaration_excerpt(variable.get("source", ""))
+                lines.append(
+                    f"- `{variable['name']}` {self._format_source_location(variable['file'], variable['start_line'], variable['end_line'])}: `{declaration or '声明内容不可用'}`"
+                )
+        else:
+            lines.append("- 当前模块的 `.c` 文件中没有观察到全局变量定义。")
+
+        lines.extend(
+            [
+                "",
+                "## 已知缺口",
+                "- 该文档根据函数定义、结构体定义、宏和全局变量的解析结果生成，不自动推断 `.h` 中未解析到的声明签名。",
+                "- 如果某个函数在“函数”一节中出现但没有明确头文件绑定，后续 Rust 迁移时应回查对应源码的 `#include` 关系与构建脚本。",
+                "- 错误码、配置项、输入输出协议只在源码中出现明确符号时记录；缺失并不代表语义不存在，只代表当前事实提取未观察到。",
+                "",
+            ]
+        )
+
+        return "\n".join(lines)
+
+    def _infer_module_focus(self, module: Dict) -> str:
+        function_names = [func.get("name", "") for func in module.get("functions", []) if isinstance(func, dict)]
+        file_stems = [os.path.splitext(os.path.basename(path))[0] for path in module.get("files", [])]
+
+        if function_names:
+            common_prefix = os.path.commonprefix(function_names).strip("_- ")
+            if len(common_prefix) >= 4:
+                return f"围绕 `{common_prefix}` 前缀函数组织"
+
+        if file_stems:
+            unique_stems = sorted(set(stem for stem in file_stems if stem))
+            if len(unique_stems) == 1:
+                return f"围绕 `{unique_stems[0]}` 相关源码文件组织"
+            if len(unique_stems) <= 3:
+                return f"围绕 {', '.join(f'`{stem}`' for stem in unique_stems)} 相关源码文件组织"
+
+        return "当前只能从文件和符号分布看出这是一个局部源码切片，职责需要结合源码进一步确认"
+
+    def _build_module_summary_content(self, module: Dict) -> str:
+        functions = module.get("functions", [])
+        project_analysis = self.project_analysis or {}
+        struct_records = self._collect_module_struct_records(module, project_analysis)
+        referenced_structs = self._collect_module_struct_references(module, struct_records)
+        focus = self._infer_module_focus(module)
+        cohesion_score = module.get("cohesion_score", 0)
+        internal_calls = module.get("internal_calls", 0)
+        external_calls = module.get("external_calls", 0)
+
+        lines = [
+            "# 模块摘要",
+            "",
+            "该文档只根据模块划分结果和已解析源码事实生成，不把“信息不足”写成“空实现”或“设计错误”。",
+            "",
+            "## 1. 模块职责",
+            f"- 观察到的焦点：{focus}",
+            f"- 模块类别：`{module.get('category', 'unknown')}`",
+            f"- 目录范围：`{self._normalize_path(module.get('directory', 'root'))}`",
+            "",
+            "## 2. 输入和输出",
+            "- 当前阶段不对运行时 I/O 做臆测，接口边界以已观察到的函数签名和源码文件为准。",
+            f"- 文件输入边界：{', '.join(self._normalize_path(path) for path in module.get('files', [])) or 'none'}",
+            f"- 函数数量：{len(functions)}",
+            "",
+            "## 3. 核心接口列表",
+        ]
+
+        if functions:
+            for func in functions[:20]:
+                lines.append(self._build_function_fact_line(func))
+        else:
+            lines.append("- 当前模块没有解析到函数定义。")
+
+        lines.extend(["", "## 4. 依赖哪些其他模块"])
+        lines.append(f"- 内部调用次数：{internal_calls}")
+        lines.append(f"- 外部调用次数：{external_calls}")
+        lines.append(f"- 内聚度分数：{cohesion_score:.2f}")
+        if module.get("headers"):
+            lines.append(f"- 关联头文件：{', '.join(self._normalize_path(path) for path in module.get('headers', []))}")
+        else:
+            lines.append("- 关联头文件：当前模块元数据中未记录。")
+
+        lines.extend(["", "## 5. 必须保留的关键行为"])
+        if functions:
+            lines.append("- 至少需要保留这些函数定义所在源码中的控制流和返回约定，具体行为应回查实现体，而不是依赖摘要脑补。")
+        else:
+            lines.append("- 当前模块没有函数定义可供提炼关键行为。")
+
+        if struct_records:
+            struct_names = ", ".join(
+                f"`{struct.get('name', 'anonymous')}`" for struct in struct_records[:10]
+            )
+            lines.append(f"- 在本模块文件中定义的数据结构：{struct_names}")
+        elif referenced_structs:
+            lines.append(f"- 仅观察到结构体引用名：{', '.join(f'`{name}`' for name in referenced_structs[:10])}")
+        else:
+            lines.append("- 当前模块没有解析到结构体定义。")
+
+        lines.extend(["", "## 6. 模块划分信号"])
+        if module.get("parent_module"):
+            lines.append(
+                f"- 当前模块是从父模块 `{module['parent_module']}` 拆分出来的子模块，cluster 类型为 `{module.get('cluster_type', 'unknown')}`。"
+            )
+            split_reasons = module.get("origin_split_reasons", [])
+            if split_reasons:
+                lines.append(f"- 父模块触发拆分的真实原因：{'；'.join(split_reasons)}")
+            else:
+                lines.append("- 父模块已发生拆分，但当前未保留更细的拆分原因。")
+        elif module.get("needs_split"):
+            split_reasons = module.get("split_reasons", [])
+            lines.append("- 模块划分器仍认为这个模块需要进一步拆分。")
+            if split_reasons:
+                lines.append(f"- 拆分原因：{'；'.join(split_reasons)}")
+        else:
+            lines.append("- 当前模块已经是划分器收敛后的可消费单元，没有额外的拆分信号。")
+
+        lines.extend(
+            [
+                "",
+                "## 结论",
+                "- 如果源码中确实存在函数定义，就不应被描述成“空实现”；当前文档以源码位置和声明摘录为准。",
+                "- “模块划分不合理”只应来自划分器的真实拆分信号，而不应由摘要模型在信息不足时自行下结论。",
+                "",
+            ]
+        )
+
+        return "\n".join(lines)
+
+    def _build_interfaces_overview(self, project_name: str, interface_entries: List[Dict]) -> str:
+        # 这里故意不用模型生成 overview，而是直接写成稳定索引。
+        # 目的不是“写得漂亮”，而是给后续 Rust 迁移提供低成本、低噪声的导航页。
+        lines = [
+            f"# {project_name} 公共接口总览",
+            "",
+            "该索引面向后续 Rust 重写阶段，保留模块级接口入口，而不是把所有接口事实压到单一超长文档里。",
+            "",
+            f"- 接口模块数：{len(interface_entries)}",
+            "",
+        ]
+
+        for entry in interface_entries:
+            lines.append(f"## {entry['module_name']}")
+            lines.append(f"- 模块类别：{entry['category']}")
+            lines.append(f"- 关联头文件：{', '.join(entry['headers']) if entry['headers'] else '无'}")
+            lines.append(
+                f"- 代表函数：{', '.join(entry['functions']) if entry['functions'] else '无'}"
+            )
+            lines.append(
+                f"- 代表结构体：{', '.join(entry['structs']) if entry['structs'] else '无'}"
+            )
+            lines.append(f"- 详细文档：{entry['detail_doc']}")
+            lines.append("")
+
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _build_behavior_blocks(self, module_analyses: List[Dict]) -> List[str]:
+        # 行为文档最容易爆上下文，因此先把每个模块摘要截成较短片段，再做批处理汇总。
+        blocks = []
+        for analysis in module_analyses:
+            excerpt = self._truncate_text(
+                analysis.get("analysis", ""),
+                self.MAX_MODULE_ANALYSIS_CHARS,
+            )
+            blocks.append(f"### {analysis['module_name']} 模块\n{excerpt}")
+        return blocks
+
+    def _build_constitution_context(
+        self,
+        project_info: Dict,
+        interfaces_doc: str,
+        behaviors_doc: str,
+    ) -> str:
+        # constitution 不需要重新看全量源码，只需要项目轮廓 + 接口摘要 + 行为摘要。
+        # 这里构造的是一个“高信噪比”的治理上下文，而不是原始分析转储。
+        lines = [
+            f"- Build system: {project_info.get('build_system', 'unknown')}",
+            f"- C files: {len(project_info.get('c_files', []))}",
+            f"- Header files: {len(project_info.get('h_files', []))}",
+            f"- Entry files: {', '.join(project_info.get('entry_files', [])[:5]) or 'none'}",
+            f"- Module units: {len(self.module_units)}",
+            f"- Cluster units: {len(self.cluster_units)}",
+            "",
+            "## Module Inventory",
+        ]
+
+        for module in self.module_units[:12]:
+            lines.append(
+                f"- {module['name']} ({module['category']}): "
+                f"{len(module.get('files', []))} files, "
+                f"{len(module.get('functions', []))} functions, "
+                f"{len(module.get('structs', []))} structs"
+            )
+
+        lines.extend(
+            [
+                "",
+                "## Interface Overview Excerpt",
+                self._truncate_text(interfaces_doc, self.MAX_CONSTITUTION_DOC_CHARS),
+                "",
+                "## Behavior Overview Excerpt",
+                self._truncate_text(behaviors_doc, self.MAX_CONSTITUTION_DOC_CHARS),
+            ]
+        )
+
+        return "\n".join(lines)
+
+    def _classify_source_file_role(self, rel_path: str) -> str:
+        """
+        对源码文件做项目无关的角色分类，用于控制迁移范围。
+        """
+        normalized = self._normalize_path(rel_path).lower()
+        basename = os.path.basename(normalized)
+        path_parts = [part for part in normalized.split("/") if part]
+
+        if normalized.endswith(".h"):
+            return "header"
+        if any(part in {"test", "tests", "spec", "specs"} for part in path_parts):
+            return "test"
+        if re.search(r"(^|[_\-.])test(s)?([_\-.]|$)", basename):
+            return "test"
+        if any(part in {"example", "examples", "demo", "demos", "sample", "samples"} for part in path_parts):
+            return "example"
+        if re.search(r"(^|[_\-.])(example|demo|sample)(s)?([_\-.]|$)", basename):
+            return "example"
+        if normalized.endswith(".c"):
+            return "source"
+        return "support"
+
+    def _safe_rust_module_stem(self, rel_path_or_name: str) -> str:
+        """
+        将 C 文件名或模块名转换为保守的 Rust 文件 stem。
+        """
+        normalized = self._normalize_path(rel_path_or_name)
+        stem = os.path.splitext(os.path.basename(normalized))[0] or normalized
+        stem = re.sub(r"[^A-Za-z0-9]+", "_", stem).strip("_").lower()
+        if not stem:
+            stem = "module"
+        if re.match(r"^\d", stem):
+            stem = f"module_{stem}"
+        return stem
+
+    def _infer_project_kind(self, project_info: Dict, project_analysis: Dict) -> str:
+        """
+        粗略区分 library / cli / mixed，不把测试或示例 main 当成 CLI 证据。
+        """
+        production_mains = []
+        example_mains = []
+        test_mains = []
+        for func in project_analysis.get("functions", []):
+            if func.get("name") != "main":
+                continue
+            role = self._classify_source_file_role(func.get("file", ""))
+            if role == "source":
+                production_mains.append(func)
+            elif role == "example":
+                example_mains.append(func)
+            elif role == "test":
+                test_mains.append(func)
+
+        if production_mains and project_info.get("h_files"):
+            return "mixed"
+        if production_mains:
+            return "cli"
+        return "library"
+
+    def _read_project_file(self, project_path: str, rel_path: str) -> str:
+        try:
+            with open(Path(project_path) / rel_path, "r", encoding="utf-8", errors="ignore") as f:
+                return f.read()
+        except Exception:
+            return ""
+
+    def _line_number_for_offset(self, text: str, offset: int) -> int:
+        return text.count("\n", 0, max(0, offset)) + 1
+
+    def _extract_header_function_declarations(self, project_path: str, header_files: List[str]) -> Dict[str, Dict]:
+        """
+        从头文件中提取函数声明。该逻辑是启发式的，但只作为角色分类信号使用。
+        """
+        declarations: Dict[str, Dict] = {}
+        declaration_pattern = re.compile(
+            r"(?m)^\s*(?!typedef\b)(?!#)(?:[A-Za-z_][\w\s\*\(\),]*?\s+)"
+            r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*\([^;{}]*\)\s*;"
+        )
+
+        for header in header_files:
+            content = self._read_project_file(project_path, header)
+            if not content:
+                continue
+            for match in declaration_pattern.finditer(content):
+                name = match.group("name")
+                declaration = self._collapse_whitespace(match.group(0))
+                declarations.setdefault(
+                    name,
+                    {
+                        "name": name,
+                        "declared_in": self._normalize_path(header),
+                        "source": declaration,
+                        "line": self._line_number_for_offset(content, match.start()),
+                    },
+                )
+        return declarations
+
+    def _extract_struct_fields_from_body(self, body: str) -> List[Dict]:
+        fields = []
+        for raw_line in body.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("//") or line.startswith("/*") or line.startswith("*"):
+                continue
+            line = line.split("//", 1)[0].strip()
+            if not line.endswith(";") or "(" in line:
+                continue
+            line = line.rstrip(";").strip()
+            # 支持简单字段、指针字段和数组字段；复杂声明保留 raw。
+            match = re.match(r"(?P<c_type>.+?)\s+(?P<name>\*?[A-Za-z_][A-Za-z0-9_]*)(?:\s*\[[^\]]+\])?$", line)
+            if not match:
+                fields.append({"name": "", "c_type": "", "raw": line})
+                continue
+            name = match.group("name").lstrip("*")
+            c_type = match.group("c_type").strip()
+            if match.group("name").startswith("*"):
+                c_type = f"{c_type} *"
+            fields.append({"name": name, "c_type": self._collapse_whitespace(c_type), "raw": line})
+        return fields
+
+    def _extract_header_type_records(self, project_path: str, header_files: List[str], project_analysis: Dict) -> List[Dict]:
+        """
+        提取头文件中的 struct/typedef struct 事实，并按名称与位置去重。
+        """
+        records = []
+        seen = set()
+
+        typedef_pattern = re.compile(
+            r"typedef\s+struct(?:\s+(?P<tag>[A-Za-z_][A-Za-z0-9_]*))?\s*\{(?P<body>.*?)\}\s*(?P<alias>[A-Za-z_][A-Za-z0-9_]*)\s*;",
+            re.DOTALL,
+        )
+        struct_pattern = re.compile(
+            r"(?<!typedef\s)struct\s+(?P<tag>[A-Za-z_][A-Za-z0-9_]*)\s*\{(?P<body>.*?)\}\s*;",
+            re.DOTALL,
+        )
+
+        for header in header_files:
+            content = self._read_project_file(project_path, header)
+            if not content:
+                continue
+
+            for pattern in (typedef_pattern, struct_pattern):
+                for match in pattern.finditer(content):
+                    name = match.groupdict().get("alias") or match.groupdict().get("tag") or "anonymous"
+                    if name == "anonymous":
+                        continue
+                    start_line = self._line_number_for_offset(content, match.start())
+                    end_line = self._line_number_for_offset(content, match.end())
+                    key = (self._normalize_path(header), start_line, end_line, name)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    records.append(
+                        {
+                            "id": f"TYPE-{name}",
+                            "name": name,
+                            "source": self._format_source_location(header, start_line, end_line),
+                            "file": self._normalize_path(header),
+                            "start_line": start_line,
+                            "end_line": end_line,
+                            "fields": self._extract_struct_fields_from_body(match.group("body")),
+                            "declaration": self._trim_inline(match.group(0), 500),
+                        }
+                    )
+
+        for struct in project_analysis.get("structs", []):
+            normalized = self._normalize_struct_entries([struct])[0]
+            name = normalized.get("name", "")
+            if not name or name == "anonymous":
+                continue
+            file_path = self._normalize_path(normalized.get("file", ""))
+            start_line = int(normalized.get("start_line", 0) or 0)
+            end_line = int(normalized.get("end_line", 0) or 0)
+            key = (file_path, start_line, end_line, name)
+            if key in seen:
+                continue
+            seen.add(key)
+            records.append(
+                {
+                    "id": f"TYPE-{name}",
+                    "name": name,
+                    "source": self._format_source_location(file_path, start_line, end_line),
+                    "file": file_path,
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "fields": [],
+                    "declaration": self._trim_inline(normalized.get("source", ""), 500),
+                }
+            )
+
+        records.sort(key=lambda item: (item["file"], item["start_line"], item["name"]))
+        return records
+
+    def _classify_function_role(self, func: Dict, header_declarations: Dict[str, Dict]) -> str:
+        name = func.get("name", "")
+        file_role = self._classify_source_file_role(func.get("file", ""))
+
+        if file_role == "test":
+            if name == "main" or name in {"all_tests", "run_tests"}:
+                return "test_runner"
+            if name.startswith(("test_", "unit_test_", "integration_test_")) or "test" in name.lower():
+                return "test_case"
+            return "test_helper"
+        if file_role == "example":
+            return "example_entry" if name == "main" else "example_helper"
+        if name in header_declarations:
+            return "public_api"
+        if name == "main":
+            return "entrypoint"
+        return "internal_helper"
+
+    def _derive_allowed_rust_files(self, project_info: Dict, project_kind: str) -> List[str]:
+        """
+        按 C 文件角色推导默认 Rust 文件边界。只根据通用文件角色和源文件 stem，不使用项目特例。
+        """
+        allowed = ["Cargo.toml"]
+        if project_kind in {"cli", "mixed"}:
+            allowed.append("src/main.rs")
+            if project_info.get("h_files") or project_kind == "mixed":
+                allowed.append("src/lib.rs")
+        else:
+            allowed.append("src/lib.rs")
+
+        for rel_path in sorted(project_info.get("c_files", [])):
+            if self._classify_source_file_role(rel_path) != "source":
+                continue
+            stem = self._safe_rust_module_stem(rel_path)
+            if stem in {"main", "lib"}:
+                continue
+            candidate = f"src/{stem}.rs"
+            if candidate not in allowed:
+                allowed.append(candidate)
+
+        allowed.append("README.md")
+        return allowed
+
+    def _build_translation_contract(
+        self,
+        project_path: str,
+        project_info: Dict,
+        project_analysis: Dict,
+        module_units: List[Dict],
+    ) -> Dict:
+        """
+        构建机器可读迁移契约，作为 Rust 生成阶段的范围上限。
+        """
+        header_files = sorted(self._normalize_path(path) for path in project_info.get("h_files", []))
+        header_declarations = self._extract_header_function_declarations(project_path, header_files)
+        project_kind = self._infer_project_kind(project_info, project_analysis)
+
+        files = []
+        for rel_path in sorted(
+            list(project_info.get("c_files", []))
+            + list(project_info.get("h_files", []))
+            + list(project_info.get("other_files", []))
+        ):
+            files.append(
+                {
+                    "path": self._normalize_path(rel_path),
+                    "role": self._classify_source_file_role(rel_path),
+                }
+            )
+
+        functions = []
+        for func in sorted(
+            project_analysis.get("functions", []),
+            key=lambda item: (
+                self._normalize_path(item.get("file", "")),
+                int(item.get("start_line", item.get("startLine", 0)) or 0),
+                item.get("name", ""),
+            ),
+        ):
+            name = func.get("name") or func.get("func_defid", "").rsplit(":", 1)[-1]
+            file_path = self._normalize_path(func.get("file") or func.get("filename") or "")
+            start_line = int(func.get("start_line", func.get("startLine", 0)) or 0)
+            end_line = int(func.get("end_line", func.get("endLine", 0)) or 0)
+            declaration = self._extract_declaration_excerpt(func.get("source", ""))
+            header_decl = header_declarations.get(name, {})
+            functions.append(
+                {
+                    "id": f"FN-{name}",
+                    "name": name,
+                    "role": self._classify_function_role(func, header_declarations),
+                    "file": file_path,
+                    "source": self._format_source_location(file_path, start_line, end_line),
+                    "signature": header_decl.get("source") or declaration,
+                    "declared_in": header_decl.get("declared_in", ""),
+                    "line_count": func.get("line_count", func.get("num_lines", 0)) or 0,
+                }
+            )
+
+        macros = []
+        for macro in project_analysis.get("macros", []):
+            file_path = self._normalize_path(macro.get("filename", macro.get("file", "")))
+            name = macro.get("name", "unknown")
+            macros.append(
+                {
+                    "id": f"MACRO-{name}",
+                    "name": name,
+                    "file": file_path,
+                    "source": self._format_source_location(
+                        file_path,
+                        macro.get("startLine", macro.get("start_line", 0)),
+                        macro.get("endLine", macro.get("end_line", 0)),
+                    ),
+                    "definition": self._trim_inline(macro.get("source", ""), 240),
+                }
+            )
+
+        types = self._extract_header_type_records(project_path, header_files, project_analysis)
+        allow_tests = bool(getattr(self.config, "generate_tests", False))
+        allow_examples = bool(getattr(self.config, "generate_examples", False))
+        allow_benches = bool(getattr(self.config, "generate_benches", False))
+
+        contract = {
+            "schema_version": 1,
+            "project": {
+                "name": project_info.get("project_name", Path(project_path).name),
+                "kind": project_kind,
+                "build_system": project_info.get("build_system", "unknown"),
+            },
+            "files": files,
+            "module_units": [
+                {
+                    "name": module.get("name", "unknown"),
+                    "category": module.get("category", "unknown"),
+                    "files": [self._normalize_path(path) for path in module.get("files", [])],
+                }
+                for module in module_units
+            ],
+            "generation_boundary": {
+                "allowed_rust_files": self._derive_allowed_rust_files(project_info, project_kind),
+                "allow_tests": allow_tests,
+                "allow_examples": allow_examples,
+                "allow_benches": allow_benches,
+                "allow_ffi": False,
+                "dependency_policy": "std_only_by_default",
+                "allowed_dependencies": [],
+            },
+            "forbidden_without_evidence": [
+                "serde",
+                "criterion",
+                "proptest",
+                "thread_safe_api",
+                "recovery_mechanism",
+                "crates_io_release",
+                "ffi",
+                "range_query",
+                "batch_operation",
+            ],
+            "types": types,
+            "functions": functions,
+            "macros": macros,
+        }
+        return contract
+
+    def _generate_translation_contract(
+        self,
+        project_path: str,
+        project_info: Dict,
+        project_analysis: Dict,
+        module_units: List[Dict],
+        output_dir: str,
+    ) -> Dict:
+        print("生成 translation_contract.json - 迁移范围契约...")
+        contract = self._build_translation_contract(project_path, project_info, project_analysis, module_units)
+        rewrite_context_dir = Path(output_dir) / "docs" / "rewrite-context"
+        rewrite_context_dir.mkdir(parents=True, exist_ok=True)
+        contract_path = rewrite_context_dir / "translation_contract.json"
+        with open(contract_path, "w", encoding="utf-8") as f:
+            json.dump(contract, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        print(f"✓ translation_contract.json 已生成：{contract_path}")
+        return contract
+
+    def _lint_generated_docs(self, output_dir: str, contract: Dict) -> List[Dict]:
+        """
+        对生成文档做轻量范围检查。该 lint 只报告问题，不阻断生成流程。
+        """
+        boundary = contract.get("generation_boundary", {}) if isinstance(contract, dict) else {}
+        allowed_files = set(self._normalize_path(path) for path in boundary.get("allowed_rust_files", []))
+        allow_ffi = bool(boundary.get("allow_ffi", False))
+        findings = []
+
+        banned_patterns = [
+            (re.compile(r"\bPhase\s+(?:8|9|10)\b", re.IGNORECASE), "发现越界阶段"),
+            (re.compile(r"\bP(?:8|9|10)-\d+\b", re.IGNORECASE), "发现越界任务编号"),
+            (re.compile(r"crates\.io|CHANGELOG|PERFORMANCE\.md|发布到", re.IGNORECASE), "发现发布相关内容"),
+            (re.compile(r"线程安全|Send\s+和\s+Sync|recovery mechanism|恢复机制", re.IGNORECASE), "发现无证据高级能力"),
+            (re.compile(r"\bserde\b|\bcriterion\b|\bproptest\b", re.IGNORECASE), "发现未授权依赖或测试框架"),
+        ]
+        if not allow_ffi:
+            banned_patterns.append((re.compile(r"\bFFI\b|extern\s+\"C\"|include/[A-Za-z0-9_.\-/]+\.h", re.IGNORECASE), "发现未授权 FFI 内容"))
+
+        path_pattern = re.compile(
+            r"(?:(?:src|tests|examples|benches|include)/[A-Za-z0-9_.\-/]+|Cargo\.toml|README\.md|CHANGELOG\.md|PERFORMANCE\.md|LICENSE)"
+        )
+
+        root = Path(output_dir)
+        if not root.exists():
+            return []
+
+        for doc_path in root.rglob("*.md"):
+            rel_doc = self._normalize_path(str(doc_path.relative_to(root)))
+            try:
+                content = doc_path.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+
+            for pattern, label in banned_patterns:
+                for match in pattern.finditer(content):
+                    findings.append(
+                        {
+                            "path": rel_doc,
+                            "kind": "scope_expansion",
+                            "message": f"{label}: {match.group(0)}",
+                        }
+                    )
+
+            for match in path_pattern.finditer(content):
+                candidate = self._normalize_path(match.group(0)).strip("`'\"")
+                if candidate in {"Cargo.toml", "README.md"}:
+                    continue
+                if allowed_files and candidate not in allowed_files and candidate.startswith(("src/", "tests/", "examples/", "benches/", "include/")):
+                    findings.append(
+                        {
+                            "path": rel_doc,
+                            "kind": "out_of_scope_file",
+                            "message": f"发现 contract 外文件路径: {candidate}",
+                        }
+                    )
+
+        if findings:
+            lint_path = Path(output_dir) / "docs" / "rewrite-context" / "translation_lint.json"
+            lint_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(lint_path, "w", encoding="utf-8") as f:
+                json.dump({"findings": findings}, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+            print(f"⚠ 文档范围 lint 发现 {len(findings)} 个问题，已写入：{lint_path}")
+        return findings
+        
+    def _collect_project_info(self, project_path: str) -> Dict:
+        """
+        收集项目基本信息
+        
+        Args:
+            project_path: 项目路径
+            
+        Returns:
+            项目信息字典
+        """
+        project_name = Path(project_path).name
+        
+        # 这一阶段只做轻量项目探查，不解析 AST。
+        # 产物主要用于 repo_manifest / constitution / prompt 上下文。
+        c_files = []
+        h_files = []
+        other_files = []
+        
+        for root, dirs, files in os.walk(project_path):
+            # 跳过隐藏目录和常见非源码目录
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['build', 'dist', 'bin', 'obj']]
+            
+            for file in files:
+                file_path = os.path.join(root, file)
+                rel_path = os.path.relpath(file_path, project_path)
+                
+                if file.endswith('.c'):
+                    c_files.append(rel_path)
+                elif file.endswith('.h'):
+                    h_files.append(rel_path)
+                else:
+                    other_files.append(rel_path)
+        
+        # README 往往是项目用途和构建方式最浓缩的自然语言说明。
+        readme_content = ""
+        for readme_name in ['README.md', 'README', 'readme.md']:
+            readme_path = Path(project_path) / readme_name
+            if readme_path.exists():
+                try:
+                    with open(readme_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        readme_content = f.read()
+                    break
+                except Exception as e:
+                    print(f"读取 README 文件失败：{e}")
+        
+        # 构建系统信息会影响后续 Rust 重写的工程组织方式。
+        build_system = "unknown"
+        build_files = []
+        for bf in ['Makefile', 'CMakeLists.txt', 'configure', 'Makefile.am', 'Makefile.in']:
+            if Path(project_path, bf).exists():
+                build_system = bf
+                build_files.append(bf)
+        
+        # 可执行文件 / 库文件的识别是很粗糙的启发式，只做辅助信息使用。
+        executables = []
+        libraries = []
+        for ext in ['', '.out', '.bin', '.exe']:
+            for f in Path(project_path).glob(f"*{ext}"):
+                if f.is_file() and os.access(f, os.X_OK):
+                    executables.append(f.name)
+        for pattern in ['*.a', '*.so', '*.so.*', '*.dylib']:
+            for f in Path(project_path).glob(pattern):
+                libraries.append(f.name)
+        
+        # 入口文件通常暗示初始化顺序和主流程，是行为文档的重要线索。
+        entry_files = []
+        for f in c_files:
+            if 'main' in f.lower() or 'entry' in f.lower() or 'start' in f.lower():
+                entry_files.append(f)
+        
+        return {
+            'project_name': project_name,
+            'c_files': c_files,
+            'h_files': h_files,
+            'other_files': other_files,
+            'readme_content': readme_content,
+            'build_system': build_system,
+            'build_files': build_files,
+            'executables': executables,
+            'libraries': libraries,
+            'entry_files': entry_files
+        }
+    
+    def _build_dependency_graph(self, project_path: str, project_analysis: Dict = None) -> Dict:
+        """
+        构建文件依赖图和调用关系图
+        
+        Args:
+            project_path: 项目路径
+            
+        Returns:
+            依赖图字典
+        """
+        print("  构建依赖图...")
+        
+        from collections import defaultdict
+        import re
+        
+        # 这里构造的 dependency_graph 并不追求编译器级精度，而是服务于模块划分和文档生成。
+        dependency_graph = {
+            'include_graph': defaultdict(set),  # 文件包含关系
+            'call_graph': defaultdict(list),      # 函数调用关系
+            'struct_usage': defaultdict(list),    # 函数使用结构体
+            'global_vars': defaultdict(set),     # 文件使用的全局变量
+            'file_symbols': defaultdict(dict)    # 文件定义的符号
+        }
+        
+        # 这里直接按文本扫描 include / 函数调用 / struct 使用，成本低，但会有一定噪声。
+        for root, dirs, files in os.walk(project_path):
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ['build', 'dist', 'bin', 'obj']]
+            
+            for file in files:
+                if not (file.endswith('.c') or file.endswith('.h')):
+                    continue
+                
+                file_path = os.path.join(root, file)
+                rel_path = os.path.relpath(file_path, project_path)
+                
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                        lines = content.split('\n')
+                    
+                    # 分析 #include
+                    for line in lines:
+                        line = line.strip()
+                        if line.startswith('#include'):
+                            # 提取包含的文件名
+                            if '"' in line:
+                                included = line.split('"')[1]
+                                dependency_graph['include_graph'][rel_path].add(included)
+                            elif '<' in line:
+                                included = line.split('<')[1].split('>')[0]
+                                dependency_graph['include_graph'][rel_path].add(included)
+                    
+                    # 简单分析函数定义和使用
+                    current_function = None
+                    for i, line in enumerate(lines):
+                        # 检测函数定义
+                        if '(' in line and ')' in line and ('{' in line or line.strip().endswith(')')):
+                            parts = line.split('(')
+                            if len(parts) >= 2 and not line.strip().startswith('#') and not line.strip().startswith('//'):
+                                # 安全提取函数名
+                                func_part = parts[0].strip()
+                                if func_part:
+                                    func_tokens = func_part.split()
+                                    if func_tokens:
+                                        func_name = func_tokens[-1]
+                                        if func_name and not func_name.startswith('*') and not func_name.startswith('&'):
+                                            current_function = func_name
+                                            dependency_graph['file_symbols'][rel_path]['functions'] = \
+                                                dependency_graph['file_symbols'][rel_path].get('functions', []) + [func_name]
+                        
+                        # 检测函数调用（简单启发式）
+                        if current_function:
+                            calls = re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(', line)
+                            for call in calls:
+                                if call != current_function and not call.startswith('_'):
+                                    if call not in dependency_graph['call_graph'][current_function]:
+                                        dependency_graph['call_graph'][current_function].append(call)
+                    
+                    # 检测结构体定义
+                    struct_defs = re.findall(r'struct\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\{', content)
+                    for struct in struct_defs:
+                        dependency_graph['file_symbols'][rel_path]['structs'] = \
+                            dependency_graph['file_symbols'][rel_path].get('structs', []) + [struct]
+                
+                except Exception as e:
+                    print(f"    a.分析文件 {rel_path} 时出错：{e}")
+
+        if project_analysis:
+            dependency_graph['call_graph'] = defaultdict(list)
+            dependency_graph['struct_usage'] = defaultdict(list)
+
+            for func in project_analysis.get("functions", []):
+                func_name = func.get("name") or func.get("func_defid", "").rsplit(":", 1)[-1]
+                file_path = self._normalize_path(
+                    func.get("file")
+                    or func.get("filename")
+                    or func.get("func_defid", "").rsplit(":", 1)[0]
+                )
+                if func_name and file_path:
+                    dependency_graph['file_symbols'][file_path]['functions'] = \
+                        dependency_graph['file_symbols'][file_path].get('functions', []) + [func_name]
+
+                for caller in func.get("calls", []):
+                    caller_name = caller.get("caller", "").rsplit(":", 1)[-1]
+                    if caller_name and func_name and func_name not in dependency_graph['call_graph'][caller_name]:
+                        dependency_graph['call_graph'][caller_name].append(func_name)
+
+                func_source = func.get("source", "")
+                for struct_name in re.findall(r'\bstruct\s+([a-zA-Z_][a-zA-Z0-9_]*)\b', func_source):
+                    if func_name and struct_name not in dependency_graph['struct_usage'][func_name]:
+                        dependency_graph['struct_usage'][func_name].append(struct_name)
+
+            for struct in project_analysis.get("structs", []):
+                normalized_struct = self._normalize_struct_entries([struct])[0]
+                file_path = self._normalize_path(normalized_struct.get("file", ""))
+                struct_name = normalized_struct.get("name")
+                if file_path and struct_name:
+                    dependency_graph['file_symbols'][file_path]['structs'] = \
+                        dependency_graph['file_symbols'][file_path].get('structs', []) + [struct_name]
+
+        # 转换为集合以便快速查找
+        for func in dependency_graph['call_graph']:
+            dependency_graph['call_graph'][func] = list(set(dependency_graph['call_graph'][func]))
+        for func in dependency_graph['struct_usage']:
+            dependency_graph['struct_usage'][func] = list(set(dependency_graph['struct_usage'][func]))
+        
+        print(f"  ✓ 依赖图构建完成")
+        print(f"    - 文件依赖：{len(dependency_graph['include_graph'])}")
+        print(f"    - 函数调用：{len(dependency_graph['call_graph'])}")
+        print(f"    - 结构体使用：{len(dependency_graph['struct_usage'])}")
+        
+        return dependency_graph
+    
+    def _split_modules(self, project_info: Dict, project_analysis: Dict, dependency_graph: Dict) -> Tuple[List[Dict], List[Dict]]:
+        """
+        使用 ModuleSplitter 进行模块划分
+        
+        Args:
+            project_info: 项目信息
+            project_analysis: 项目分析结果
+            dependency_graph: 依赖图
+            
+        Returns:
+            (module_units, cluster_units) 元组
+        """
+        # ContextualSpecAgent 不自己决定模块边界，统一委托给 ModuleSplitter。
+        # 这样模块划分逻辑可以独立演进，不污染文档生成代码。
+        print("  使用 ModuleSplitter 进行模块划分...")
+        
+        # 调用公共接口方法
+        module_units, cluster_units = self.module_splitter.split(
+            project_info, 
+            project_analysis, 
+            dependency_graph
+        )
+        
+        print(f"  ✓ 模块划分完成: {len(module_units)} 个模块, {len(cluster_units)} 个函数簇")
+        
+        return module_units, cluster_units
+    
+    def _generate_repo_manifest(self, project_info: Dict, output_dir: str) -> str:
+        """
+        生成 00_repo_manifest.md - 仓库地图
+        
+        Args:
+            project_info: 项目信息
+            output_dir: 输出目录
+            
+        Returns:
+            生成的文档内容
+        """
+        print("生成 00_repo_manifest.md - 仓库地图...")
+        
+        # repo manifest 直接用事实型模板构建，避免 LLM 擅自补全目录树、产物和职责。
+        content = self._build_repo_manifest_content(project_info)
+        
+        # 保存到文件
+        rewrite_context_dir = Path(output_dir) / "docs" / "rewrite-context"
+        rewrite_context_dir.mkdir(parents=True, exist_ok=True)
+        
+        manifest_path = rewrite_context_dir / "00_repo_manifest.md"
+        with open(manifest_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        print(f"✓ 00_repo_manifest.md 已生成：{manifest_path}")
+        return content
+    
+    def _generate_subsystem_docs(self, module_units: List[Dict], output_dir: str) -> List[Dict]:
+        """
+        生成 01_subsystems/*.md - 子系统说明
+        
+        Args:
+            module_units: 模块单元列表
+            output_dir: 输出目录
+            
+        Returns:
+            模块分析结果列表
+        """
+        print("生成子系统文档...")
+        
+        rewrite_context_dir = Path(output_dir) / "docs" / "rewrite-context" / "01_subsystems"
+        rewrite_context_dir.mkdir(parents=True, exist_ok=True)
+        
+        # module_analyses 是后续行为文档 / 风险文档的上游输入，因此这里不仅要写文件，还要保留内存态结果。
+        # 可优化点：这里可以补模块质量指标，例如模块内调用密度、跨模块耦合度、
+        # 以及文档长度与后续生成成功率的关联，方便做实验分析和自动调参。
+        module_analyses = []
+        
+        for module in module_units:
+            print(f"  处理模块：{module['name']}")
+            
+            # 生成模块摘要
+            summary = self._generate_module_summary(module, [], output_dir)
+            
+            # 保存文档
+            doc_path = rewrite_context_dir / f"{module['name']}.md"
+            with open(doc_path, 'w', encoding='utf-8') as f:
+                f.write(summary)
+            
+            print(f"  ✓ {module['name']}.md 已生成")
+            
+            # 添加到分析结果
+            module_analyses.append({
+                'module_name': module['name'],
+                'files': [{'name': Path(f).name, 'path': f, 'content': ''} 
+                         for f in module['files']],
+                'analysis': summary
+            })
+        
+        return module_analyses
+    
+    def _generate_module_summary(self, module: Dict, file_summaries: List[Dict], 
+                                output_dir: str) -> str:
+        """
+        生成模块摘要
+        
+        Args:
+            module: 模块信息
+            file_summaries: 文件摘要列表
+            output_dir: 输出目录
+            
+        Returns:
+            生成的摘要内容
+        """
+        # 模块摘要是行为文档 / spec / tasks 的上游输入，因此这里优先保真，不再让模型凭空判断
+        # “空实现”“重复定义”或“划分不合理”。
+        return self._build_module_summary_content(module)
+    
+    def _generate_interfaces_docs(self, project_analysis: Dict, output_dir: str) -> str:
+        """
+        生成 02_interfaces/*.md - 接口事实文档
+        
+        Args:
+            project_analysis: 项目分析结果
+            output_dir: 输出目录
+            
+        Returns:
+            生成的文档内容
+        """
+        print("生成 02_interfaces 文档...")
+        
+        rewrite_context_dir = Path(output_dir) / "docs" / "rewrite-context" / "02_interfaces"
+        rewrite_context_dir.mkdir(parents=True, exist_ok=True)
+        project_name = project_analysis.get("project_name", "project")
+        interface_entries = []
+
+        # 当前实现是“按模块生成接口文档”，不是“按文件逐个生成”。
+        # 这样更贴近后续 Rust 模块迁移的消费方式，也更有利于控制 prompt 大小。
+        # 可优化点：后续可以同时产出一份机器可读的接口清单，
+        # 例如把函数签名、输入输出、错误返回、所属头文件单独整理成 JSON。
+        for index, module in enumerate(self.module_units, start=2):
+            header_records = self._collect_module_header_records(module, project_analysis)
+            headers = [item["path"] for item in header_records]
+            functions = module.get("functions", [])[:self.MAX_INTERFACE_FUNCTIONS]
+            structs = self._collect_module_struct_records(module, project_analysis, header_records)
+            referenced_structs = self._collect_module_struct_references(module, structs)
+            macros = self._collect_module_macros(module, project_analysis, header_records)
+            globals_list = self._collect_module_globals(module, project_analysis)
+
+            if not headers and not functions and not structs and not referenced_structs and not macros and not globals_list:
+                continue
+
+            # 详细接口文档改为事实型拼装，避免生成“假设存在 xxx.h”这类不可执行信息。
+            content = self._build_interface_doc_content(
+                module=module,
+                header_records=header_records,
+                functions=functions,
+                structs=structs,
+                referenced_structs=referenced_structs,
+                macros=macros,
+                globals_list=globals_list,
+            )
+
+            detail_name = f"{index:03d}_{module['name']}.md"
+            detail_path = rewrite_context_dir / detail_name
+            with open(detail_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+
+            interface_entries.append(
+                {
+                    "module_name": module["name"],
+                    "category": module["category"],
+                    "headers": headers,
+                    "functions": [func.get("name", "unknown") for func in functions[:8] if isinstance(func, dict)],
+                    "structs": [struct.get("name", "unknown") for struct in structs[:8]],
+                    "detail_doc": detail_name,
+                }
+            )
+
+            print(f"  ✓ {detail_name} 已生成")
+
+        # 总览页只保留索引性质的信息，避免再做一次大型全量汇总。
+        content = self._build_interfaces_overview(project_name, interface_entries)
+        interfaces_path = rewrite_context_dir / "001_public_interfaces.md"
+        with open(interfaces_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        print(f"✓ 001_public_interfaces.md 已生成：{interfaces_path}")
+        return content
+    
+    def _generate_behaviors_docs(self, project_path: str, module_analyses: List[Dict], 
+                                output_dir: str) -> str:
+        """
+        生成 03_behaviors/*.md - 行为说明文档
+        
+        Args:
+            project_path: 项目路径
+            module_analyses: 模块分析结果
+            output_dir: 输出目录
+            
+        Returns:
+            生成的文档内容
+        """
+        print("生成 03_behaviors 文档...")
+        
+        rewrite_context_dir = Path(output_dir) / "docs" / "rewrite-context" / "03_behaviors"
+        rewrite_context_dir.mkdir(parents=True, exist_ok=True)
+        project_name = Path(project_path).name
+        behavior_blocks = self._build_behavior_blocks(module_analyses)
+        # 可优化点：行为归纳现在仍然偏摘要式。
+        # 如果后续要增强修复器或测试生成器，可以把 precondition / postcondition /
+        # invariant / error_case 明确拆成稳定字段，而不是主要保留在自然语言段落里。
+        behavior_chunks = self._chunk_blocks(behavior_blocks, self.MAX_BATCH_CHARS)
+
+        if not behavior_chunks:
+            # 模块分析为空时，至少生成一个可消费的占位文档，避免后续阶段找不到文件。
+            content = (
+                f"# {project_name} Behavior Specification\n\n"
+                "当前没有足够的模块分析结果来推导完整行为文档。"
+                "后续 Rust 重写时需要结合模块 spec 补充运行流程和状态约束。\n"
+            )
+        elif len(behavior_chunks) == 1:
+            # 模块不多时，直接单轮生成行为文档。
+            prompt = prompt_manager.get(
+                'spec_agent',
+                'generate_behaviors_doc',
+                project_name=project_name,
+                all_analyses=behavior_chunks[0],
+            )
+
+            content = self._generate_markdown_with_continuation(
+                prompt_manager.get('spec_agent', 'generate_behaviors_doc_system_prompt'),
+                prompt,
+                max_rounds=4,
+                label="行为文档",
+            )
+        else:
+            # 模块很多时，先做分批行为摘要，再做最终汇总。
+            # 这是为了兼顾“尽量完整理解项目”和“本地模型上下文有限”这两个目标。
+            batches_dir = rewrite_context_dir / "batches"
+            batches_dir.mkdir(parents=True, exist_ok=True)
+            batch_summaries = []
+
+            for batch_index, chunk in enumerate(behavior_chunks, start=1):
+                prompt = prompt_manager.get(
+                    'spec_agent',
+                    'generate_behaviors_batch_summary',
+                    project_name=project_name,
+                    batch_index=batch_index,
+                    total_batches=len(behavior_chunks),
+                    batch_analyses=chunk,
+                )
+
+                batch_content = self._generate_markdown_with_continuation(
+                    prompt_manager.get('spec_agent', 'generate_behaviors_batch_summary_system_prompt'),
+                    prompt,
+                    max_rounds=3,
+                    label=f"行为摘要批次 {batch_index}",
+                )
+                batch_path = batches_dir / f"{batch_index:03d}_behavior_summary.md"
+                with open(batch_path, 'w', encoding='utf-8') as f:
+                    f.write(batch_content)
+
+                batch_summaries.append(f"## Batch {batch_index}\n{batch_content}")
+                print(f"  ✓ 行为摘要批次 {batch_index}/{len(behavior_chunks)} 已生成")
+
+            # 所有批次摘要生成完后，再合成为最终行为规范。
+            prompt = prompt_manager.get(
+                'spec_agent',
+                'generate_behaviors_final_doc',
+                project_name=project_name,
+                batch_summaries="\n\n".join(batch_summaries),
+            )
+
+            content = self._generate_markdown_with_continuation(
+                prompt_manager.get('spec_agent', 'generate_behaviors_final_doc_system_prompt'),
+                prompt,
+                max_rounds=4,
+                label="行为文档最终汇总",
+            )
+        
+        # 保存文档
+        behaviors_path = rewrite_context_dir / "001_behavior_specification.md"
+        with open(behaviors_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        print(f"✓ 001_behavior_specification.md 已生成：{behaviors_path}")
+        return content
+    
+    def _generate_constitution(
+        self,
+        project_path: str,
+        project_info: Dict,
+        interfaces_doc: str,
+        behaviors_doc: str,
+        output_dir: str,
+    ) -> str:
+        """
+        生成 constitution.md - 项目级原则文档
+        
+        Args:
+            project_path: 项目路径
+            output_dir: 输出目录
+            
+        Returns:
+            生成的文档内容
+        """
+        print("生成 constitution.md - 项目级原则文档...")
+        
+        project_name = Path(project_path).name
+        project_context = self._build_constitution_context(project_info, interfaces_doc, behaviors_doc)
+        
+        # constitution 更像“迁移工程治理规则”，不应该重新阅读原始源码，而应该消费精炼后的上游文档。
+        # 可优化点：这里后续可以区分“强约束”和“软建议”两层，
+        # 让后续 Rust 生成与修复阶段更清楚哪些规则必须满足，哪些只是优先遵守。
+        prompt = prompt_manager.get('spec_agent', 'generate_constitution',
+                                   project_name=project_name,
+                                   project_context=project_context,
+                                   interface_summary=self._truncate_text(interfaces_doc, self.MAX_CONSTITUTION_DOC_CHARS),
+                                   behavior_summary=self._truncate_text(behaviors_doc, self.MAX_CONSTITUTION_DOC_CHARS))
+        
+        content = self._generate_markdown_with_continuation(
+            prompt_manager.get('spec_agent', 'generate_constitution_system_prompt'),
+            prompt,
+            max_rounds=5,
+            label="constitution.md",
+        )
+        
+        # 保存文档
+        memory_dir = Path(output_dir) / ".specify" / "memory"
+        memory_dir.mkdir(parents=True, exist_ok=True)
+        
+        constitution_path = memory_dir / "constitution.md"
+        with open(constitution_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        print(f"✓ constitution.md 已生成：{constitution_path}")
+        return content
+    
+    def _generate_spec_per_module(self, project_path: str, module: Dict, 
+                                 output_dir: str, module_index: int) -> str:
+        """
+        为单个模块生成 spec.md
+        
+        Args:
+            project_path: 项目路径
+            module: 模块信息
+            output_dir: 输出目录
+            module_index: 模块索引
+            
+        Returns:
+            生成的文档内容
+        """
+        project_name = Path(project_path).name
+        feature_name = module['name'].replace('-', '_').replace(' ', '_')
+        branch_name = f"{module_index:03d}-{feature_name}-rust-port"
+        today = datetime.now().strftime("%Y-%m-%d")
+        
+        specs_dir = Path(output_dir) / "specs" / branch_name
+        specs_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 这里把模块元数据重新压缩成 prompt 可用的文本块，
+        # 目的是为 spec-kit 的 spec.md 提供足够明确但不过载的上下文。
+        # 可优化点：这里可以进一步拆成“类型事实 / 接口事实 / 行为事实 / 风险事实”四段，
+        # 减少自然语言混排，提高下游 agent 对上下文的稳定消费能力。
+        functions_info = ""
+        for func in module.get('functions', [])[:30]:
+            if isinstance(func, dict):
+                functions_info += self._build_function_fact_line(func) + "\n"
+        
+        module_structs = self._collect_module_struct_records(module, self.project_analysis or {})
+        referenced_structs = self._collect_module_struct_references(module, module_structs)
+        structs_info = ""
+        for struct in module_structs[:30]:
+            structs_info += self._build_struct_fact_line(struct) + "\n"
+        for struct_name in referenced_structs[:20]:
+            structs_info += f"- `{struct_name}`: referenced type name without local definition\n"
+        
+        prompt = prompt_manager.get('spec_agent', 'generate_module_spec',
+                                   project_name=project_name,
+                                   module_name=module['name'],
+                                   module_category=module['category'],
+                                   branch_name=branch_name,
+                                   today=today,
+                                   files=module['files'],
+                                   functions_info=functions_info,
+                                   structs_info=structs_info)
+        
+        content = self._generate_markdown_with_continuation(
+            prompt_manager.get('spec_agent', 'generate_module_spec_system_prompt'),
+            prompt,
+            max_rounds=5,
+            label=f"{branch_name}/spec.md",
+        )
+        
+        # 保存文档
+        spec_path = specs_dir / "spec.md"
+        with open(spec_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        print(f"  ✓ spec.md 已生成：{spec_path}")
+        return content
+    
+    def _generate_plan_per_module(self, project_path: str, module: Dict, 
+                                 output_dir: str, module_index: int) -> str:
+        """
+        为单个模块生成 plan.md
+        
+        Args:
+            project_path: 项目路径
+            module: 模块信息
+            output_dir: 输出目录
+            module_index: 模块索引
+            
+        Returns:
+            生成的文档内容
+        """
+        project_name = Path(project_path).name
+        feature_name = module['name'].replace('-', '_').replace(' ', '_')
+        branch_name = f"{module_index:03d}-{feature_name}-rust-port"
+        
+        specs_dir = Path(output_dir) / "specs" / branch_name
+        
+        # plan.md 更偏“技术实现路线”，所以直接吃模块级信息，不依赖全局大上下文。
+        module_structs = self._collect_module_struct_records(module, self.project_analysis or {})
+        prompt = prompt_manager.get('spec_agent', 'generate_module_plan',
+                                   project_name=project_name,
+                                   module_name=module['name'],
+                                   module_category=module['category'],
+                                   branch_name=branch_name,
+                                   files=module['files'],
+                                   functions=module.get('functions', []),
+                                   structs=module_structs)
+        
+        content = self._generate_markdown_with_continuation(
+            prompt_manager.get('spec_agent', 'generate_module_plan_system_prompt'),
+            prompt,
+            max_rounds=4,
+            label=f"{branch_name}/plan.md",
+        )
+        
+        # 保存文档
+        plan_path = specs_dir / "plan.md"
+        with open(plan_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        print(f"  ✓ plan.md 已生成：{plan_path}")
+        return content
+    
+    def _generate_tasks_per_module(self, project_path: str, module: Dict, 
+                                  output_dir: str, module_index: int) -> str:
+        """
+        为单个模块生成 tasks.md
+        
+        Args:
+            project_path: 项目路径
+            module: 模块信息
+            output_dir: 输出目录
+            module_index: 模块索引
+            
+        Returns:
+            生成的文档内容
+        """
+        project_name = Path(project_path).name
+        feature_name = module['name'].replace('-', '_').replace(' ', '_')
+        branch_name = f"{module_index:03d}-{feature_name}-rust-port"
+        
+        specs_dir = Path(output_dir) / "specs" / branch_name
+        
+        # tasks.md 是执行层文档，因此这里只保留任务分解所需的最小上下文。
+        module_structs = self._collect_module_struct_records(module, self.project_analysis or {})
+        prompt = prompt_manager.get('spec_agent', 'generate_module_tasks',
+                                   project_name=project_name,
+                                   module_name=module['name'],
+                                   module_category=module['category'],
+                                   branch_name=branch_name,
+                                   files=module['files'],
+                                   functions=module.get('functions', []),
+                                   structs=module_structs)
+        
+        content = self._generate_markdown_with_continuation(
+            prompt_manager.get('spec_agent', 'generate_module_tasks_system_prompt'),
+            prompt,
+            max_rounds=4,
+            label=f"{branch_name}/tasks.md",
+        )
+        
+        # 保存文档
+        tasks_path = specs_dir / "tasks.md"
+        with open(tasks_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        print(f"  ✓ tasks.md 已生成：{tasks_path}")
+        return content
+    
+    def _generate_gaps_and_risks(self, project_path: str, module_analyses: List[Dict], 
+                                output_dir: str) -> str:
+        """
+        生成 04_gaps_and_risks.md - 不确定点和风险文档
+        
+        Args:
+            project_path: 项目路径
+            module_analyses: 模块分析结果
+            output_dir: 输出目录
+            
+        Returns:
+            生成的文档内容
+        """
+        print("生成 04_gaps_and_risks.md - 不确定点和风险文档...")
+        
+        rewrite_context_dir = Path(output_dir) / "docs" / "rewrite-context"
+        
+        # 风险文档仍然是全量汇总路径，因此在大项目上最容易成为上下文瓶颈。
+        # 你当前把它注释掉是合理的。
+        all_analyses = ""
+        for analysis in module_analyses:
+            all_analyses += f"### {analysis['module_name']} 模块\n"
+            all_analyses += analysis['analysis']
+            all_analyses += "\n\n"
+        
+        prompt = prompt_manager.get('spec_agent', 'generate_gaps_and_risks',
+                                   project_name=Path(project_path).name,
+                                   all_analyses=all_analyses)
+        
+        content = self._generate_markdown_with_continuation(
+            prompt_manager.get('spec_agent', 'generate_gaps_and_risks_system_prompt'),
+            prompt,
+            max_rounds=4,
+            label="gaps_and_risks.md",
+        )
+        
+        # 保存文档
+        gaps_path = rewrite_context_dir / "04_gaps_and_risks.md"
+        with open(gaps_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        print(f"✓ 04_gaps_and_risks.md 已生成：{gaps_path}")
+        return content
+
+    def _filter_findings_for_module(self, module: Dict, findings: List[Dict]) -> List[Dict]:
+        """
+        只保留与当前模块直接相关的条目，避免补充文档过长。
+        """
+        relevant_files = {self._normalize_path(path) for path in module.get("files", [])}
+        header_records = self._collect_module_header_records(module, self.project_analysis or {})
+        relevant_files.update(self._normalize_path(item.get("path", "")) for item in header_records)
+
+        module_findings = []
+        for item in findings:
+            file_path = self._normalize_path(item.get("file", ""))
+            if file_path in relevant_files:
+                module_findings.append(item)
+
+        return module_findings
+
+    def _build_module_auxiliary_note(self, title: str, findings: List[Dict], max_items: int = 8) -> str:
+        """
+        生成简短的 pointer.md / macro.md。
+        """
+        lines = [f"# {title}", ""]
+
+        if not findings:
+            lines.append("- 当前模块未发现需要特别关注的相关条目。")
+            return "\n".join(lines) + "\n"
+
+        summary = self._summarize_auxiliary_findings(findings)
+        lines.append("## 概览")
+        lines.append(f"- 条目总数：{len(findings)}")
+        if summary:
+            top_kinds = list(summary.items())[:4]
+            lines.append("- 类型分布：" + "，".join(f"{kind}={count}" for kind, count in top_kinds))
+
+        lines.extend(["", "## 关键条目"])
+        for item in findings[:max_items]:
+            location = f"{item.get('file', 'unknown')}:{item.get('line', 0)}"
+            declaration = self._trim_inline(item.get("declaration", ""), 120)
+            hint = self._trim_inline(item.get("rust_hint", ""), 100)
+            lines.append(
+                f"- `{item.get('kind', 'unknown')}` `{location}`: `{declaration}` -> {hint}"
+            )
+
+        if len(findings) > max_items:
+            lines.append(f"- 其余 {len(findings) - max_items} 条相近条目已省略。")
+
+        return "\n".join(lines) + "\n"
+
+    def _summarize_auxiliary_findings(self, findings: List[Dict]) -> Dict[str, int]:
+        """
+        对 pointer/macro 条目做轻量分类统计。
+        """
+        summary: Dict[str, int] = {}
+        for item in findings:
+            kind = item.get("kind", "unknown")
+            summary[kind] = summary.get(kind, 0) + 1
+        return dict(sorted(summary.items(), key=lambda kv: (-kv[1], kv[0])))
+
+    def _write_module_auxiliary_notes(self, module: Dict, output_dir: str, module_index: int) -> None:
+        """
+        在每个模块的 specs 目录下补充精简的 pointer.md / macro.md。
+        """
+        feature_name = module['name'].replace('-', '_').replace(' ', '_')
+        branch_name = f"{module_index:03d}-{feature_name}-rust-port"
+        specs_dir = Path(output_dir) / "specs" / branch_name
+        specs_dir.mkdir(parents=True, exist_ok=True)
+
+        if self.pointer_notes_enabled:
+            pointer_items = self._filter_findings_for_module(module, self.pointer_findings)
+            with open(specs_dir / "pointer.md", "w", encoding="utf-8") as f:
+                f.write(self._build_module_auxiliary_note("Pointer Notes", pointer_items))
+
+        if self.macro_notes_enabled:
+            macro_items = self._filter_findings_for_module(module, self.macro_findings)
+            with open(specs_dir / "macro.md", "w", encoding="utf-8") as f:
+                f.write(self._build_module_auxiliary_note("Macro Notes", macro_items))
+
+    def _generate_auxiliary_risk_summary(self, output_dir: str) -> None:
+        """
+        将模块级 pointer/macro 信息再汇总一份到 rewrite-context/04_gaps_and_risks/。
+        只有在启用了对应专项分析时才创建该目录。
+        """
+        if not self.pointer_notes_enabled and not self.macro_notes_enabled:
+            return
+
+        risk_dir = Path(output_dir) / "docs" / "rewrite-context" / "04_gaps_and_risks"
+        risk_dir.mkdir(parents=True, exist_ok=True)
+
+        lines = [
+            "# Pointer / Macro Gaps and Risks",
+            "",
+            "本文件汇总专项分析器给出的高风险迁移点，便于 Rust 生成阶段和人工复查阶段优先关注。",
+            "",
+        ]
+
+        if self.pointer_notes_enabled:
+            pointer_summary = self._summarize_auxiliary_findings(self.pointer_findings)
+            lines.extend([
+                "## Pointer 风险汇总",
+                f"- 条目总数：{len(self.pointer_findings)}",
+            ])
+            if pointer_summary:
+                top_pointer = list(pointer_summary.items())[:6]
+                lines.append("- 主要类型：" + "，".join(f"{kind}={count}" for kind, count in top_pointer))
+            lines.extend([
+                "- 重点关注：所有权恢复、节点/链式结构、双重指针、函数指针、显式分配与释放。",
+                "- Rust 侧优先检查 Box/Rc<RefCell>/NonNull/&mut/FFI 边界是否选择合理。",
+                "",
+            ])
+
+        if self.macro_notes_enabled:
+            macro_summary = self._summarize_auxiliary_findings(self.macro_findings)
+            lines.extend([
+                "## Macro 风险汇总",
+                f"- 条目总数：{len(self.macro_findings)}",
+            ])
+            if macro_summary:
+                top_macro = list(macro_summary.items())[:6]
+                lines.append("- 主要类型：" + "，".join(f"{kind}={count}" for kind, count in top_macro))
+            lines.extend([
+                "- 重点关注：函数式宏、语句型宏、条件编译块、位标志宏、依赖预处理技巧的复杂宏。",
+                "- Rust 侧优先检查 const / 函数 / #[cfg] / bitflags! / 手工改写 的选型是否正确。",
+                "",
+            ])
+
+        lines.extend([
+            "## 使用建议",
+            "- 若生成代码在所有权、宏替换、条件编译、回调接口处反复出错，应优先回看模块目录下的 pointer.md / macro.md。",
+            "- 本文件只做汇总，不替代各模块的专项说明。",
+            "",
+        ])
+
+        summary_path = risk_dir / "001_pointer_macro_summary.md"
+        with open(summary_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+
+    def _write_auxiliary_guide_files(self, guide_root: Path, guide_title: str, findings: List[Dict], summary: Dict[str, int], templates: Dict[str, Dict]) -> None:
+        """
+        将 PointerAgent / MacroAgent 的结果按 spec 风格拆成多文件写入。
+        这里不追求全量细节，而是保留摘要、模板和按类别分组后的代表性发现。
+        """
+        guide_root.mkdir(parents=True, exist_ok=True)
+
+        summary_lines = [
+            f"# {guide_title}",
+            "",
+            "## 分类统计",
+        ]
+        if summary:
+            for kind, count in summary.items():
+                summary_lines.append(f"- `{kind}`: {count}")
+        else:
+            summary_lines.append("- 未发现需要特别关注的条目")
+
+        summary_lines.extend([
+            "",
+            "## 指导模板",
+        ])
+        for kind, template in templates.items():
+            summary_lines.append(f"### {kind}")
+            summary_lines.append(f"- 场景说明：{template.get('scenario', '')}")
+            summary_lines.append(f"- Rust 候选：{', '.join(template.get('rust_candidates', []))}")
+            for note in template.get("notes", []):
+                summary_lines.append(f"- {note}")
+            summary_lines.append("")
+
+        with open(guide_root / "000_summary.md", "w", encoding="utf-8") as f:
+            f.write("\n".join(summary_lines))
+
+        by_kind_dir = guide_root / "by_kind"
+        by_kind_dir.mkdir(parents=True, exist_ok=True)
+        grouped: Dict[str, List[Dict]] = {}
+        for item in findings:
+            grouped.setdefault(item.get("kind", "unknown"), []).append(item)
+
+        for kind, items in sorted(grouped.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+            lines = [
+                f"# {guide_title} - {kind}",
+                "",
+                f"- 条目数量：{len(items)}",
+                "",
+            ]
+            for item in items[:30]:
+                lines.extend([
+                    f"## {item.get('name', 'unknown')}",
+                    f"- 位置：`{item.get('file', 'unknown')}:{item.get('line', 0)}`",
+                    f"- 原始定义：`{self._trim_inline(item.get('declaration', ''), 240)}`",
+                    f"- Rust 候选：{', '.join(item.get('rust_candidates', []))}",
+                    f"- 迁移建议：{item.get('rust_hint', '')}",
+                    "",
+                ])
+            if len(items) > 30:
+                lines.append(f"- 其余 {len(items) - 30} 条同类发现已省略。")
+                lines.append("")
+
+            safe_name = re.sub(r'[^A-Za-z0-9_\-]+', '_', kind)
+            with open(by_kind_dir / f"{safe_name}.md", "w", encoding="utf-8") as f:
+                f.write("\n".join(lines))
+
+        with open(guide_root / "index.json", "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "title": guide_title,
+                    "summary": summary,
+                    "total_findings": len(findings),
+                    "kinds": sorted(grouped.keys()),
+                },
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
+
+    def _generate_optional_translation_guides(self, project_path: str, output_dir: str, use_pointer_agent: bool = False, use_macro_agent: bool = False) -> None:
+        """
+        可选地把指针/宏分析接入 ContextualSpecAgent。
+        这里先只收集结果，后面在每个模块的 specs 目录下写入精简的 pointer.md / macro.md。
+        """
+        self.pointer_findings = []
+        self.macro_findings = []
+        self.pointer_notes_enabled = use_pointer_agent
+        self.macro_notes_enabled = use_macro_agent
+
+        if use_pointer_agent:
+            print("\n[可选] 生成指针迁移指导文档集...")
+            pointer_agent = PointerAgent()
+            findings, _ = pointer_agent.collect_findings(project_path, str(Path(output_dir) / "_pointer_tmp"))
+            self.pointer_findings = findings
+            print(f"  ✓ 已收集指针条目：{len(findings)}")
+
+        if use_macro_agent:
+            print("\n[可选] 生成宏迁移指导文档集...")
+            macro_agent = MacroAgent()
+            findings, _ = macro_agent.collect_findings(project_path)
+            self.macro_findings = macro_agent._select_important_findings(findings, 120)
+            print(f"  ✓ 已收集宏条目：{len(self.macro_findings)}")
+    
+    def analyze_and_generate_spec(self, project_path: str, output_dir: str, use_pointer_agent: bool = False, use_macro_agent: bool = False) -> None:
+        """
+        分析 C 项目并生成完整的 spec 文档集（分层聚类方法）
+        
+        Args:
+            project_path: 项目路径
+            output_dir: 输出目录
+        """
+        print("=" * 60)
+        print("ContextualSpecAgent - C 项目 Spec 文档生成（分层聚类 + 语义细分）")
+        print("=" * 60)
+        self._ensure_c_pipeline()
+        
+        # 整个流程可以粗分为三层：
+        # 1. 静态分析层：收集项目信息、AST、依赖图
+        # 2. 认知压缩层：模块划分、子系统摘要、接口/行为/constitution
+        # 3. 执行规划层：为每个模块生成 spec / plan / tasks
+        # 可优化点：如果后续要支持更大项目，可以把这三层做成可缓存流水线，
+        # 例如拆成“静态分析缓存 / 文档缓存 / spec 缓存”，避免每次实验都从头全量生成。
+
+        # 确保输出目录存在
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # 步骤 0: 初始化 spec-kit 项目结构
+        print("\n[步骤 0/9] 初始化 spec-kit 项目结构...")
+        try:
+            specify_init(output_dir, model_type="qwen", script="sh")
+            print("  ✓ spec-kit 项目结构初始化完成")
+        except Exception as e:
+            print(f"  ⚠ 初始化 spec-kit 失败：{e}，继续生成文档...")
+        
+        # 步骤 1: 收集项目基本信息
+        print("\n[步骤 1/9] 收集项目基本信息...")
+        project_info = self._collect_project_info(project_path)
+        print(f"  项目名称：{project_info['project_name']}")
+        print(f"  C 文件数量：{len(project_info['c_files'])}")
+        print(f"  头文件数量：{len(project_info['h_files'])}")
+        print(f"  构建系统：{project_info['build_system']}")
+        
+        # 步骤 2: 解析 C 代码结构并构建依赖图。
+        # parser 负责产出事实，dependency_graph 负责给模块划分和后续摘要提供关系信息。
+        print("\n[步骤 2/9] 解析 C 代码结构并构建依赖图...")
+        input_dir_name = Path(project_path).name
+        output_dir_path = Path(__file__).parent.parent / "parse" / "res"
+        output_dir_path.mkdir(parents=True, exist_ok=True)
+        output_file = str(output_dir_path / f"{input_dir_name}.json")
+        
+        self.parser.analyze_directory(project_path, output_file)
+        self.project_analysis = self.parser.get_project_analysis()
+        self.dependency_graph = self._build_dependency_graph(project_path, self.project_analysis)
+        print(f"  文件数量：{len(self.project_analysis['file_path_map'])}")
+        print(f"  函数数量：{len(self.project_analysis['functions'])}")
+        print(f"  结构体数量：{len(self.project_analysis['structs'])}")
+        
+        # 步骤 3: 使用 ModuleSplitter 进行模块划分。
+        # 这一步的输出会决定后面文档是按什么粒度生成。
+        print("\n[步骤 3/9] 使用 ModuleSplitter 进行模块划分...")
+        self.module_units, self.cluster_units = self._split_modules(
+            project_info, 
+            self.project_analysis, 
+            self.dependency_graph
+        )
+        
+        # 步骤 4: 生成 repo_manifest.md
+        print("\n[步骤 4/9] 生成仓库地图...")
+        self._generate_repo_manifest(project_info, output_dir)
+        
+        # 步骤 5: 生成子系统文档（基于模块单元）
+        print("\n[步骤 5/9] 生成子系统文档...")
+        module_analyses = self._generate_subsystem_docs(self.module_units, output_dir)
+        
+        # 步骤 6: 生成 rewrite-context 中最关键的“横切面文档”。
+        # 这些文档不是直接拿来替代源码，而是给后续 Rust 生成阶段提供结构化约束。
+        print("\n[步骤 6/9] 生成其他文档...")
+        self.project_analysis['project_name'] = project_info['project_name']
+        interfaces_doc = self._generate_interfaces_docs(self.project_analysis, output_dir)
+        translation_contract = self._generate_translation_contract(
+            project_path=project_path,
+            project_info=project_info,
+            project_analysis=self.project_analysis,
+            module_units=self.module_units,
+            output_dir=output_dir,
+        )
+        behaviors_doc = self._generate_behaviors_docs(project_path, module_analyses, output_dir)
+        # self._generate_gaps_and_risks(project_path, module_analyses, output_dir)
+        self._generate_constitution(project_path, project_info, interfaces_doc, behaviors_doc, output_dir)
+        self._generate_optional_translation_guides(
+            project_path=project_path,
+            output_dir=output_dir,
+            use_pointer_agent=use_pointer_agent,
+            use_macro_agent=use_macro_agent,
+        )
+        
+        # 步骤 7: 为每个模块生成 spec-kit 文档集。
+        # 这是把“理解结果”转成“执行文档”的过程。
+        print("\n[步骤 7/8] 为每个模块生成 spec-kit 文档集...")
+        for i, module in enumerate(self.module_units, 1):
+            print(f"\n处理模块 {i}/{len(self.module_units)}: {module['name']}")
+            self._generate_spec_per_module(project_path, module, output_dir, i)
+            self._generate_plan_per_module(project_path, module, output_dir, i)
+            self._generate_tasks_per_module(project_path, module, output_dir, i)
+            self._write_module_auxiliary_notes(module, output_dir, i)
+
+        self._generate_auxiliary_risk_summary(output_dir)
+        self._lint_generated_docs(output_dir, translation_contract)
+        
+        print("\n" + "=" * 60)
+        print("✓ ContextualSpecAgent 完成！")
+        print("=" * 60)
+        print(f"\n文档生成在：{output_dir}")
+        print(f"\n生成的模块 spec 数量：{len(self.module_units)}")
+        print(f"生成的函数簇数量：{len(self.cluster_units)}")
+        print("\n生成的文档结构:")
+        print("  docs/rewrite-context/")
+        print("    ├── 00_repo_manifest.md")
+        print("    ├── 01_subsystems/*.md")
+        print("    ├── 02_interfaces/001_public_interfaces.md")
+        print("    ├── 03_behaviors/001_behavior_specification.md")
+        print("    ├── translation_contract.json")
+        if self.pointer_notes_enabled or self.macro_notes_enabled:
+            print("    └── 04_gaps_and_risks/001_pointer_macro_summary.md")
+        print("  .specify/memory/constitution.md")
+        print("  specs/<index>-<module>-rust-port/")
+        print("    ├── spec.md")
+        print("    ├── plan.md")
+        print("    └── tasks.md")
+        if self.pointer_notes_enabled:
+            print("    ├── pointer.md")
+        if self.macro_notes_enabled:
+            print("    └── macro.md")
+
+    def load_rust_generation_context(
+        self,
+        doc_contents: Optional[Dict[str, str]] = None,
+        source_records: Optional[List[Dict]] = None,
+        translation_contract: Optional[Dict] = None,
+    ) -> RustGenerationSpecAgent:
+        """
+        为 Rust 生成链路准备一个只读的 spec context 视图。
+
+        这里不改动原有 C->spec 主流程，只是在 ContextualSpecAgent 上补一个
+        面向 Rust 侧的门面，避免 ContextualRustAgent 直接依赖多个实现细节。
+        """
+        self._rust_context_agent = RustGenerationSpecAgent(
+            doc_contents=doc_contents or {},
+            source_records=source_records or [],
+            translation_contract=translation_contract or {},
+            config=self.config,
+        )
+        return self._rust_context_agent
+
+    def infer_candidate_rust_files(self) -> List[str]:
+        if not self._rust_context_agent:
+            return []
+        return self._rust_context_agent.infer_candidate_files()
+
+    def build_rust_file_plan(self, allowed_files: Optional[Sequence[str]] = None) -> List[RustFilePlan]:
+        if not self._rust_context_agent:
+            return []
+        return self._rust_context_agent.build_file_plan(allowed_files=allowed_files)
+
+    def rust_context_for_file(self, plan: RustFilePlan) -> str:
+        if not self._rust_context_agent:
+            return ""
+        return self._rust_context_agent.context_for_file(plan)
+
+    def rust_context_for_planned_file(self, planned) -> str:
+        return self.rust_context_for_file(
+            RustFilePlan(
+                path=getattr(planned, "path", ""),
+                role=getattr(planned, "role", ""),
+                owns=list(getattr(planned, "owns", []) or []),
+                depends_on=list(getattr(planned, "depends_on", []) or []),
+                spec_queries=list(getattr(planned, "spec_queries", []) or []),
+                source_files=list(getattr(planned, "source_files", []) or []),
+                source_functions=list(getattr(planned, "source_functions", []) or []),
+            ),
+        )
+
+    def rust_context_for_query(self, query: str, max_chars: int = 18000) -> str:
+        if not self._rust_context_agent:
+            return ""
+        return self._rust_context_agent.context_for_query(query, max_chars=max_chars)
+
+    def rust_context_overview(self, max_chars: int = 12000) -> str:
+        if not self._rust_context_agent:
+            return ""
+        return self._rust_context_agent.overview(max_chars=max_chars)
+
+    def rust_rewrite_contract(self, planned=None) -> str:
+        return RustGenerationSpecPrompts.rewrite_contract(planned)
+
+    def rust_read_materials_followup(self, materials: str) -> str:
+        return RustGenerationSpecPrompts.read_materials_followup(materials)
+
+    def rust_project_planning_system_prompt(self) -> str:
+        return RustGenerationSpecPrompts.project_planning_system_prompt()
+
+    def rust_project_planning_prompt(self, fallback_files: Sequence[str], static_context: str) -> str:
+        return RustGenerationSpecPrompts.project_planning_prompt(fallback_files, static_context)
+
+    def rust_file_generation_system_prompt(self) -> str:
+        return RustGenerationSpecPrompts.file_generation_system_prompt()
+
+    def rust_file_generation_prompt(
+        self,
+        planned,
+        planned_files: Sequence[str],
+        plan_summary: str,
+        registry_summary: str,
+        spec_context: str,
+        source_context: str,
+    ) -> str:
+        return RustGenerationSpecPrompts.file_generation_prompt(
+            planned=planned,
+            planned_files=planned_files,
+            plan_summary=plan_summary,
+            registry_summary=registry_summary,
+            spec_context=spec_context,
+            source_context=source_context,
+        )
+
+    def rust_repair_system_prompt(self) -> str:
+        return RustGenerationSpecPrompts.repair_system_prompt()
+
+    def rust_repair_prompt(
+        self,
+        planned,
+        findings: Sequence[str],
+        registry_summary: str,
+        plan_summary: str,
+        current_content: str,
+    ) -> str:
+        return RustGenerationSpecPrompts.repair_prompt(
+            planned=planned,
+            findings=findings,
+            registry_summary=registry_summary,
+            plan_summary=plan_summary,
+            current_content=current_content,
+        )
+
+    def rust_force_write_system_prompt(self) -> str:
+        return RustGenerationSpecPrompts.force_write_system_prompt()
+
+    def rust_force_write_prompt(
+        self,
+        planned,
+        findings: Sequence[str],
+        registry_summary: str,
+        plan_summary: str,
+        current_content: str,
+    ) -> str:
+        return RustGenerationSpecPrompts.force_write_prompt(
+            planned=planned,
+            findings=findings,
+            registry_summary=registry_summary,
+            plan_summary=plan_summary,
+            current_content=current_content,
+        )
+
+
+__all__ = [
+    "ContextualSpecAgent",
+]

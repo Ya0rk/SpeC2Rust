@@ -1,0 +1,19 @@
+{
+  "project_name": "demo-rust",
+  "project_path": "E:\\Code\\C2R-Auto\\cGrcode\\src\\tests\\_tmp_contextual_rust_agent_79d86adafd1e43068dea5664183616cc\\demo-rust",
+  "project_structure": "",
+  "implementation_plan": "",
+  "planned_files": [
+    "src/unsafe_api.rs"
+  ],
+  "updated_at": "2026-04-29T20:27:00",
+  "files": {
+    "src/unsafe_api.rs": {
+      "status": "completed",
+      "updated_at": "2026-04-29T20:27:00",
+      "note": "contextual_force_write: registry lint is intentionally overridden for this migration step.",
+      "size": 60,
+      "sha256": "a421b2607c7c5f6cf80c7f55a67b21ccd4c749bdff3407810670fd8b982df2cb"
+    }
+  }
+}

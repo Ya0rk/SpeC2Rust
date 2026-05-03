@@ -13,6 +13,7 @@ from config.config import Config
 from utils.cmd import run
 from config.prompt import prompt_manager
 from llm.model import Model
+from agent.alternatives.contextual_rust_agent import RustProjectRegistry
 
 
 class Fixer:
@@ -90,19 +91,81 @@ class Fixer:
         """
         return os.path.join(self.project_path, ".cgr_api_contract.json")
 
-    def _load_api_contract_summary(self, max_chars: int = 12000) -> str:
+    def _build_live_reference_summary(self, max_chars: int = 50000) -> str:
+        """
+        从当前 src/*.rs 实时重建引用表。
+
+        旧项目的 .cgr_api_contract.json 可能没有 references 字段；repair 阶段
+        不能因此丢失函数参数、字段和可见性信息。
+        """
+        src_dir = Path(self.project_path) / "src"
+        if not src_dir.is_dir():
+            return ""
+
+        registry = RustProjectRegistry()
+        for path in sorted(src_dir.rglob("*.rs")):
+            try:
+                rel_path = path.relative_to(self.project_path).as_posix()
+                content = path.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            registry.update_file(rel_path, content)
+        if not registry.files:
+            return ""
+        return registry.summary(max_chars=max_chars)
+
+    def _format_reference_summary(self, references: List[Dict], default_path: str = "") -> List[str]:
+        lines = []
+        for ref in references:
+            kind = ref.get("kind", "")
+            visibility = ref.get("visibility", "public")
+            is_public = ref.get("public", visibility != "private")
+            path = ref.get("path") or default_path
+            owner = ref.get("owner_type", "")
+            name = ref.get("name", "")
+            signature = ref.get("signature", "")
+            params = ref.get("params", []) or []
+            if not isinstance(params, list):
+                params = [str(params)]
+            return_type = ref.get("return_type", "")
+            display_name = f"{owner}::{name}" if owner else name
+
+            if not signature:
+                if kind in {"function", "method"}:
+                    signature = f"{display_name}({', '.join(params)})"
+                    if return_type:
+                        signature += f" -> {return_type}"
+                elif kind == "field":
+                    signature = f"{display_name}: {return_type}" if return_type else display_name
+                else:
+                    signature = display_name
+            params_text = "[" + ", ".join(str(item) for item in params) + "]"
+            lines.append(
+                "- reference "
+                f"kind={kind}; "
+                f"visibility={visibility}; "
+                f"public={str(bool(is_public)).lower()}; "
+                f"path={path or '(unknown)'}; "
+                f"owner_type={owner or '(none)'}; "
+                f"name={name}; "
+                f"params={params_text}; "
+                f"return_type={return_type or '(none)'}; "
+                f"signature={signature}"
+            )
+        return lines
+
+    def _load_api_contract_summary(self, max_chars: int = 50000) -> str:
         """
         读取精简接口契约摘要，供跨文件接口修复时参考。
         """
         contract_path = self._api_contract_path()
-        if not os.path.exists(contract_path):
-            return ""
-        try:
-            with open(contract_path, 'r', encoding='utf-8') as f:
-                contract = json.load(f)
-        except Exception as e:
-            print(f"读取接口契约失败：{e}")
-            return ""
+        contract = {}
+        if os.path.exists(contract_path):
+            try:
+                with open(contract_path, 'r', encoding='utf-8') as f:
+                    contract = json.load(f)
+            except Exception as e:
+                print(f"读取接口契约失败：{e}")
 
         parts = ["当前 Rust 接口契约摘要："]
         for rel_path, info in contract.get("files", {}).items():
@@ -110,25 +173,45 @@ class Fixer:
             if not file_contract:
                 continue
             parts.append(f"\n### {rel_path}")
-            for struct in file_contract.get("public_structs", [])[:4]:
+            for struct in file_contract.get("public_structs", []):
                 fields = ", ".join(
-                    f"{f['name']}({'pub' if f['public'] else 'private'})"
-                    for f in struct.get("fields", [])[:8]
+                    f"{f['name']}({'pub' if f['public'] else 'private'}:{f.get('type', '?')})"
+                    for f in struct.get("fields", [])
                 )
                 parts.append(f"- struct {struct['name']}: {fields or '无字段信息'}")
-            for enum in file_contract.get("public_enums", [])[:4]:
-                parts.append(f"- enum {enum['name']}: {', '.join(enum.get('variants', [])[:8])}")
+            for enum in file_contract.get("public_enums", []):
+                parts.append(f"- enum {enum['name']}: {', '.join(enum.get('variants', []))}")
             if file_contract.get("constructors"):
-                parts.append(f"- constructors: {', '.join(file_contract['constructors'][:8])}")
+                parts.append(f"- constructors: {', '.join(file_contract['constructors'])}")
             if file_contract.get("accessors"):
-                parts.append(f"- accessors: {', '.join(file_contract['accessors'][:8])}")
+                parts.append(f"- accessors: {', '.join(file_contract['accessors'])}")
             if file_contract.get("public_functions"):
-                parts.append(f"- public_functions: {', '.join(file_contract['public_functions'][:8])}")
+                parts.append(f"- public_functions: {', '.join(file_contract['public_functions'])}")
+            references = file_contract.get("references") or info.get("references") or []
+            if references:
+                parts.append("- references (完整引用表；调用和字段访问必须以这里为准):")
+                parts.extend(self._format_reference_summary(references, default_path=rel_path))
+
+        live_reference_summary = self._build_live_reference_summary(max_chars=max_chars)
+        if live_reference_summary:
+            parts.append("\n### 当前 src/*.rs 实时引用表")
+            parts.append(live_reference_summary)
 
         text = "\n".join(parts).strip()
         if len(text) > max_chars:
             return text[:max_chars] + "\n\n[接口契约摘要已截断]"
         return text
+
+    def _is_secondary_rustc_location(self, text: str, match_start: int) -> bool:
+        prefix = text[:match_start]
+        previous_lines = [line.strip().lower() for line in prefix.splitlines()[-4:] if line.strip()]
+        if not previous_lines:
+            return False
+        marker_lines = previous_lines[-2:]
+        return any(
+            line.startswith(("note:", "help:", "warning:", "= note:", "= help:"))
+            for line in marker_lines
+        )
 
     def _looks_like_cross_file_interface_error(self, error_message: str) -> bool:
         """
@@ -147,6 +230,9 @@ class Fixer:
             "cannot find trait",
             "function or associated item not found",
             "mismatched types",
+            "this function takes",
+            "arguments were supplied",
+            "unexpected argument",
         ]
         return any(marker in normalized for marker in markers)
 
@@ -405,6 +491,8 @@ class Fixer:
         grouped: Dict[str, Dict] = {}
 
         for match in re.finditer(r'--> ([^:\n]+):(\d+):(\d+)', normalized):
+            if self._is_secondary_rustc_location(normalized, match.start()):
+                continue
             file_path = match.group(1).strip()
             if not os.path.isabs(file_path):
                 file_path = os.path.join(self.project_path, file_path)
@@ -1434,6 +1522,8 @@ class CodeFixer(Fixer):
         candidates: List[str] = []
 
         for match in re.finditer(r'--> ([^:\n]+):(\d+):(\d+)', error_message):
+            if self._is_secondary_rustc_location(error_message, match.start()):
+                continue
             file_path = match.group(1).strip()
             if not os.path.isabs(file_path):
                 file_path = os.path.join(self.project_path, file_path)
@@ -1472,6 +1562,8 @@ class CodeFixer(Fixer):
         grouped: Dict[str, Dict] = {}
 
         for match in re.finditer(r'--> ([^:\n]+):(\d+):(\d+)', normalized):
+            if self._is_secondary_rustc_location(normalized, match.start()):
+                continue
             file_path = match.group(1).strip()
             if not os.path.isabs(file_path):
                 file_path = os.path.join(self.project_path, file_path)
@@ -1564,6 +1656,16 @@ class CodeFixer(Fixer):
         if not candidate_blocks:
             return False
 
+        api_contract_summary = self._load_api_contract_summary(max_chars=50000)
+        contract_block = ""
+        if api_contract_summary:
+            contract_block = (
+                "\n\n接口契约与完整引用表：\n"
+                "```text\n"
+                f"{api_contract_summary}\n"
+                "```\n"
+            )
+
         prompt = f"""下面是一次 Rust 项目修复任务。
 
 错误类型：
@@ -1571,6 +1673,7 @@ class CodeFixer(Fixer):
 
 编译器/格式化器报错：
 {error_message}
+{contract_block}
 
 候选文件内容：
 {chr(10).join(candidate_blocks)}
@@ -1583,6 +1686,9 @@ class CodeFixer(Fixer):
 要求：
 1. 只能选择上面给出的候选文件之一
 2. 不要输出解释
+3. 如果错误是 E0061 / no field / no method / 参数数量不匹配，优先选择“发生错误的调用方文件”，不要因为 `note: associated function defined here` 选择被调用方定义文件
+4. 判断调用是否合法时必须读取完整引用表中的 `params`、`return_type`、`owner_type`、`visibility`、`signature`
+5. 如果候选文件中的调用违反引用表签名，例如 `Bounds::new` 的 `params=[]` 却传入参数，应选择该候选文件修调用
 """
 
         messages = [

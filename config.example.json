@@ -16,5 +16,7 @@
   "generate_examples": false,
   "generate_benches": false,
   "skeleton_first": true,
+  "round_log_enabled": true,
+  "round_log_dir": "",
   "提示": "本文件需要改为local_config.json使用，并需要删了本行"
 }

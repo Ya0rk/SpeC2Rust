@@ -76,6 +76,7 @@ if ($pythonExe) {
         --c_project_path $dataset `
         --output_dir $outputDir `
         --rust-project-name $rustProjectName `
+        --use-rust-repair-agent `
         --use-spec-agent 2>&1 | Tee-Object -FilePath $logFile
 }
 else {
