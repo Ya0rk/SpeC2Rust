@@ -1753,6 +1753,64 @@ class ContextualRustAgent(RustAgent):
             source_context=source_context,
         )
 
+    def _generate_file_with_continuation(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        label: str,
+        code_lang: str = "rust",
+        max_read_rounds: int = 5,
+        max_continuation_rounds: int = 4,
+    ) -> str:
+        """先走 _chat_with_context_requests 完成 read 循环，
+        然后检测是否因 max_tokens 截断（无 <CGR_DONE>），
+        如果截断则自动续写，最终返回拼接后的完整代码。"""
+
+        response = self._chat_with_context_requests(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            label=label,
+            max_read_rounds=max_read_rounds,
+        )
+        content, done = self._extract_done_marker(response)
+        content = self._extract_generated_content(content, code_lang=code_lang)
+
+        if done or not code_lang:
+            return content
+
+        accumulated = content
+        for cont_round in range(1, max_continuation_rounds + 1):
+            continuation_user = (
+                f"你上一次输出在 max_tokens 处被截断了。"
+                f"下面是你已经输出的全部代码：\n"
+                f"```{code_lang}\n{accumulated}\n```\n\n"
+                f"请从截断处继续输出（不要重复已有代码），完成后在末尾追加 `<CGR_DONE>`。\n"
+                f"只输出代码续写部分和 `<CGR_DONE>`，不需要解释。"
+            )
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+                {"role": "assistant", "content": f"```{code_lang}\n{accumulated}\n```"},
+                {"role": "user", "content": continuation_user},
+            ]
+            print(f"  续写 {label} [continuation {cont_round}]")
+            reply = self._read_llm(messages, f"{label} [continuation {cont_round}]")
+            chunk, chunk_done = self._extract_done_marker(reply)
+            chunk = self._extract_generated_content(chunk, code_lang=code_lang)
+            chunk = self._strip_outer_code_fences(chunk, code_lang)
+
+            if chunk.strip():
+                if not accumulated.endswith("\n"):
+                    accumulated += "\n"
+                accumulated += chunk.strip()
+
+            if chunk_done:
+                print(f"  续写完成 ({cont_round} round(s))")
+                break
+        else:
+            print(f"  续写达到上限 ({max_continuation_rounds} rounds)，使用当前累积内容")
+        return accumulated
+
     def _generate_contextual_file(self, planned: PlannedFile, planned_files: Sequence[str]) -> Tuple[bool, str]:
         print(f"ContextualRustAgent 生成文件：{planned.path}")
         self._mark_generation_status(planned.path, "in_progress", "contextual_generation")
@@ -1772,15 +1830,15 @@ class ContextualRustAgent(RustAgent):
             self._mark_generation_status(normalized, "completed", "local_lib_rs")
             return True, content
 
-        response = self._chat_with_context_requests(
+        code_lang = "" if normalized.lower() == "readme.md" else "rust"
+        content = self._generate_file_with_continuation(
             system_prompt=self._spec_agent().rust_file_generation_system_prompt(),
             user_prompt=self._build_file_prompt(planned, planned_files),
             label=f"ContextualRustAgent 代码生成 {planned.path}",
+            code_lang=code_lang,
             max_read_rounds=5,
+            max_continuation_rounds=4,
         )
-        content, _ = self._extract_done_marker(response)
-        code_lang = "" if normalized.lower() == "readme.md" else "rust"
-        content = self._extract_generated_content(content, code_lang=code_lang)
         content = self._sanitize_file_content_before_write(normalized, content)
 
         if not content.strip() and normalized.lower() == "readme.md":
@@ -1914,8 +1972,14 @@ class ContextualRustAgent(RustAgent):
                 if prefix not in source_stems:
                     continue
             escaped = re.escape(function_name)
-            if re.search(rf"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?fn\s+{escaped}\s*\(", text):
-                findings.append(f"C ABI 泄漏：{rel_path} 照抄了 C 函数名 `{function_name}`，应改为 Rust 类型方法或 Rust 命名自由函数")
+            if not re.search(rf"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?fn\s+{escaped}\s*\(", text):
+                continue
+            if "_" not in function_name and re.search(
+                rf"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?fn\s+{escaped}\s*\(\s*&(?:mut\s+)?self",
+                text,
+            ):
+                continue
+            findings.append(f"C ABI 泄漏：{rel_path} 照抄了 C 函数名 `{function_name}`，应改为 Rust 类型方法或 Rust 命名自由函数")
 
         return findings
 
@@ -2048,10 +2112,20 @@ class ContextualRustAgent(RustAgent):
 
         try:
             result_lines = self._apply_partial_edits(lines, edits)
-            return "".join(result_lines)
         except Exception as exc:
             print(f"局部修复编辑应用失败：{exc}，回退到整文件修复")
             return ""
+
+        result_text = "".join(result_lines)
+        opens = result_text.count("{")
+        closes = result_text.count("}")
+        if opens - closes >= 3 or closes - opens >= 3:
+            print(f"局部修复导致大括号不平衡 ({{ {opens} vs }} {closes})，拒绝局部修复")
+            return ""
+        if len(result_lines) < len(lines) * 0.8:
+            print(f"局部修复删除过多内容 ({len(lines)} -> {len(result_lines)} 行)，拒绝局部修复")
+            return ""
+        return result_text
 
     @staticmethod
     def _numbered_slice(lines: Sequence[str], start: int, end: int, context_tag: str = "") -> str:

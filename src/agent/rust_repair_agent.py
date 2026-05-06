@@ -979,6 +979,15 @@ class RustRepairAgent:
                 mode = edit.get("mode") or "replace_range"
                 if mode not in {"replace_range", "delete_range", "insert_before", "insert_after"}:
                     continue
+                start = int(edit.get("start_line") or 0)
+                end = int(edit.get("end_line") or start)
+                span = end - start + 1 if start and end else 0
+                if mode == "replace_range" and span > 120:
+                    print(f"  跳过过大的 replace_range ({span} 行)：{rel_path}:{start}-{end}")
+                    continue
+                if mode == "delete_range" and span > 60:
+                    print(f"  跳过过大的 delete_range ({span} 行)：{rel_path}:{start}-{end}")
+                    continue
                 try:
                     lines, delta, record = self._apply_single_edit_to_lines(lines, edit)
                 except Exception:
@@ -1065,7 +1074,7 @@ class RustRepairAgent:
 ```
 """
 
-    def _llm_fix_file(self, project_dir: str, rel_path: str, error_block: str) -> bool:
+    def _llm_fix_file(self, project_dir: str, rel_path: str, error_block: str, max_continuation_rounds: int = 4) -> bool:
         full_path = os.path.join(project_dir, rel_path.replace("/", os.sep))
         if not os.path.exists(full_path):
             return False
@@ -1073,14 +1082,45 @@ class RustRepairAgent:
         file_content = self._read_file(full_path)
         related_context = self._collect_related_context(project_dir, rel_path)
         prompt = self._build_fix_prompt(rel_path, error_block, file_content, related_context)
+        system_prompt = "你是经验丰富的 Rust 编译修复助手。"
         self._set_request_label(f"独立修复 {os.path.basename(rel_path)}")
         response = self.llm.generate([
-            {"role": "system", "content": "你是经验丰富的 Rust 编译修复助手。"},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
         ])
         fixed_code = self._extract_code(response[0] if isinstance(response, list) else response)
         if not fixed_code.strip():
             return False
+
+        for cont_round in range(1, max_continuation_rounds + 1):
+            opens = fixed_code.count("{")
+            closes = fixed_code.count("}")
+            if opens - closes < 3:
+                break
+            print(f"    独立修复续写 {rel_path} [continuation {cont_round}]")
+            continuation_user = (
+                f"你上一次输出在 max_tokens 处被截断了。"
+                f"下面是你已经输出的全部代码：\n"
+                f"```rust\n{fixed_code}\n```\n\n"
+                f"请从截断处继续输出（不要重复已有代码），直到文件完整结束。\n"
+                f"只输出代码续写部分，不需要解释。"
+            )
+            self._set_request_label(f"独立修复续写 {os.path.basename(rel_path)} [cont {cont_round}]")
+            reply = self.llm.generate([
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": f"```rust\n{fixed_code}\n```"},
+                {"role": "user", "content": continuation_user},
+            ])
+            chunk = self._extract_code(reply[0] if isinstance(reply, list) else reply)
+            chunk = self._strip_outer_code_fences(chunk)
+            if chunk.strip():
+                if not fixed_code.endswith("\n"):
+                    fixed_code += "\n"
+                fixed_code += chunk.strip()
+            else:
+                break
+
         self._write_file(full_path, fixed_code)
         return True
 
