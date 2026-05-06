@@ -23,11 +23,8 @@ def _dedupe_keep_order(items: Iterable[str]) -> List[str]:
     return ordered
 
 
-def _clip_text(text: str, max_chars: int) -> str:
-    content = text or ""
-    if len(content) <= max_chars:
-        return content
-    return content[:max_chars].rstrip() + "\n...[截断]..."
+def _clip_text(text: str, max_chars: int = 0) -> str:
+    return text or ""
 
 
 def _collapse_spaces(text: str) -> str:
@@ -227,7 +224,7 @@ class SpecDocumentIndex:
             for item in sorted(grouped[kind], key=lambda current: current.rel_path):
                 module = f" module={item.module}" if item.module else ""
                 lines.append(f"- {item.rel_path}{module}: {item.title}")
-        return _clip_text("\n".join(lines), max_chars)
+        return "\n".join(lines)
 
     def _target_module(self, rel_path: str) -> str:
         """从 Rust 文件路径推导目标模块名：src/sds.rs → sds"""
@@ -928,7 +925,7 @@ class RustProjectRegistry:
                 lines.append("  references:")
                 for ref in symbols.references:
                     lines.append(f"    - {ref.detail_line()}")
-        return _clip_text("\n".join(lines) if lines else "(当前还没有已生成 Rust 符号)", max_chars)
+        return "\n".join(lines) if lines else "(当前还没有已生成 Rust 符号)"
 
 
 class ContextualRustAgent(RustAgent):
@@ -991,6 +988,41 @@ class ContextualRustAgent(RustAgent):
             )
         return self.spec_context_agent.rust_context_for_planned_file(planned)
 
+    def _build_translation_contract_context(self, max_chars: int = 0) -> str:
+        if not self.translation_contract:
+            return ""
+        boundary = self.translation_contract.get("generation_boundary", {})
+        functions = self.translation_contract.get("functions", [])
+        types = self.translation_contract.get("types", [])
+        parts = [
+            "迁移契约（最高优先级）：",
+            f"- 项目类型：{self.translation_contract.get('project', {}).get('kind', 'unknown')}",
+            f"- 允许生成文件：{', '.join(self.allowed_rust_files) if self.allowed_rust_files else '未限制'}",
+            f"- 依赖策略：{boundary.get('dependency_policy', 'unspecified')}",
+            f"- 允许测试文件：{bool(boundary.get('allow_tests', False))}",
+            f"- 允许示例文件：{bool(boundary.get('allow_examples', False))}",
+            f"- 允许 benchmark：{bool(boundary.get('allow_benches', False))}",
+            f"- 允许 FFI：{bool(boundary.get('allow_ffi', False))}",
+            "",
+            "函数角色摘要：",
+        ]
+        for item in functions:
+            parts.append(
+                f"- {item.get('id', '')} {item.get('name', 'unknown')} "
+                f"[{item.get('role', 'unknown')}] {item.get('source', '')}"
+            )
+        if types:
+            parts.append("")
+            parts.append("类型事实摘要：")
+            for item in types:
+                field_names = ", ".join(field.get("name", "") for field in item.get("fields", []) if field.get("name"))
+                parts.append(f"- {item.get('id', '')} {item.get('name', 'unknown')} {item.get('source', '')}: {field_names or '字段待回查'}")
+        forbidden = self.translation_contract.get("forbidden_without_evidence", [])
+        if forbidden:
+            parts.append("")
+            parts.append(f"未获证据禁止生成：{', '.join(str(item) for item in forbidden)}")
+        return "\n".join(parts).strip()
+
     def _build_static_project_context(self) -> str:
         parts = [
             f"项目名称：{self.project_name}",
@@ -1000,7 +1032,7 @@ class ContextualRustAgent(RustAgent):
             "Rust 化迁移契约（最高优先级）：\n" + self._rust_rewrite_contract(),
         ]
 
-        contract_context = self._build_translation_contract_context(max_chars=7000)
+        contract_context = self._build_translation_contract_context()
         if contract_context:
             parts.append("迁移契约（最高优先级）：\n" + contract_context)
             scope = self._contract_scope_instructions()
@@ -1008,11 +1040,11 @@ class ContextualRustAgent(RustAgent):
                 parts.append(scope)
 
         if self.source_interface_summary:
-            parts.append("原始 C 对外接口事实：\n" + _clip_text(self.source_interface_summary, 3000))
+            parts.append("原始 C 对外接口事实：\n" + self.source_interface_summary)
         if self.tool_interface_constraints:
-            parts.append("工具/CLI 接口保持约束：\n" + _clip_text(self.tool_interface_constraints, 2500))
+            parts.append("工具/CLI 接口保持约束：\n" + self.tool_interface_constraints)
         if self.spec_index.slices:
-            overview = self._spec_overview(max_chars=5000)
+            overview = self._spec_overview()
             parts.append("可用 spec 文档索引（只有索引，不是全文）：\n" + overview)
         return "\n\n".join(part for part in parts if part).strip()
 
@@ -1091,30 +1123,28 @@ class ContextualRustAgent(RustAgent):
                 requests.append({"kind": kind, "query": query})
         return requests
 
-    def _materialize_read_requests(self, read_requests: Sequence[Dict[str, str]], max_chars: int = 18000) -> str:
+    def _materialize_read_requests(self, read_requests: Sequence[Dict[str, str]], max_chars: int = 40000) -> str:
         blocks = []
         total = 0
+        per_request_budget = 12000
         for request in read_requests:
             kind = (request.get("kind") or "").lower()
             query = request.get("query") or ""
             if kind in {"spec", "doc", "docs"}:
-                content = self._spec_context_for_query(query, max_chars=8000)
+                content = self._spec_context_for_query(query, max_chars=per_request_budget)
             elif kind in {"source", "c", "c_source"}:
-                content = self._read_source_material(query, max_chars=8000)
+                content = self._read_source_material(query, max_chars=per_request_budget)
             elif kind in {"rust", "generated", "file"}:
-                content = self._read_generated_rust_material(query, max_chars=8000)
+                content = self._read_generated_rust_material(query, max_chars=per_request_budget)
             elif kind in {"registry", "symbols", "symbol"}:
-                content = self.registry.summary(max_chars=8000)
+                content = self.registry.summary(max_chars=per_request_budget)
             elif kind in {"plan", "project_plan"}:
                 content = self._format_plan_summary()
             else:
                 content = f"不支持的读取类型：{kind}"
 
             block = f"\n\n=== READ {kind or 'unknown'}: {query or '(empty)'} ===\n{content}\n"
-            if total + len(block) > max_chars:
-                remaining = max_chars - total
-                if remaining > 0:
-                    blocks.append(block[:remaining].rstrip() + "\n...[读取材料预算已满]...")
+            if max_chars and total + len(block) > max_chars:
                 break
             blocks.append(block)
             total += len(block)
@@ -1135,7 +1165,7 @@ class ContextualRustAgent(RustAgent):
         return None
 
     def _read_source_material(self, query: str, max_chars: int = 8000) -> str:
-        normalized_query = (query or "").replace("\\", "/").strip()
+        normalized_query = (query or "").replace("\\", "/").strip().lstrip("/")
         lowered_query = normalized_query.lower()
 
         exact_func = [r for r in self.source_records if str(r.get("name", "")).lower() == lowered_query]
@@ -1152,7 +1182,7 @@ class ContextualRustAgent(RustAgent):
         direct = self._safe_join_existing_file(self.source_project_path, normalized_query)
         if direct:
             try:
-                return _clip_text(Path(direct).read_text(encoding="utf-8", errors="ignore"), max_chars)
+                return Path(direct).read_text(encoding="utf-8", errors="ignore")
             except Exception as exc:
                 return f"读取源文件失败：{exc}"
 
@@ -1181,16 +1211,14 @@ class ContextualRustAgent(RustAgent):
             ]
             if calls:
                 caller_lines = ", ".join(
-                    f"{c.get('caller', '?').rsplit(':', 1)[-1]}(): {self._truncate_text(str(c.get('source', '')).strip(), 60)}"
+                    f"{c.get('caller', '?').rsplit(':', 1)[-1]}(): {str(c.get('source', '')).strip()}"
                     for c in calls if c.get("caller")
                 )
                 if caller_lines:
                     block_lines.append(f"被调用于：{caller_lines}")
             block_lines.append(record.get("source", ""))
             block = "\n".join(block_lines) + "\n"
-            if total + len(block) > max_chars and parts:
-                remaining_count = len(records) - records.index(record)
-                parts.append(f"\n...另有 {remaining_count} 个函数因预算限制未展示，可缩小查询范围重试。")
+            if max_chars and total + len(block) > max_chars and parts:
                 break
             parts.append(block)
             total += len(block)
@@ -1202,7 +1230,7 @@ class ContextualRustAgent(RustAgent):
         if not path:
             return f"生成项目中不存在该 Rust 文件：{normalized}"
         try:
-            return _clip_text(Path(path).read_text(encoding="utf-8", errors="ignore"), max_chars)
+            return Path(path).read_text(encoding="utf-8", errors="ignore")
         except Exception as exc:
             return f"读取 Rust 文件失败：{exc}"
 
@@ -1421,10 +1449,96 @@ class ContextualRustAgent(RustAgent):
             if item.source_files:
                 lines.append(f"   source_files: {', '.join(item.source_files)}")
             if item.source_functions:
-                lines.append(f"   source_functions: {', '.join(item.source_functions[:16])}")
+                lines.append(f"   source_functions: {', '.join(item.source_functions)}")
             if item.spec_queries:
                 lines.append(f"   spec_queries: {', '.join(item.spec_queries)}")
         return "\n".join(lines)
+
+    def _generate_contextual_project_structure(self) -> str:
+        print("生成项目结构设计...")
+        plan_summary = self._format_plan_summary()
+        static_context = self._build_static_project_context()
+        spec_overview = self._spec_overview(max_chars=8000)
+
+        prompt = self._spec_agent().rust_project_structure_prompt(
+            project_name=self.project_name,
+            plan_summary=plan_summary,
+            static_context=static_context,
+            spec_overview=spec_overview,
+        )
+        response = self._chat_with_context_requests(
+            system_prompt=self._spec_agent().rust_project_structure_system_prompt(),
+            user_prompt=prompt,
+            label="ContextualRustAgent 项目结构设计",
+            max_read_rounds=3,
+        )
+        structure, _ = self._extract_done_marker(response)
+        print("项目结构设计完成")
+        return structure
+
+    def _generate_contextual_implementation_plan(self, project_structure: str) -> str:
+        print("生成实现计划...")
+        plan_summary = self._format_plan_summary()
+        planned_files = [item.path for item in self.contextual_plan]
+
+        prompt = self._spec_agent().rust_implementation_plan_prompt(
+            project_structure=project_structure,
+            plan_summary=plan_summary,
+            files_list=planned_files,
+        )
+        response = self._chat_with_context_requests(
+            system_prompt=self._spec_agent().rust_implementation_plan_system_prompt(),
+            user_prompt=prompt,
+            label="ContextualRustAgent 实现计划",
+            max_read_rounds=3,
+        )
+        plan_text, _ = self._extract_done_marker(response)
+
+        if '<implementation_plan>' in plan_text:
+            parts = plan_text.split('<implementation_plan>')
+            plan_text = parts[1].split('</implementation_plan>')[0].strip()
+
+        if '<new_files_to_generate>' in plan_text and '</new_files_to_generate>' in plan_text:
+            try:
+                tag_content = plan_text.split('<new_files_to_generate>')[1].split('</new_files_to_generate>')[0].strip()
+                new_order = self._parse_reorder_tag(tag_content, planned_files)
+                if new_order:
+                    print(f"从实现计划中提取新文件顺序：{new_order}")
+                    self._reorder_contextual_plan(new_order)
+            except Exception as e:
+                print(f"解析新文件顺序失败：{e}，保留原始顺序")
+
+        print("实现计划制定完成")
+        return plan_text
+
+    def _parse_reorder_tag(self, tag_content: str, current_files: List[str]) -> List[str]:
+        text = tag_content.strip()
+        allowed = {f.replace("\\", "/") for f in current_files}
+        candidates: List[str] = []
+        for line in text.splitlines():
+            cleaned = line.strip().strip("-").strip("*").strip()
+            cleaned = re.sub(r"^\d+[\.\)]\s*", "", cleaned).strip()
+            cleaned = cleaned.strip('"').strip("'").strip("`").strip()
+            normalized = cleaned.replace("\\", "/")
+            if normalized in allowed:
+                candidates.append(normalized)
+        return _dedupe_keep_order(candidates) if candidates else []
+
+    def _reorder_contextual_plan(self, new_order: List[str]):
+        by_path = {item.path.replace("\\", "/"): item for item in self.contextual_plan}
+        reordered: List[PlannedFile] = []
+        seen: set = set()
+        for path in new_order:
+            if path in by_path and path not in seen:
+                reordered.append(by_path[path])
+                seen.add(path)
+        for item in self.contextual_plan:
+            normalized = item.path.replace("\\", "/")
+            if normalized not in seen:
+                reordered.append(item)
+                seen.add(normalized)
+        self.contextual_plan = reordered
+        self._plan_by_path = {item.path: item for item in self.contextual_plan}
 
     def _build_targeted_plan_summary(self, planned: PlannedFile) -> str:
         """只保留当前文件、直接依赖和直接被依赖的计划条目，减少无关上下文。
@@ -1453,7 +1567,7 @@ class ContextualRustAgent(RustAgent):
             if item.source_files:
                 lines.append(f"   source_files: {', '.join(item.source_files)}")
             if item.source_functions:
-                lines.append(f"   source_functions: {', '.join(item.source_functions[:16])}")
+                lines.append(f"   source_functions: {', '.join(item.source_functions)}")
         if not lines:
             return self._format_plan_summary()
 
@@ -1466,6 +1580,14 @@ class ContextualRustAgent(RustAgent):
             global_index.append(f"  - {item.path}{owns_hint}")
         if len(global_index) > 1:
             lines.extend(global_index)
+
+        if getattr(self, "project_structure", ""):
+            lines.append("\n--- 项目结构设计 ---")
+            lines.append(self.project_structure)
+        if getattr(self, "implementation_plan", ""):
+            lines.append("\n--- 实现计划 ---")
+            lines.append(self.implementation_plan)
+
         return "\n".join(lines)
 
     def _build_targeted_registry_summary(self, planned: PlannedFile) -> str:
@@ -1524,7 +1646,7 @@ class ContextualRustAgent(RustAgent):
         if not self.source_records:
             return ""
 
-        target_files = {sf.replace("\\", "/").lower() for sf in (planned.source_files or [])}
+        target_files = {sf.replace("\\", "/").lstrip("/").lower() for sf in (planned.source_files or [])}
         target_funcs = {fn.lower() for fn in (planned.source_functions or [])}
         file_stem = os.path.splitext(os.path.basename(planned.path.replace("\\", "/")))[0].lower()
 
@@ -1550,13 +1672,25 @@ class ContextualRustAgent(RustAgent):
         if not scored:
             return ""
 
-        scored.sort(key=lambda item: (-item[0], -int(item[1].get("num_lines", 0)), item[1].get("name", "")))
+        # 排序：高分优先；同分时短函数（真正实现）优先于长函数（test/main）
+        scored.sort(key=lambda item: (-item[0], int(item[1].get("num_lines", 0)), item[1].get("name", "")))
 
-        MAX_INLINE = 2
+        # 跳过 test/main 等测试入口，不浪费内联 token
+        _skip_inline = {"sdstest", "main", "test_cond", "test_report"}
+
+        MAX_INLINE = 10
+        MAX_INLINE_LINES = 80  # 超过此行数的函数只放索引
         inline_records = []
         index_records = []
-        for rank, (score, record) in enumerate(scored):
-            if rank < MAX_INLINE and score >= 20:
+        for score, record in scored:
+            name_lower = str(record.get("name", "")).lower()
+            num_lines = int(record.get("num_lines", 0))
+            if (
+                len(inline_records) < MAX_INLINE
+                and score >= 20
+                and name_lower not in _skip_inline
+                and num_lines <= MAX_INLINE_LINES
+            ):
                 inline_records.append(record)
             else:
                 index_records.append(record)
@@ -1574,14 +1708,14 @@ class ContextualRustAgent(RustAgent):
                         for call in calls
                     )
                     block_lines.append(f"被调用于：{call_lines}")
-                snippet = self._truncate_text(record.get("source", "").strip(), 1200)
+                snippet = record.get("source", "").strip()
                 block_lines.append(f"```c\n{snippet}\n```")
                 block = "\n".join(block_lines)
                 parts.append(block)
 
         if index_records:
             parts.append("\n## C 源码索引（需要详情请用 <CGR_READ> 请求）")
-            for record in index_records[:20]:
+            for record in index_records:
                 sig = self._extract_c_signature(record)
                 callers = record.get("calls", [])[:3]
                 caller_hint = ""
@@ -1603,7 +1737,7 @@ class ContextualRustAgent(RustAgent):
         else:
             sig = source.split("\n")[0].strip()
         sig = " ".join(sig.split())
-        return self._truncate_text(sig, 120)
+        return sig
 
     def _build_file_prompt(self, planned: PlannedFile, planned_files: Sequence[str]) -> str:
         spec_context = self._spec_context_for_file(planned)
@@ -1642,7 +1776,7 @@ class ContextualRustAgent(RustAgent):
             system_prompt=self._spec_agent().rust_file_generation_system_prompt(),
             user_prompt=self._build_file_prompt(planned, planned_files),
             label=f"ContextualRustAgent 代码生成 {planned.path}",
-            max_read_rounds=3,
+            max_read_rounds=5,
         )
         content, _ = self._extract_done_marker(response)
         code_lang = "" if normalized.lower() == "readme.md" else "rust"
@@ -1764,7 +1898,21 @@ class ContextualRustAgent(RustAgent):
             findings.append(f"C ABI 泄漏：{rel_path} 暴露了 C 风格生命周期函数 `{function_name}`，应改为构造器/Drop/所有权")
 
         source_functions = planned.source_functions if planned else []
+        _skip_names = {
+            "main", "s_malloc", "s_realloc", "s_free", "s_trymalloc",
+            "test_cond", "test_report", "main_root",
+        }
         for function_name in source_functions:
+            if function_name in _skip_names:
+                continue
+            if re.fullmatch(r"[a-z][a-z0-9]*(_[a-z0-9]+)*", function_name) and "_" in function_name:
+                prefix = function_name.split("_")[0]
+                source_stems = {
+                    os.path.splitext(os.path.basename(sf))[0].lower()
+                    for sf in (planned.source_files or [])
+                }
+                if prefix not in source_stems:
+                    continue
             escaped = re.escape(function_name)
             if re.search(rf"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?fn\s+{escaped}\s*\(", text):
                 findings.append(f"C ABI 泄漏：{rel_path} 照抄了 C 函数名 `{function_name}`，应改为 Rust 类型方法或 Rust 命名自由函数")
@@ -1792,6 +1940,18 @@ class ContextualRustAgent(RustAgent):
         content: str,
         findings: Sequence[str],
     ) -> str:
+        result = self._repair_contextual_file_partial(planned, content, findings)
+        if result and result.strip():
+            return result
+        return self._repair_contextual_file_full(planned, planned_files, content, findings)
+
+    def _repair_contextual_file_full(
+        self,
+        planned: PlannedFile,
+        planned_files: Sequence[str],
+        content: str,
+        findings: Sequence[str],
+    ) -> str:
         prompt = self._spec_agent().rust_repair_prompt(
             planned=planned,
             findings=findings,
@@ -1802,11 +1962,219 @@ class ContextualRustAgent(RustAgent):
         response = self._chat_with_context_requests(
             system_prompt=self._spec_agent().rust_repair_system_prompt(),
             user_prompt=prompt,
-            label=f"ContextualRustAgent 边界修复 {planned.path}",
+            label=f"ContextualRustAgent 边界修复(整文件) {planned.path}",
             max_read_rounds=2,
         )
         repaired, _ = self._extract_done_marker(response)
         return self._extract_generated_content(repaired, code_lang="" if planned.path.lower() == "readme.md" else "rust")
+
+    # ------------------------------------------------------------------
+    # Partial repair: structured line-level edits
+    # ------------------------------------------------------------------
+
+    def _repair_contextual_file_partial(
+        self,
+        planned: PlannedFile,
+        content: str,
+        findings: Sequence[str],
+    ) -> str:
+        if not content.strip() or not findings:
+            return ""
+        lines = content.splitlines(keepends=True)
+        total_lines = len(lines)
+
+        numbered_content = self._numbered_slice(lines, 1, total_lines, context_tag="full")
+
+        findings_text = "\n".join(f"- {f}" for f in findings)
+        path = getattr(planned, "path", "unknown")
+        prompt = f"""你在修复已生成的 `{path}` 中的违规项。**不要重写整个文件**，只做最小局部编辑。
+
+违规项：
+{findings_text}
+
+当前文件（带行号）：
+```rust
+{numbered_content}
+```
+
+要求：
+1. 只返回 JSON，不要解释。
+2. 只允许局部编辑：replace_range / delete_range / insert_before / insert_after。
+3. **不允许**返回整个文件。每个 edit 只修改需要修改的行范围。
+4. 行号必须基于上面带行号的文件内容。
+5. 如果某个违规项只需要删除一行或改函数名，就只改那几行。
+
+返回 JSON：
+{{
+  "summary": "一句话修复摘要",
+  "edits": [
+    {{
+      "mode": "replace_range",
+      "start_line": 10,
+      "end_line": 12,
+      "content": "替换后的代码片段（不带行号前缀）"
+    }},
+    {{
+      "mode": "delete_range",
+      "start_line": 50,
+      "end_line": 52
+    }},
+    {{
+      "mode": "insert_before",
+      "before_line": 5,
+      "content": "要插入的新代码"
+    }}
+  ]
+}}
+"""
+        system_prompt = (
+            "你是严格的 Rust 文件局部修复助手。只做最小编辑修正违规项，不要重写整个文件。"
+            "只返回 JSON 格式的结构化编辑指令。"
+        )
+        response = self._read_llm(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            label=f"ContextualRustAgent 局部修复 {path}",
+        )
+
+        payload = self._extract_json_payload(response)
+        if not isinstance(payload, dict):
+            return ""
+        edits = payload.get("edits", [])
+        if not edits or not isinstance(edits, list):
+            return ""
+
+        try:
+            result_lines = self._apply_partial_edits(lines, edits)
+            return "".join(result_lines)
+        except Exception as exc:
+            print(f"局部修复编辑应用失败：{exc}，回退到整文件修复")
+            return ""
+
+    @staticmethod
+    def _numbered_slice(lines: Sequence[str], start: int, end: int, context_tag: str = "") -> str:
+        parts = []
+        for i in range(max(0, start - 1), min(len(lines), end)):
+            line_content = lines[i].rstrip("\n").rstrip("\r")
+            parts.append(f"{i + 1:>5}\t{line_content}")
+        return "\n".join(parts)
+
+    def _apply_partial_edits(self, lines: List[str], edits: List[dict]) -> List[str]:
+        result = list(lines)
+        pending = [dict(e) for e in edits]
+        for idx, edit in enumerate(pending):
+            mode = (edit.get("mode") or "replace_range").strip()
+            if mode not in {"replace_range", "delete_range", "insert_before", "insert_after"}:
+                continue
+            new_result, delta, record = self._apply_single_edit_to_lines(result, edit)
+            result = new_result
+            self._update_remaining_edits_after_apply(pending[idx + 1:], record, delta)
+        return result
+
+    @staticmethod
+    def _apply_single_edit_to_lines(lines: List[str], edit: dict):
+        mode = edit.get("mode") or "replace_range"
+        content = edit.get("content") or ""
+        record = {"mode": mode}
+
+        if mode == "replace_range":
+            start_line = int(edit.get("start_line") or 1)
+            end_line = int(edit.get("end_line") or start_line)
+            actual_start = max(1, start_line)
+            actual_end = max(actual_start, end_line)
+            s = actual_start - 1
+            e = min(len(lines), actual_end)
+            replacement = content
+            if replacement and not replacement.endswith("\n"):
+                replacement += "\n"
+            new_segments = replacement.splitlines(keepends=True)
+            delta = len(new_segments) - (e - s)
+            new_lines = lines[:s] + new_segments + lines[e:]
+            record.update({"actual_start_line": actual_start, "actual_end_line": actual_end})
+            return new_lines, delta, record
+
+        if mode == "delete_range":
+            start_line = int(edit.get("start_line") or 1)
+            end_line = int(edit.get("end_line") or start_line)
+            actual_start = max(1, start_line)
+            actual_end = max(actual_start, end_line)
+            s = actual_start - 1
+            e = min(len(lines), actual_end)
+            delta = -(e - s)
+            new_lines = lines[:s] + lines[e:]
+            record.update({"actual_start_line": actual_start, "actual_end_line": actual_end})
+            return new_lines, delta, record
+
+        if mode == "insert_before":
+            before_line = int(edit.get("before_line") or edit.get("start_line") or 1)
+            actual_before = max(1, before_line)
+            insert_at = max(0, min(len(lines), actual_before - 1))
+            insertion = content
+            if insertion and not insertion.endswith("\n"):
+                insertion += "\n"
+            insertion_lines = insertion.splitlines(keepends=True)
+            new_lines = lines[:insert_at] + insertion_lines + lines[insert_at:]
+            record.update({"actual_before_line": actual_before})
+            return new_lines, len(insertion_lines), record
+
+        if mode == "insert_after":
+            after_line = int(edit.get("after_line") or edit.get("end_line") or edit.get("start_line") or 0)
+            actual_after = max(0, after_line)
+            insert_at = max(0, min(len(lines), actual_after))
+            insertion = content
+            if insertion and not insertion.endswith("\n"):
+                insertion += "\n"
+            insertion_lines = insertion.splitlines(keepends=True)
+            new_lines = lines[:insert_at] + insertion_lines + lines[insert_at:]
+            record.update({"actual_after_line": actual_after})
+            return new_lines, len(insertion_lines), record
+
+        raise ValueError(f"unsupported edit mode: {mode}")
+
+    @staticmethod
+    def _update_remaining_edits_after_apply(remaining_edits: List[dict], applied_record: dict, delta: int):
+        mode = applied_record.get("mode") or "replace_range"
+        if mode in {"replace_range", "delete_range"}:
+            pivot_start = int(applied_record.get("actual_start_line", 1))
+            pivot_end = int(applied_record.get("actual_end_line", pivot_start))
+            for edit in remaining_edits:
+                for key in ("start_line", "end_line", "before_line", "after_line"):
+                    if key not in edit:
+                        continue
+                    try:
+                        value = int(edit[key])
+                    except (ValueError, TypeError):
+                        continue
+                    if value > pivot_end:
+                        edit[key] = value + delta
+                    elif pivot_start <= value <= pivot_end:
+                        edit[key] = pivot_start
+        elif mode == "insert_before":
+            pivot = int(applied_record.get("actual_before_line", 1))
+            for edit in remaining_edits:
+                for key in ("start_line", "end_line", "before_line", "after_line"):
+                    if key not in edit:
+                        continue
+                    try:
+                        value = int(edit[key])
+                    except (ValueError, TypeError):
+                        continue
+                    if value >= pivot:
+                        edit[key] = value + delta
+        elif mode == "insert_after":
+            pivot = int(applied_record.get("actual_after_line", 0))
+            for edit in remaining_edits:
+                for key in ("start_line", "end_line", "before_line", "after_line"):
+                    if key not in edit:
+                        continue
+                    try:
+                        value = int(edit[key])
+                    except (ValueError, TypeError):
+                        continue
+                    if value > pivot:
+                        edit[key] = value + delta
 
     def _request_force_write_decision(
         self,
@@ -1973,18 +2341,31 @@ class ContextualRustAgent(RustAgent):
             source_records=self.source_records,
             translation_contract=self.translation_contract,
         )
+
+        # 1. 程序化推导初始文件计划
         self.contextual_plan = self._request_contextual_plan()
         planned_files = [item.path for item in self.contextual_plan]
 
-        plan_summary = self._format_plan_summary()
+        # 2. LLM 项目结构设计
+        self.project_structure = self._generate_contextual_project_structure()
+        print(f"\n项目结构:\n{self.project_structure}")
+
+        # 3. LLM 实现计划（可能会重排 contextual_plan）
+        self.implementation_plan = self._generate_contextual_implementation_plan(self.project_structure)
+        print(f"\n实现计划:\n{self.implementation_plan}")
+
+        # 重排后更新 planned_files
+        planned_files = [item.path for item in self.contextual_plan]
+
         self._initialize_generation_plan(
-            project_structure="<contextual_plan>\n" + plan_summary + "\n</contextual_plan>",
-            implementation_plan="ContextualRustAgent: demand-driven context, registry constrained, bottom-up generation.",
+            project_structure=self.project_structure,
+            implementation_plan=self.implementation_plan,
             planned_files=planned_files,
         )
         self._ensure_api_contract_loaded()
         self._load_existing_registry(planned_files)
 
+        # 4. 逐个生成文件
         for planned in self.contextual_plan:
             state = self.generation_plan.get("files", {}).get(planned.path, {})
             if self.continue_mode and state.get("status") == "completed" and self._is_completed_file_still_valid(planned.path, state):

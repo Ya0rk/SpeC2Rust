@@ -77,6 +77,7 @@ if ($pythonExe) {
         --output_dir $outputDir `
         --rust-project-name $rustProjectName `
         --use-rust-repair-agent `
+        --use-contextual-rust-agent `
         --use-spec-agent 2>&1 | Tee-Object -FilePath $logFile
 }
 else {
@@ -87,6 +88,7 @@ else {
         --output_dir $outputDir `
         --rust-project-name $rustProjectName `
         --use-rust-repair-agent `
+        --use-contextual-rust-agent `
         --use-spec-agent 2>&1 | Tee-Object -FilePath $logFile
 }
 

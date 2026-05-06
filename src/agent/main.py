@@ -56,6 +56,18 @@ def should_run_macro_stage(args) -> bool:
     return args.use_macro_agent and not args.use_spec_agent and c_docs_writable(args)
 
 
+def should_run_rust_repair_stage(args) -> bool:
+    return bool(getattr(args, "use_rust_repair_agent", False))
+
+
+def should_run_legacy_code_fix_stage(args) -> bool:
+    return not should_run_rust_repair_stage(args) and not getattr(args, "skip_code_fix", False)
+
+
+def should_run_legacy_test_fix_stage(args) -> bool:
+    return not should_run_rust_repair_stage(args) and not getattr(args, "skip_test_fix", False)
+
+
 def selected_rust_agent_mode(args) -> str:
     if getattr(args, "use_contextual_rust_agent", False):
         return "ContextualRustAgent"
@@ -68,14 +80,14 @@ def selected_rust_agent_mode(args) -> str:
 
 def run_optional_rust_repair_agent(args, config: Config, rust_project_path: str):
     """
-    可选运行独立 RustRepairAgent。
-    主流程中默认原地修复当前 Rust 项目，不再创建新的修复项目作为最终产物。
+    可选运行 RustRepairAgent。
+    开启后替代默认 CodeFixer/TestFixer，并原地修复当前 Rust 项目。
     """
     if not getattr(args, "use_rust_repair_agent", False):
         return None
 
     prBlue("\n" + "=" * 80)
-    prYellow("步骤 4.5: RustRepairAgent 深度修复")
+    prYellow("步骤 3: RustRepairAgent 深度修复")
     prBlue("=" * 80)
 
     repair_agent = RustRepairAgent(
@@ -194,7 +206,7 @@ def main():
     parser.add_argument(
         "--use-rust-repair-agent",
         action="store_true",
-        help="可选开启 RustRepairAgent，在主流程末尾对当前 Rust 项目做原地深度修复"
+        help="使用 RustRepairAgent 替代默认 CodeFixer/TestFixer，对当前 Rust 项目做原地深度修复"
     )
     parser.add_argument(
         "--rust-repair-max-iterations",
@@ -258,6 +270,7 @@ def main():
         prYellow(f"Spec JSON 中间层：{'开启' if args.use_spec_json_agent else '关闭'}")
         prYellow(f"PointerAgent：{'开启' if args.use_pointer_agent else '关闭'}")
         prYellow(f"冻结 c_docs：{'开启' if args.freeze_c_docs else '关闭'}")
+        prYellow(f"RustRepairAgent：{'开启' if should_run_rust_repair_stage(args) else '关闭'}")
         prYellow(f"最大修复迭代次数：{args.max_fix_iterations}")
         prBlue("=" * 80)
 
@@ -468,53 +481,59 @@ def main():
         else:
             prRed("\n⊘ 跳过未完成实现检查步骤")
 
-        # =========================================================================
-        # 步骤 3: 对生成的 Rust 代码进行编译修复
-        # =========================================================================
-        if not args.skip_code_fix:
-            prBlue("\n" + "=" * 80)
-            prYellow("步骤 3: 编译修复 Rust 代码")
-            prBlue("=" * 80)
-
-            code_fixer = CodeFixer(
-                config=config,
-                project_path=rust_project_path,
-                max_iterations=args.max_fix_iterations,
-                error_organizer_agent=error_organizer_agent
-            )
-
-            success = code_fixer.fix()
-
-            if success:
-                prGreen("\n✓ 代码编译修复成功")
-            else:
-                prRed("\n⚠ 代码编译修复失败，但项目可能仍可使用")
+        if should_run_rust_repair_stage(args):
+            # =========================================================================
+            # 步骤 3: 使用 RustRepairAgent 替代默认编译/测试修复链路
+            # =========================================================================
+            run_optional_rust_repair_agent(args, config, rust_project_path)
         else:
-            prRed("\n⊘ 跳过代码编译修复步骤")
+            # =========================================================================
+            # 步骤 3: 对生成的 Rust 代码进行编译修复
+            # =========================================================================
+            if should_run_legacy_code_fix_stage(args):
+                prBlue("\n" + "=" * 80)
+                prYellow("步骤 3: 编译修复 Rust 代码")
+                prBlue("=" * 80)
 
-        # =========================================================================
-        # 步骤 4: 对生成的 Rust 代码进行测试修复
-        # =========================================================================
-        if not args.skip_test_fix:
-            prBlue("\n" + "=" * 80)
-            prYellow("步骤 4: 测试修复 Rust 代码")
-            prBlue("=" * 80)
+                code_fixer = CodeFixer(
+                    config=config,
+                    project_path=rust_project_path,
+                    max_iterations=args.max_fix_iterations,
+                    error_organizer_agent=error_organizer_agent
+                )
 
-            test_fixer = TestFixer(
-                config=config,
-                project_path=rust_project_path,
-                max_iterations=args.max_fix_iterations,
-                error_organizer_agent=error_organizer_agent
-            )
+                success = code_fixer.fix()
 
-            success = test_fixer.fix()
-
-            if success:
-                prGreen("\n✓ 所有测试通过")
+                if success:
+                    prGreen("\n✓ 代码编译修复成功")
+                else:
+                    prRed("\n⚠ 代码编译修复失败，但项目可能仍可使用")
             else:
-                prRed("\n⚠ 测试修复失败，但项目可能仍可使用")
-        else:
-            prRed("\n⊘ 跳过测试修复步骤")
+                prRed("\n⊘ 跳过代码编译修复步骤")
+
+            # =========================================================================
+            # 步骤 4: 对生成的 Rust 代码进行测试修复
+            # =========================================================================
+            if should_run_legacy_test_fix_stage(args):
+                prBlue("\n" + "=" * 80)
+                prYellow("步骤 4: 测试修复 Rust 代码")
+                prBlue("=" * 80)
+
+                test_fixer = TestFixer(
+                    config=config,
+                    project_path=rust_project_path,
+                    max_iterations=args.max_fix_iterations,
+                    error_organizer_agent=error_organizer_agent
+                )
+
+                success = test_fixer.fix()
+
+                if success:
+                    prGreen("\n✓ 所有测试通过")
+                else:
+                    prRed("\n⚠ 测试修复失败，但项目可能仍可使用")
+            else:
+                prRed("\n⊘ 跳过测试修复步骤")
 
         # =========================================================================
         # 完成

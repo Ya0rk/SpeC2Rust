@@ -17,6 +17,9 @@ class MainCDocsFlagTests(unittest.TestCase):
             "use_pointer_agent": False,
             "use_macro_agent": False,
             "freeze_c_docs": False,
+            "use_rust_repair_agent": False,
+            "skip_code_fix": False,
+            "skip_test_fix": False,
         }
         defaults.update(overrides)
         return Namespace(**defaults)
@@ -56,6 +59,27 @@ class MainCDocsFlagTests(unittest.TestCase):
             freeze_c_docs=True,
         )
         self.assertFalse(main_module.should_run_spec_json_stage(args))
+
+    def test_rust_repair_stage_is_controlled_by_optional_flag(self):
+        self.assertFalse(main_module.should_run_rust_repair_stage(self.make_args()))
+        self.assertTrue(
+            main_module.should_run_rust_repair_stage(
+                self.make_args(use_rust_repair_agent=True)
+            )
+        )
+
+    def test_rust_repair_agent_replaces_legacy_fixers(self):
+        args = self.make_args(use_rust_repair_agent=True)
+
+        self.assertTrue(main_module.should_run_rust_repair_stage(args))
+        self.assertFalse(main_module.should_run_legacy_code_fix_stage(args))
+        self.assertFalse(main_module.should_run_legacy_test_fix_stage(args))
+
+    def test_legacy_fixers_run_only_when_not_replaced_and_not_skipped(self):
+        self.assertTrue(main_module.should_run_legacy_code_fix_stage(self.make_args()))
+        self.assertTrue(main_module.should_run_legacy_test_fix_stage(self.make_args()))
+        self.assertFalse(main_module.should_run_legacy_code_fix_stage(self.make_args(skip_code_fix=True)))
+        self.assertFalse(main_module.should_run_legacy_test_fix_stage(self.make_args(skip_test_fix=True)))
 
 
 if __name__ == "__main__":

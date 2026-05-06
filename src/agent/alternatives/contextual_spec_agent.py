@@ -29,13 +29,14 @@ class ContextualSpecAgent:
     """Alternative spec agent built by incrementally refining the base SpecAgent."""
     # 以下常量主要用于控制 prompt 尺寸，避免本地模型在单次生成时吃到过长上下文。
     # 这些值不是业务语义的一部分，而是服务于“文档可生成、可汇总、可继续喂给下游模型”。
-    MAX_CONTEXT_CHARS = 12000
-    MAX_BATCH_CHARS = 9000
-    MAX_MODULE_ANALYSIS_CHARS = 1600
-    MAX_CONSTITUTION_DOC_CHARS = 2000
-    MAX_INTERFACE_HEADERS = 12
-    MAX_INTERFACE_FUNCTIONS = 20
-    MAX_INTERFACE_STRUCTS = 20
+    TEMP = 9999999
+    MAX_CONTEXT_CHARS = TEMP
+    MAX_BATCH_CHARS = TEMP
+    MAX_MODULE_ANALYSIS_CHARS = TEMP
+    MAX_CONSTITUTION_DOC_CHARS = TEMP
+    MAX_INTERFACE_HEADERS = TEMP
+    MAX_INTERFACE_FUNCTIONS = TEMP
+    MAX_INTERFACE_STRUCTS = TEMP
     
     def __init__(self, config: Config = None, enable_c_pipeline: bool = True):
         """
@@ -728,7 +729,7 @@ class ContextualSpecAgent:
         ]
 
         if functions:
-            for func in functions[:20]:
+            for func in functions:
                 lines.append(self._build_function_fact_line(func))
         else:
             lines.append("- 当前模块没有解析到函数定义。")
@@ -1692,7 +1693,7 @@ class ContextualSpecAgent:
                     "module_name": module["name"],
                     "category": module["category"],
                     "headers": headers,
-                    "functions": [func.get("name", "unknown") for func in functions[:8] if isinstance(func, dict)],
+                    "functions": [func.get("name", "unknown") for func in functions[:20] if isinstance(func, dict)],
                     "structs": [struct.get("name", "unknown") for struct in structs[:8]],
                     "detail_doc": detail_name,
                 }
@@ -2487,6 +2488,38 @@ class ContextualSpecAgent:
 
     def rust_read_materials_followup(self, materials: str) -> str:
         return RustGenerationSpecPrompts.read_materials_followup(materials)
+
+    def rust_project_structure_system_prompt(self) -> str:
+        return RustGenerationSpecPrompts.project_structure_system_prompt()
+
+    def rust_project_structure_prompt(
+        self,
+        project_name: str,
+        plan_summary: str,
+        static_context: str,
+        spec_overview: str,
+    ) -> str:
+        return RustGenerationSpecPrompts.project_structure_prompt(
+            project_name=project_name,
+            plan_summary=plan_summary,
+            static_context=static_context,
+            spec_overview=spec_overview,
+        )
+
+    def rust_implementation_plan_system_prompt(self) -> str:
+        return RustGenerationSpecPrompts.implementation_plan_system_prompt()
+
+    def rust_implementation_plan_prompt(
+        self,
+        project_structure: str,
+        plan_summary: str,
+        files_list: Sequence[str],
+    ) -> str:
+        return RustGenerationSpecPrompts.implementation_plan_prompt(
+            project_structure=project_structure,
+            plan_summary=plan_summary,
+            files_list=files_list,
+        )
 
     def rust_project_planning_system_prompt(self) -> str:
         return RustGenerationSpecPrompts.project_planning_system_prompt()

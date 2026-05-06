@@ -5,11 +5,8 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 
-def _clip(text: str, max_chars: int) -> str:
-    content = text or ""
-    if len(content) <= max_chars:
-        return content
-    return content[:max_chars].rstrip() + "\n...[截断]..."
+def _clip(text: str, max_chars: int = 0) -> str:
+    return text or ""
 
 
 def _dedupe(items: Iterable[str]) -> List[str]:
@@ -123,7 +120,7 @@ class RustGenerationSpecPrompts:
         return getattr(item, name, default)
 
     @staticmethod
-    def _join(values: Sequence[str], default: str, limit: int = 24) -> str:
+    def _join(values: Sequence[str], default: str, limit: int = 80) -> str:
         cleaned = [str(value).strip() for value in values or [] if str(value).strip()]
         if not cleaned:
             return default
@@ -134,12 +131,10 @@ class RustGenerationSpecPrompts:
         c_functions = cls._join(
             cls._attr(planned, "source_functions", []),
             "当前文件关联的 C 函数",
-            limit=24,
         )
         rust_symbols = cls._join(
             cls._attr(planned, "owns", []),
             "当前文件规划的 Rust 类型和方法",
-            limit=24,
         )
         return f"""目标是行为等价，不是 C ABI 等价。
 - C 文件名、C 类型名、C 函数名只作为溯源证据；目标 Rust API 必须使用 Rust 命名、所有权和模块组织。
@@ -176,11 +171,109 @@ class RustGenerationSpecPrompts:
 - 下面的 spec section 是按目标文件筛选后的局部上下文，不是完整项目 dump。
 - 优先从当前目标 Rust 符号、source_functions、source_files 中确认职责边界。
 - 如果行为、类型字段、调用关系或依赖仍不清楚，使用 `<CGR_READ>` 请求更多 spec/source/rust/registry。
+- **对于 C 源码索引中只有签名而没有内联源码的函数，你必须在第一轮回复中用 `<CGR_READ>` 一次性请求全部缺失源码，然后再生成代码。禁止凭签名猜测函数实现。**
 - 不要因为上下文片段中出现其它 C 函数，就把其它模块职责搬进当前文件。
 
 {cls.evidence_boundary()}
 
 {cls.rewrite_contract(planned)}"""
+
+    @staticmethod
+    def project_structure_system_prompt() -> str:
+        return (
+            "你是一个 Rust 架构设计专家，擅长根据 spec 文档和迁移契约设计地道的 Rust 项目结构。\n\n"
+            "设计原则：\n"
+            "1. 遵循 Rust 惯用法，但迁移范围优先于'最佳实践发挥'\n"
+            "2. 只有在输入证据支持时才引入 trait 或额外抽象，默认保持简单直接\n"
+            "3. 不要凭空创造原 C 项目中不存在的核心模块、指令集、状态机、协议、线程模型或恢复机制\n"
+            "4. 默认依赖策略是 std-only；没有明确证据不要引入第三方 crate\n"
+            "5. 清晰的模块划分，但不要扩展出输入中不存在的能力边界"
+        )
+
+    @classmethod
+    def project_structure_prompt(
+        cls,
+        project_name: str,
+        plan_summary: str,
+        static_context: str,
+        spec_overview: str,
+    ) -> str:
+        return f"""请根据以下 spec 文档和迁移契约，设计一个地道的 Rust 项目结构。
+
+项目名称：{project_name}
+
+程序化推导的初始文件计划（供参考，你可以调整模块划分）：
+{plan_summary}
+
+静态项目上下文（含迁移契约）：
+{static_context}
+
+Spec 文档概览：
+{spec_overview or '(无 spec 概览)'}
+
+请设计项目结构，包括：
+1. 项目目录文件结构（使用 tree 命令格式，<project_file> 标签包裹）
+2. 主要模块划分和每个模块的职责
+3. 核心数据结构和 trait 设计
+4. 关键函数和方法签名
+5. 错误处理策略
+6. 如果有 <CGR_READ> 需要更多信息可以请求
+
+{cls.evidence_boundary()}
+
+约束：
+- 目录树只能落在迁移契约允许的文件范围内
+- 不要为了"更 Rust"而额外拆出大量新模块
+- 不要输出 tests/examples/benches/ffi/release 相关目录，除非上下文明确要求
+- C 源码事实优先于摘要性描述
+"""
+
+    @staticmethod
+    def implementation_plan_system_prompt() -> str:
+        return (
+            "你是一个 Rust 实现专家，擅长制定详细的代码实现计划。\n\n"
+            "实现原则：\n"
+            "1. 由简到繁，分析依赖关系，自底向上逐步实现\n"
+            "2. 减少 unsafe 使用，优先使用 safe 的 Rust 标准库\n"
+            "3. 遵循 Rust 编码规范\n"
+            "4. 不扩写输入中没有证据支持的技术能力或工程设施"
+        )
+
+    @classmethod
+    def implementation_plan_prompt(
+        cls,
+        project_structure: str,
+        plan_summary: str,
+        files_list: Sequence[str],
+    ) -> str:
+        files_text = "\n".join(f"- {f}" for f in files_list)
+        return f"""基于以下项目结构设计和文件计划，制定详细的实现计划。
+
+项目结构设计：
+{project_structure}
+
+程序化推导的文件计划（含 C 函数映射）：
+{plan_summary}
+
+需要生成的文件列表：
+{files_text}
+
+请制定分步骤的实现计划，包括：
+1. 依赖分析：各模块之间的依赖关系
+2. 生成顺序：自底向上的文件生成计划（将新的文件列表顺序保存到 <new_files_to_generate> 标签中）
+3. 每个文件的实现策略：需要实现的关键类型和方法、算法要点
+4. 跨文件接口约定：类型共享、错误传播方式
+
+约束：
+- 新的文件顺序只能重排已有文件，不能新增
+- 默认只使用 Rust 标准库
+- C 源码函数体和接口事实为准，不要扩写无证据部分
+- Phase 数量保持克制，优先使用 3-5 个阶段
+- 不要把同一事实反复重写
+
+{cls.evidence_boundary()}
+
+请使用 <implementation_plan> 标签包裹实现计划。"""
 
     @staticmethod
     def project_planning_system_prompt() -> str:
@@ -236,6 +329,10 @@ class RustGenerationSpecPrompts:
             "你是一个按需读取上下文的 Rust 代码生成助手。"
             "你的任务是生成单个目标文件，严格遵守已规划文件边界、已有符号表和迁移契约。"
             "你必须重构为 Rust 风格 API，而不是模拟 C ABI；禁止 raw pointer、unsafe、c_void 和 C 风格函数名。"
+            "\n\n关键原则：你必须实现 owns 列表中的所有符号。"
+            "如果某个函数只有签名索引而没有完整源码，你 **禁止猜测实现**，必须立即使用 <CGR_READ> 请求完整源码。"
+            "只有看到完整 C 源码后才能编写对应的 Rust 实现。"
+            "宁可多发一轮 <CGR_READ>，也不要生成不完整的文件或跳过任何 owns 中的符号。"
         )
 
     @classmethod
@@ -285,12 +382,17 @@ Rust 化迁移契约：
 8. 不要生成 C ABI 适配层，不要公开 `项目名前缀_*`/`*_free`/`*_new` 这类 C 风格自由函数。
 9. 不要使用 raw pointer、`unsafe`、`c_void`、`repr(C)` 或 `extern \"C\"` 来模拟原 C 项目。
 10. 代码应符合 Rust 命名习惯：类型 `CamelCase`，方法/函数 `snake_case`，模块职责清晰。
-11. C 源码区域中只内联了关键函数，其余函数仅提供索引。如果需要查看索引中某个函数的完整源码，或信息不足，请输出：
+11. C 源码区域中只内联了关键函数，其余函数仅提供索引。
+    **你必须实现 owns 列表中的每一个符号。**
+    如果某个符号对应的 C 函数只有签名索引而没有内联源码，你 **必须** 先用 <CGR_READ> 请求完整源码再实现，禁止凭签名猜测函数体。
+    请求格式：
 <CGR_READ>
 [{{"kind":"source","query":"函数名或文件名"}}, {{"kind":"spec","query":"关键词"}}, {{"kind":"rust","query":"src/existing.rs"}}, {{"kind":"registry"}}]
 </CGR_READ>
-一次可发多个请求。source 支持按函数名（如 "quadtree_insert"）或文件名（如 "node.c"）查询。
+    一次可发多个请求。source 支持按函数名（如 "quadtree_insert"）或文件名（如 "node.c"）查询。
+    **在第一轮回复中，先检查索引中所有未内联的函数，一次性请求全部需要的源码，不要分多轮请求。**
 12. 信息足够时输出完整文件内容，并在最后单独添加 `<CGR_DONE>`。
+    **如果输出的文件缺少 owns 中的任何符号，视为失败。**
 """
 
     @staticmethod
@@ -694,8 +796,9 @@ class RustGenerationSpecAgent:
         source_functions: List[str] = []
         source_types: List[str] = []
         for source_file in source_files:
-            source_functions.extend(self.source_to_functions.get(source_file, []))
-            source_types.extend(self.source_to_types.get(source_file, []))
+            key = self._strip_leading_slash(source_file)
+            source_functions.extend(self.source_to_functions.get(key, []))
+            source_types.extend(self.source_to_types.get(key, []))
 
         owns = self._target_rust_symbols_for_sources(normalized, source_files, source_functions, source_types)
         stem = _stem(normalized)
@@ -816,17 +919,23 @@ class RustGenerationSpecAgent:
             return "run_" + cleaned
         return cleaned
 
+    @staticmethod
+    def _strip_leading_slash(path: str) -> str:
+        """Remove leading '/' from paths like '/sds.c' extracted from spec text."""
+        return path.lstrip("/") if path else path
+
     def _source_files_for_rust_path(self, rust_path: str) -> List[str]:
         normalized = rust_path.replace("\\", "/")
         base = _stem(normalized)
         c_matches: List[str] = []
         h_matches: List[str] = []
         for source_file in self.source_files:
-            if _stem(source_file).lower() == base.lower():
-                if source_file.endswith(".c"):
-                    c_matches.append(source_file)
-                elif source_file.endswith(".h"):
-                    h_matches.append(source_file)
+            cleaned = self._strip_leading_slash(source_file)
+            if _stem(cleaned).lower() == base.lower():
+                if cleaned.endswith(".c"):
+                    c_matches.append(cleaned)
+                elif cleaned.endswith(".h"):
+                    h_matches.append(cleaned)
         with_dir = [source for source in c_matches if "/" in source]
         return _dedupe(with_dir or c_matches or h_matches)
 
@@ -961,8 +1070,6 @@ class RustGenerationSpecAgent:
                 f"\n\n=== SPEC SECTION {section.rel_path} | {section.kind} | {section.title} ===\n"
                 f"{excerpt}"
             )
-            if total + len(block) > max_chars and parts:
-                break
             parts.append(block)
             total += len(block)
         return "\n".join(parts).strip() or "没有找到匹配的 spec section。"
@@ -1455,7 +1562,7 @@ class RustGenerationSpecAgent:
             lines.append("已提取的函数声明数：")
             lines.append(f"- signatures: {len(self.function_signatures)}")
 
-        return _clip("\n".join(lines), max_chars)
+        return "\n".join(lines)
 
 
 __all__ = [
