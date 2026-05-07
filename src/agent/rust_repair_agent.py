@@ -554,6 +554,30 @@ class RustRepairAgent:
             total += len(content)
         return materials
 
+    def _refresh_materials_for_edited_files(self, project_dir: str, materials: List[Dict], edited_paths: set) -> None:
+        """编辑应用后，刷新 materials 中被修改文件的内容，避免 LLM 看到过时的代码。
+        line_range 条目会被升级为 whole_file，因为行号在编辑后可能已偏移。"""
+        if not edited_paths:
+            return
+        refreshed_paths = set()
+        for i, mat in enumerate(materials):
+            path = mat.get("path", "")
+            if path not in edited_paths:
+                continue
+            if mat.get("mode") == "search_results":
+                continue
+            if path in refreshed_paths:
+                materials[i]["content"] = ""
+                continue
+            new_content = self._read_file_slice(project_dir, path)
+            if new_content:
+                materials[i]["content"] = new_content
+                materials[i]["mode"] = "whole_file"
+                materials[i]["start_line"] = None
+                materials[i]["end_line"] = None
+                refreshed_paths.add(path)
+        materials[:] = [m for m in materials if m.get("content")]
+
     def _iter_searchable_files(self, project_dir: str, path_glob: str = "") -> List[str]:
         candidates: List[str] = []
         normalized_glob = (path_glob or "").replace("\\", "/").strip()
@@ -1327,6 +1351,14 @@ class RustRepairAgent:
                 })
 
                 self._sanitize_project_locally(run_dir)
+
+                edited_paths = {
+                    (e.get("path") or "").replace("\\", "/")
+                    for e in structured.get("edits", [])
+                    if e.get("path")
+                }
+                self._refresh_materials_for_edited_files(run_dir, materials, edited_paths)
+
                 current_check_success, current_check_output = self._cargo_check(run_dir)
                 self._append_repair_record(journal_path, {
                     "iteration": iteration,

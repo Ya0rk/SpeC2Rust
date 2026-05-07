@@ -1,1 +1,351 @@
-[]
+[
+  {
+    "func_defid": "yank.c:input",
+    "span": "yank.c:69:1:90:2",
+    "pieces": [
+      "yank.c:69:1:90:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 22,
+    "source": "static void\ninput(void)\n{\n\tint n;\n\n\tin.size = BUFSIZ;\n\tif ((in.v = malloc(in.size)) == NULL)\n\t\terr(1, NULL);\n\n\twhile ((n = read(0, in.v + in.nmemb, in.size - in.nmemb)) != 0) {\n\t\tif (n == -1)\n\t\t\terr(1, \"read\");\n\t\tin.nmemb += n;\n\n\t\tif (in.nmemb < in.size)\n\t\t\tcontinue;\n\t\tin.size *= 2;\n\t\tif ((in.v = realloc(in.v, in.size)) == NULL)\n\t\t\terr(1, NULL);\n\t}\n\tmemset(in.v + in.nmemb, 0, in.size - in.nmemb);\n}",
+    "calls": [
+      {
+        "caller": "yank.c:main",
+        "span": "yank.c:480:2:480:9",
+        "source": "input();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "yank.c:strtopat",
+    "span": "yank.c:96:1:112:2",
+    "pieces": [
+      "yank.c:96:1:112:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 17,
+    "source": "static char *\nstrtopat(const char *s)\n{\n\tconst char *fmt = \"[^%s\\f\\n\\r\\t]+\";\n\tchar *pat;\n\tsize_t len;\n\tint n;\n\n\tlen = strlen(s) + strlen(fmt) + 1;\n\tif ((pat = malloc(len)) == NULL)\n\t\terr(1, NULL);\n\tn = snprintf(pat, len, fmt, s);\n\tif (n == -1 || n >= (ssize_t)len)\n\t\terrx(1, \"pattern too long\");\n\n\treturn pat;\n}",
+    "calls": [
+      {
+        "caller": "yank.c:main",
+        "span": "yank.c:434:8:434:21",
+        "source": "pat = strtopat(\" \");"
+      },
+      {
+        "caller": "yank.c:main",
+        "span": "yank.c:442:10:442:26",
+        "source": "pat = strtopat(optarg);"
+      },
+      {
+        "caller": "yank.c:main",
+        "span": "yank.c:455:10:455:22",
+        "source": "pat = strtopat(\"\");"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "yank.c:fcmp",
+    "span": "yank.c:119:1:128:2",
+    "pieces": [
+      "yank.c:119:1:128:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 10,
+    "source": "static int\nfcmp(const struct field *f1, const struct field *f2)\n{\n\tsize_t e1, e2, s1, s2;\n\n\ts1 = f1->so - f1->lo, e1 = f1->eo - f1->lo;\n\ts2 = f2->so - f2->lo, e2 = f2->eo - f2->lo;\n\n\treturn MAX(s1, s2) <= MIN(e1, e2) ? 0 : (e1 < s2 ? 1 : -1);\n}",
+    "calls": [
+      {
+        "caller": "yank.c:tmain",
+        "span": "yank.c:400:11:400:33",
+        "source": "for (; fcmp(&f.v[i], &f.v[j]) < 0 &&"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "yank.c:xwrite",
+    "span": "yank.c:130:1:147:2",
+    "pieces": [
+      "yank.c:130:1:147:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 18,
+    "source": "static ssize_t\nxwrite(int fd, const char *s, size_t nmemb)\n{\n\tsize_t n;\n\n\tn = nmemb;\n\tdo {\n\t\tssize_t r;\n\n\t\tr = write(fd, s, n);\n\t\tif (r == -1)\n\t\t\treturn r;\n\t\tn -= r;\n\t\ts += r;\n\t} while (n);\n\n\treturn nmemb;\n}",
+    "calls": [
+      {
+        "caller": "yank.c:yank",
+        "span": "yank.c:157:7:157:26",
+        "source": "if (xwrite(1, s, nmemb) == -1)"
+      },
+      {
+        "caller": "yank.c:yank",
+        "span": "yank.c:168:6:168:29",
+        "source": "if (xwrite(fd[1], s, nmemb) == -1)"
+      },
+      {
+        "caller": "yank.c:twrite",
+        "span": "yank.c:194:6:194:31",
+        "source": "if (xwrite(tty.wfd, s, nmemb) == -1)"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "yank.c:yank",
+    "span": "yank.c:149:1:189:2",
+    "pieces": [
+      "yank.c:149:1:189:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 41,
+    "source": "static void\nyank(const char *s, size_t nmemb)\n{\n\tint fd[2];\n\tint status;\n\tpid_t pid;\n\n\tif (!isatty(1)) {\n\t\tif (xwrite(1, s, nmemb) == -1)\n\t\t\terr(1, \"write\");\n\t\texit(0);\n\t}\n\n\tif (pipe(fd) == -1)\n\t\terr(1, \"pipe\");\n\tif (dup2(fd[0], 0) == -1)\n\t\terr(1, \"dup2\");\n\tif (close(fd[0]) == -1)\n\t\terr(1, \"close\");\n\tif (xwrite(fd[1], s, nmemb) == -1)\n\t\terr(1, \"write\");\n\tif (close(fd[1]) == -1)\n\t\terr(1, \"close\");\n\tpid = fork();\n\tswitch (pid) {\n\tcase -1:\n\t\terr(1, \"fork\");\n\t\t/* NOTREACHED */\n\tcase 0:\n\t\texecvp(yankargv[0], yankargv);\n\t\terr(126 + (errno == ENOENT), \"%s\", yankargv[0]);\n\t\t/* NOTREACHED */\n\tdefault:\n\t\tif (waitpid(pid, &status, 0) == -1)\n\t\t\terr(1, \"waitpid\");\n\t\tif (WIFSIGNALED(status))\n\t\t\texit(128 + WTERMSIG(status));\n\t\tif (WIFEXITED(status))\n\t\t\texit(WEXITSTATUS(status));\n\t}\n}",
+    "calls": [
+      {
+        "caller": "yank.c:main",
+        "span": "yank.c:489:2:489:51",
+        "source": "yank(in.v + field->so, field->eo - field->so + 1);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "yank.c:twrite",
+    "span": "yank.c:191:1:196:2",
+    "pieces": [
+      "yank.c:191:1:196:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 6,
+    "source": "static void\ntwrite(const char *s, size_t nmemb)\n{\n\tif (xwrite(tty.wfd, s, nmemb) == -1)\n\t\terr(1, \"write\");\n}",
+    "calls": [
+      {
+        "caller": "yank.c:tputs",
+        "span": "yank.c:204:2:204:14",
+        "source": "twrite(s, n);"
+      },
+      {
+        "caller": "yank.c:tmain",
+        "span": "yank.c:354:4:354:27",
+        "source": "twrite(in.v, f.v[i].so);"
+      },
+      {
+        "caller": "yank.c:tmain",
+        "span": "yank.c:356:4:356:55",
+        "source": "twrite(in.v + f.v[i].so, f.v[i].eo - f.v[i].so + 1);"
+      },
+      {
+        "caller": "yank.c:tmain",
+        "span": "yank.c:358:4:358:47",
+        "source": "twrite(in.v + f.v[i].eo + 1, n - f.v[i].eo);"
+      },
+      {
+        "caller": "yank.c:tmain",
+        "span": "yank.c:360:4:360:19",
+        "source": "twrite(in.v, n);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "yank.c:tputs",
+    "span": "yank.c:198:1:205:2",
+    "pieces": [
+      "yank.c:198:1:205:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 8,
+    "source": "static void\ntputs(const char *s)\n{\n\tsize_t n;\n\n\tn = strlen(s);\n\ttwrite(s, n);\n}",
+    "calls": [
+      {
+        "caller": "yank.c:tsetup",
+        "span": "yank.c:273:3:273:25",
+        "source": "tputs(T_ENTER_CA_MODE);"
+      },
+      {
+        "caller": "yank.c:tsetup",
+        "span": "yank.c:274:2:274:27",
+        "source": "tputs(T_CURSOR_INVISIBLE);"
+      },
+      {
+        "caller": "yank.c:tsetup",
+        "span": "yank.c:277:3:277:14",
+        "source": "tputs(\"\\n\");"
+      },
+      {
+        "caller": "yank.c:tsetup",
+        "span": "yank.c:279:3:279:17",
+        "source": "tputs(\"\\033M\");"
+      },
+      {
+        "caller": "yank.c:tsetup",
+        "span": "yank.c:280:2:280:22",
+        "source": "tputs(T_SAVE_CURSOR);"
+      },
+      {
+        "caller": "yank.c:tend",
+        "span": "yank.c:286:2:286:25",
+        "source": "tputs(T_RESTORE_CURSOR);"
+      },
+      {
+        "caller": "yank.c:tend",
+        "span": "yank.c:287:2:287:18",
+        "source": "tputs(T_CLR_EOS);"
+      },
+      {
+        "caller": "yank.c:tend",
+        "span": "yank.c:288:2:288:25",
+        "source": "tputs(T_CURSOR_VISIBLE);"
+      },
+      {
+        "caller": "yank.c:tend",
+        "span": "yank.c:290:3:290:24",
+        "source": "tputs(T_EXIT_CA_MODE);"
+      },
+      {
+        "caller": "yank.c:tmain",
+        "span": "yank.c:352:3:352:26",
+        "source": "tputs(T_RESTORE_CURSOR);"
+      },
+      {
+        "caller": "yank.c:tmain",
+        "span": "yank.c:355:4:355:32",
+        "source": "tputs(T_ENTER_STANDOUT_MODE);"
+      },
+      {
+        "caller": "yank.c:tmain",
+        "span": "yank.c:357:4:357:31",
+        "source": "tputs(T_EXIT_STANDOUT_MODE);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "yank.c:tsetup",
+    "span": "yank.c:207:1:281:2",
+    "pieces": [
+      "yank.c:207:1:281:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 75,
+    "source": "static void\ntsetup(void)\n{\n\tstruct termios attr;\n\tstruct winsize ws;\n\tregmatch_t r;\n\tchar *e, *s;\n\tsize_t m, n;\n\tunsigned int i, j;\n\n\tif ((tty.rfd = open(\"/dev/tty\", O_RDONLY)) == -1)\n\t\terr(1, \"/dev/tty\");\n\tif ((tty.wfd = open(\"/dev/tty\", O_WRONLY)) == -1)\n\t\terr(1, \"/dev/tty\");\n\n\tif (ioctl(tty.rfd, TIOCGWINSZ, &ws) == -1)\n\t\terr(1, \"TIOCGWINSZ\");\n\n\tf.size = 32;\n\tif ((f.v = malloc(f.size*sizeof(struct field))) == NULL)\n\t\terr(1, NULL);\n\tm = n = MIN(ws.ws_col*ws.ws_row, (ssize_t)in.nmemb);\n\ts = e = in.v;\n\twhile (m && !regexec(&reg, e, 1, &r, 0) && r.rm_eo - r.rm_so) {\n\t\tf.v[f.nmemb].so = f.v[f.nmemb].eo = e - s;\n\t\tf.v[f.nmemb].so += r.rm_so;\n\t\tf.v[f.nmemb].eo += MAX(MIN(r.rm_eo, (ssize_t)m) - 1, 0);\n\t\te += r.rm_eo;\n\t\tm -= MIN(r.rm_eo, (ssize_t)m);\n\n\t\tif (++f.nmemb < f.size)\n\t\t\tcontinue;\n\t\tf.size *= 2;\n\t\tif ((f.v = realloc(f.v, f.size*sizeof(struct field))) == NULL)\n\t\t\terr(1, NULL);\n\t}\n\n\tfor (i = j = 0, s = e = in.v; n && i < ws.ws_row; i++) {\n\t\tsize_t w;\n\n\t\tif (s == e && !(e = memchr(s + 1, '\\n', n)))\n\t\t\te = in.v + in.nmemb;\n\n\t\tw = MIN(e - s, ws.ws_col);\n\t\tfor (; j < f.nmemb && f.v[j].so < (size_t)(s - in.v + w); j++)\n\t\t\tf.v[j].lo = s - in.v;\n\t\ts += w;\n\t\tn -= w;\n\t}\n\tf.nmemb = MIN(f.nmemb, j);\n\t/* Ensure last field does not exceed the terminal width. */\n\tif (n > 0 && f.nmemb > 0 &&\n\t    f.v[f.nmemb - 1].eo - f.v[f.nmemb - 1].lo >= ws.ws_col)\n\t\tf.v[f.nmemb - 1].eo = f.v[f.nmemb - 1].lo + ws.ws_col - 1;\n\t/* Number of bytes to output. */\n\tf.v[f.nmemb].lo = MAX(s - in.v - 1, 0);\n\n\tif (tcgetattr(tty.rfd, &tty.attr) == -1)\n\t\terr(1, \"tcgetattr\");\n\tattr = tty.attr;\n\tattr.c_iflag |= ICRNL;\n\tattr.c_lflag &= ~(ICANON|ECHO|ISIG);\n\tif (tcsetattr(tty.rfd, TCSANOW, &attr) == -1)\n\t\terr(1, \"tcsetattr\");\n\n\tif (tty.ca)\n\t\ttputs(T_ENTER_CA_MODE);\n\ttputs(T_CURSOR_INVISIBLE);\n\t/* Emit the number of lines and save the cursor position. */\n\tfor (j = 0; j < i; j++)\n\t\ttputs(\"\\n\");\n\tfor (j = 0; j < i; j++)\n\t\ttputs(\"\\033M\");\n\ttputs(T_SAVE_CURSOR);\n}",
+    "calls": [
+      {
+        "caller": "yank.c:main",
+        "span": "yank.c:481:2:481:10",
+        "source": "tsetup();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "yank.c:tend",
+    "span": "yank.c:283:1:294:2",
+    "pieces": [
+      "yank.c:283:1:294:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 12,
+    "source": "static void\ntend(void)\n{\n\ttputs(T_RESTORE_CURSOR);\n\ttputs(T_CLR_EOS);\n\ttputs(T_CURSOR_VISIBLE);\n\tif (tty.ca)\n\t\ttputs(T_EXIT_CA_MODE);\n\ttcsetattr(tty.rfd, TCSANOW, &tty.attr);\n\tclose(tty.rfd);\n\tclose(tty.wfd);\n}",
+    "calls": [
+      {
+        "caller": "yank.c:main",
+        "span": "yank.c:486:2:486:8",
+        "source": "tend();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "yank.c:tgetc",
+    "span": "yank.c:296:1:339:2",
+    "pieces": [
+      "yank.c:296:1:339:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 44,
+    "source": "static int\ntgetc(void)\n{\n\tstatic struct {\n\t\tconst char\t*s;\n\t\tint\t\t c;\n\t} keys[] = {\n\t\t{ \"\\n\",\t\tKEY_ENTER },\n\t\t{ \"\\001\",\tKEY_HOME },\t/* Ctrl-A */\n\t\t{ \"\\003\",\tKEY_TERM },\t/* Ctrl-C */\n\t\t{ \"\\004\",\tKEY_TERM },\t/* Ctrl-D */\n\t\t{ \"\\005\",\tKEY_END },\t/* Ctrl-E */\n\t\t{ \"\\016\",\tKEY_RIGHT },\t/* Ctrl-N */\n\t\t{ \"\\020\",\tKEY_LEFT },\t/* Ctrl-P */\n\t\t{ \"G\",\t\tKEY_END },\n\t\t{ \"g\",\t\tKEY_HOME },\n\t\t{ \"h\",\t\tKEY_LEFT },\n\t\t{ \"j\",\t\tKEY_DOWN },\n\t\t{ \"k\",\t\tKEY_UP },\n\t\t{ \"l\",\t\tKEY_RIGHT },\n\t\t{ \"\\033[A\",\tKEY_UP },\n\t\t{ \"\\033[C\",\tKEY_RIGHT },\n\t\t{ \"\\033[B\",\tKEY_DOWN },\n\t\t{ \"\\033[D\",\tKEY_LEFT },\n\t\t{ NULL,\t\t0 },\n\t};\n\tchar buf[4];\n\tssize_t n;\n\tint i;\n\n\tn = read(tty.rfd, buf, sizeof(buf) - 1);\n\tif (n == -1)\n\t\terr(1, \"read\");\n\tif (n == 0)\n\t\treturn KEY_TERM;\t/* EOF */\n\tbuf[n] = '\\0';\n\n\tfor (i = 0; keys[i].s != NULL; i++) {\n\t\tif (strncmp(keys[i].s, buf, strlen(keys[i].s)) == 0)\n\t\t\treturn keys[i].c;\n\t}\n\n\treturn 0;\n}",
+    "calls": [
+      {
+        "caller": "yank.c:tmain",
+        "span": "yank.c:363:7:363:14",
+        "source": "c = tgetc();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "yank.c:tmain",
+    "span": "yank.c:341:1:408:2",
+    "pieces": [
+      "yank.c:341:1:408:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 68,
+    "source": "static const struct field *\ntmain(void)\n{\n\tsize_t n;\n\tint i, j;\n\n\ti = j = 0;\n\tn = f.v[f.nmemb].lo;\n\tfor (;;) {\n\t\tint c;\n\n\t\ttputs(T_RESTORE_CURSOR);\n\t\tif (f.nmemb > 0) {\n\t\t\ttwrite(in.v, f.v[i].so);\n\t\t\ttputs(T_ENTER_STANDOUT_MODE);\n\t\t\ttwrite(in.v + f.v[i].so, f.v[i].eo - f.v[i].so + 1);\n\t\t\ttputs(T_EXIT_STANDOUT_MODE);\n\t\t\ttwrite(in.v + f.v[i].eo + 1, n - f.v[i].eo);\n\t\t} else {\n\t\t\ttwrite(in.v, n);\n\t\t}\n\n\t\tc = tgetc();\n\t\tswitch (c) {\n\t\tcase KEY_ENTER:\n\t\t\tif (f.nmemb > 0)\n\t\t\t\treturn &f.v[i];\n\t\t\tbreak;\n\t\tcase KEY_TERM:\n\t\t\treturn NULL;\n\t\tcase KEY_HOME:\n\t\t\tj = 0;\n\t\t\tbreak;\n\t\tcase KEY_RIGHT:\n\t\t\tj = i + 1;\n\t\t\tbreak;\n\t\tcase KEY_END:\n\t\t\tj = f.nmemb - 1;\n\t\t\tbreak;\n\t\tcase KEY_LEFT:\n\t\t\tj = i - 1;\n\t\t\tbreak;\n\t\tcase KEY_DOWN:\n\t\tcase KEY_UP:\n\t\t\tif (c == KEY_DOWN) {\n\t\t\t\tj = i;\n\t\t\t\twhile (j < (ssize_t)f.nmemb &&\n\t\t\t\t    f.v[i].lo == f.v[j].lo)\n\t\t\t\t\tj++;\n\t\t\t\tif (j == (ssize_t)f.nmemb)\n\t\t\t\t\tbreak;\n\t\t\t} else {\n\t\t\t\tint k = i;\n\t\t\t\twhile (k && f.v[i].lo == f.v[k].lo)\n\t\t\t\t\tk--;\n\t\t\t\tj = k;\n\t\t\t\twhile (j && f.v[j - 1].lo == f.v[k].lo)\n\t\t\t\t\tj--;\n\t\t\t}\n\t\t\tfor (; fcmp(&f.v[i], &f.v[j]) < 0 &&\n\t\t\t    f.v[j].lo == f.v[j + 1].lo; j++)\n\t\t\t\tcontinue;\n\t\t\tbreak;\n\t\t}\n\t\tif (j >= 0 && j < (ssize_t)f.nmemb)\n\t\t\ti = j;\n\t}\n}",
+    "calls": [
+      {
+        "caller": "yank.c:main",
+        "span": "yank.c:485:11:485:18",
+        "source": "field = tmain();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "yank.c:usage",
+    "span": "yank.c:410:1:416:2",
+    "pieces": [
+      "yank.c:410:1:416:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 7,
+    "source": "static void\nusage(void)\n{\n\tfprintf(stderr, \"usage: yank [-1ilxv] [-d delim] [-g pattern] \"\n\t    \"[-- command [args]]\\n\");\n\texit(2);\n}",
+    "calls": [
+      {
+        "caller": "yank.c:main",
+        "span": "yank.c:464:4:464:11",
+        "source": "usage();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "yank.c:main",
+    "span": "yank.c:418:1:492:2",
+    "pieces": [
+      "yank.c:418:1:492:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 75,
+    "source": "int\nmain(int argc, char *argv[])\n{\n\tconst struct field *field;\n\tchar *pat;\n\tint one = 0;\n\tint rflags = REG_EXTENDED;\n\tint c, i;\n\n\tsetlocale(LC_CTYPE, \"\");\n\n#ifdef __OpenBSD__\n\tif (pledge(\"stdio tty proc exec\", NULL) == -1)\n\t\terr(1, \"pledge\");\n#endif\n\n\tpat = strtopat(\" \");\n\twhile ((c = getopt(argc, argv, \"1ilvxd:g:\")) != -1) {\n\t\tswitch (c) {\n\t\tcase '1':\n\t\t\tone = 1;\n\t\t\tbreak;\n\t\tcase 'd':\n\t\t\tfree(pat);\n\t\t\tpat = strtopat(optarg);\n\t\t\tbreak;\n\t\tcase 'g':\n\t\t\tfree(pat);\n\t\t\tif ((pat = strdup(optarg)) == NULL)\n\t\t\t\terr(1, NULL);\n\t\t\trflags |= REG_NEWLINE;\n\t\t\tbreak;\n\t\tcase 'i':\n\t\t\trflags |= REG_ICASE;\n\t\t\tbreak;\n\t\tcase 'l':\n\t\t\tfree(pat);\n\t\t\tpat = strtopat(\"\");\n\t\t\tbreak;\n\t\tcase 'v':\n\t\t\tputs(\"yank \" VERSION);\n\t\t\texit(0);\n\t\tcase 'x':\n\t\t\ttty.ca = 1;\n\t\t\tbreak;\n\t\tdefault:\n\t\t\tusage();\n\t\t}\n\t}\n\targc -= optind;\n\targv += optind;\n\n\tif (regcomp(&reg, pat, rflags) != 0)\n\t\terrx(1, \"invalid regular expression\");\n\n\t/* Ensure space for yank command and null terminator. */\n\tif ((yankargv = calloc(argc + 2, sizeof(char *))) == NULL)\n\t\terr(1, NULL);\n\tyankargv[0] = YANKCMD;\n\tfor (i = 0; i < argc; i++)\n\t\tyankargv[i] = argv[i];\n\n\tinput();\n\ttsetup();\n\tif (one && f.nmemb == 1)\n\t\tfield = &f.v[0];\n\telse\n\t\tfield = tmain();\n\ttend();\n\tif (field == NULL)\n\t\treturn 1;\n\tyank(in.v + field->so, field->eo - field->so + 1);\n\n\treturn 0;\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  }
+]
