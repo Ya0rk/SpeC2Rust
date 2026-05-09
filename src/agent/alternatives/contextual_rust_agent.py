@@ -946,6 +946,8 @@ class ContextualRustAgent(RustAgent):
         self.registry = RustProjectRegistry()
         self.contextual_plan: List[PlannedFile] = []
         self._plan_by_path: Dict[str, PlannedFile] = {}
+        self._cfile_to_module: Dict[str, str] = {}
+        self._module_spec_docs: Dict[str, Dict[str, str]] = {}
 
     def _set_request_label(self, label: str):
         if hasattr(self.llm, "set_request_label"):
@@ -1581,14 +1583,83 @@ class ContextualRustAgent(RustAgent):
         if len(global_index) > 1:
             lines.extend(global_index)
 
-        if getattr(self, "project_structure", ""):
-            lines.append("\n--- 项目结构设计 ---")
-            lines.append(self.project_structure)
-        if getattr(self, "implementation_plan", ""):
-            lines.append("\n--- 实现计划 ---")
-            lines.append(self.implementation_plan)
+        module_ctx = self._module_context_for_file(planned)
+        if module_ctx:
+            lines.append(module_ctx)
 
         return "\n".join(lines)
+
+    def _build_module_index(self):
+        """从 translation_contract 和 doc_contents 构建 C 文件→模块 和 模块→spec文档 的索引。"""
+        self._cfile_to_module = {}
+        self._module_spec_docs = {}
+
+        module_units = (self.translation_contract or {}).get("module_units", [])
+        module_dir_by_name: Dict[str, str] = {}
+        for i, unit in enumerate(module_units, 1):
+            module_name = unit.get("name", "unknown")
+            feature_name = module_name.replace("-", "_").replace(" ", "_")
+            dir_prefix = f"{i:03d}-{feature_name}-rust-port"
+            module_dir_by_name[module_name] = dir_prefix
+            for c_file in unit.get("files", []):
+                normalized = c_file.replace("\\", "/")
+                stem = os.path.splitext(os.path.basename(normalized))[0].lower()
+                self._cfile_to_module[normalized] = module_name
+                self._cfile_to_module[stem] = module_name
+
+        doc_keys = ["tasks.md", "plan.md", "spec.md"]
+        for module_name, dir_prefix in module_dir_by_name.items():
+            docs: Dict[str, str] = {}
+            for doc_key in doc_keys:
+                for path, content in (self.doc_contents or {}).items():
+                    normalized = path.replace("\\", "/")
+                    if f"specs/{dir_prefix}/{doc_key}" in normalized or \
+                       f"specs\\{dir_prefix}\\{doc_key}" in normalized.replace("/", "\\"):
+                        docs[doc_key] = (content or "").strip()
+                        break
+            if docs:
+                self._module_spec_docs[module_name] = docs
+
+        if self._module_spec_docs:
+            print(f"  模块上下文索引: {len(self._module_spec_docs)} 个模块, "
+                  f"{len(self._cfile_to_module)} 个 C 文件映射")
+
+    def _module_context_for_file(self, planned: PlannedFile) -> str:
+        """返回该文件所属模块的 tasks.md / plan.md / spec.md 拼接内容。"""
+        if not self._module_spec_docs:
+            return ""
+
+        modules = set()
+        for source in (planned.source_files or []):
+            normalized = source.replace("\\", "/")
+            stem = os.path.splitext(os.path.basename(normalized))[0].lower()
+            if normalized in self._cfile_to_module:
+                modules.add(self._cfile_to_module[normalized])
+            elif stem in self._cfile_to_module:
+                modules.add(self._cfile_to_module[stem])
+
+        if not modules:
+            target_stem = os.path.splitext(os.path.basename(planned.path))[0].lower()
+            if target_stem in self._cfile_to_module:
+                modules.add(self._cfile_to_module[target_stem])
+
+        if not modules:
+            return ""
+
+        parts = []
+        for module_name in sorted(modules):
+            docs = self._module_spec_docs.get(module_name)
+            if not docs:
+                continue
+            parts.append(f"\n--- 所属模块: {module_name} ---")
+            for doc_key in ["tasks.md", "plan.md", "spec.md"]:
+                content = docs.get(doc_key, "")
+                if not content:
+                    continue
+                parts.append(f"=== {doc_key} ===")
+                parts.append(content)
+
+        return "\n".join(parts) if parts else ""
 
     def _build_targeted_registry_summary(self, planned: PlannedFile) -> str:
         """只保留当前文件依赖的文件的符号，减少无关上下文。
@@ -2415,6 +2486,7 @@ class ContextualRustAgent(RustAgent):
             source_records=self.source_records,
             translation_contract=self.translation_contract,
         )
+        self._build_module_index()
 
         # 1. 程序化推导初始文件计划
         self.contextual_plan = self._request_contextual_plan()
