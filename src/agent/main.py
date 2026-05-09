@@ -30,6 +30,7 @@ from agent.alternatives.growth_rust_agent import GrowthRustAgent
 from agent.alternatives.contextual_rust_agent import ContextualRustAgent
 from agent.code_fixer_agent import CodeFixer, TestFixer
 from agent.rust_repair_agent import RustRepairAgent
+from agent.rtest import RustTestAgent
 from agent.unfinished_code_agent import UnfinishedCodeAgent
 from config.config import Config
 from utils.fmtpr import prGreen, prRed, prBlue, prYellow
@@ -64,8 +65,50 @@ def should_run_legacy_code_fix_stage(args) -> bool:
     return not should_run_rust_repair_stage(args) and not getattr(args, "skip_code_fix", False)
 
 
+def should_run_rust_test_agent_stage(args) -> bool:
+    return bool(getattr(args, "use_rust_test_agent", False))
+
+
 def should_run_legacy_test_fix_stage(args) -> bool:
-    return not should_run_rust_repair_stage(args) and not getattr(args, "skip_test_fix", False)
+    if should_run_rust_repair_stage(args):
+        return False
+    if should_run_rust_test_agent_stage(args):
+        return False
+    return not getattr(args, "skip_test_fix", False)
+
+
+def run_optional_rust_test_agent(args, config: Config, rust_project_path: str):
+    """启用 RustTestAgent：用 C 项目的 sh 测试脚本验证 Rust 项目功能完整性，
+    并对失败用例进入 LLM 修复循环。"""
+    if not should_run_rust_test_agent_stage(args):
+        return None
+    if not args.c_project_path:
+        prRed("\n⊘ 启用了 --use-rust-test-agent，但未提供 --c_project_path，跳过测试")
+        return None
+
+    prBlue("\n" + "=" * 80)
+    prYellow("步骤 4: RustTestAgent 功能测试与修复")
+    prBlue("=" * 80)
+
+    test_agent = RustTestAgent(
+        config=config,
+        max_repair_iterations=getattr(args, "rust_test_agent_max_iterations", 5),
+    )
+    summary = test_agent.run(
+        rust_project_path=rust_project_path,
+        c_project_path=args.c_project_path,
+        binary_name=(getattr(args, "rust_test_agent_binary_name", "") or None),
+    )
+
+    if summary.total == 0:
+        prRed("\n⚠ RustTestAgent 未执行任何测试用例（可能缺少 sh 脚本或编译失败）")
+    elif summary.all_passed:
+        prGreen(f"\n✓ RustTestAgent 全部 {summary.total} 个用例通过")
+    else:
+        prRed(
+            f"\n⚠ RustTestAgent {summary.failed}/{summary.total} 个用例仍未通过修复"
+        )
+    return summary
 
 
 def selected_rust_agent_mode(args) -> str:
@@ -215,6 +258,22 @@ def main():
         help="RustRepairAgent 最大修复迭代次数（默认：15）"
     )
     parser.add_argument(
+        "--use-rust-test-agent",
+        action="store_true",
+        help="启用 RustTestAgent：基于 C 项目 sh 测试脚本验证 Rust 项目功能完整性，并对失败用例进行 LLM 修复（替代默认的 cargo test 修复步骤 4）"
+    )
+    parser.add_argument(
+        "--rust-test-agent-max-iterations",
+        type=int,
+        default=10,
+        help="RustTestAgent 单个失败用例的最大修复轮数（默认：10）"
+    )
+    parser.add_argument(
+        "--rust-test-agent-binary-name",
+        default="",
+        help="RustTestAgent 期望的 Rust 可执行文件名，默认与 C 项目目录名同名（例如 cat）"
+    )
+    parser.add_argument(
         "--continue",
         dest="continue_run",
         action="store_true",
@@ -271,6 +330,7 @@ def main():
         prYellow(f"PointerAgent：{'开启' if args.use_pointer_agent else '关闭'}")
         prYellow(f"冻结 c_docs：{'开启' if args.freeze_c_docs else '关闭'}")
         prYellow(f"RustRepairAgent：{'开启' if should_run_rust_repair_stage(args) else '关闭'}")
+        prYellow(f"RustTestAgent：{'开启' if should_run_rust_test_agent_stage(args) else '关闭'}")
         prYellow(f"最大修复迭代次数：{args.max_fix_iterations}")
         prBlue("=" * 80)
 
@@ -534,6 +594,11 @@ def main():
                     prRed("\n⚠ 测试修复失败，但项目可能仍可使用")
             else:
                 prRed("\n⊘ 跳过测试修复步骤")
+
+        # =========================================================================
+        # 步骤 4 (新): RustTestAgent —— 用 C 项目 sh 测试脚本验证 Rust 项目功能
+        # =========================================================================
+        run_optional_rust_test_agent(args, config, rust_project_path)
 
         # =========================================================================
         # 完成
