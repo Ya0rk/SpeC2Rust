@@ -1,4 +1,0 @@
-/home/jfeng/miniconda3/envs/c2saferrust/lib/python3.12/site-packages/tree_sitter/__init__.py:36: FutureWarning: Language.build_library is deprecated. Use the new bindings instead.
-  warn("{} is deprecated. Use {} instead.".format(old, new), FutureWarning)
-/home/jfeng/miniconda3/envs/c2saferrust/lib/python3.12/site-packages/tree_sitter/__init__.py:36: FutureWarning: Language(path, name) is deprecated. Use Language(ptr, name) instead.
-  warn("{} is deprecated. Use {} instead.".format(old, new), FutureWarning)

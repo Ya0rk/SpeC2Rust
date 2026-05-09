@@ -77,7 +77,7 @@ class ContextualSpecAgent:
         self.parser = CCodeAnalyzer()
         self.analyzer = CodeAnalyzer(self.llm)
         self.doc_generator = DocumentGenerator(self.llm)
-        self.module_splitter = ModuleSplitter()
+        self.module_splitter = ModuleSplitter(llm=self.llm)
         self._c_pipeline_initialized = True
 
     def _truncate_text(self, text: str, max_chars: int) -> str:

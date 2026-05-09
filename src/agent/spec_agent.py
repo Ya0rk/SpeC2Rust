@@ -50,7 +50,7 @@ class SpecAgent:
         self.doc_generator = DocumentGenerator(self.llm)
         
         # 初始化模块划分器
-        self.module_splitter = ModuleSplitter()
+        self.module_splitter = ModuleSplitter(llm=self.llm)
         
         # 存储分析结果
         self.project_analysis = None
