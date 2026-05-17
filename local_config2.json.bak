@@ -1,8 +1,8 @@
 {
   "model_name": "custom_api",
-  "api_key": "sk-K6YEzq6dSnRgiw8ErxEFdIWtz9JL1t3828g44Whmem0cVXTY",
-  "api_base_url": "https://ai.wavepulse.live/v1",
-  "api_model": "gpt-5.4",
+  "api_key": "sk-9003e46a26fc42a482f9ad1bd0cd3772",
+  "api_base_url": "https://api.deepseek.com/v1",
+  "api_model": "deepseek-chat",
   "api_max_tokens": 8192,
   "api_min_interval_seconds": 8,
   "api_retry_base_delay_seconds": 12,

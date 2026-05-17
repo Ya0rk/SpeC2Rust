@@ -10,6 +10,7 @@ C 到 Rust 项目转换 Agent 主程序
 
 import argparse
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -77,6 +78,33 @@ def should_run_legacy_test_fix_stage(args) -> bool:
     return not getattr(args, "skip_test_fix", False)
 
 
+def cargo_command_passes(project_path: str, command: list[str], timeout_seconds: int = 240) -> bool:
+    if not project_path or not os.path.isdir(project_path):
+        return False
+    try:
+        result = subprocess.run(
+            command,
+            cwd=project_path,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            timeout=timeout_seconds,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False
+    return result.returncode == 0
+
+
+def cargo_check_passes(project_path: str, timeout_seconds: int = 240) -> bool:
+    return cargo_command_passes(project_path, ["cargo", "check"], timeout_seconds)
+
+
+def cargo_build_release_passes(project_path: str, timeout_seconds: int = 600) -> bool:
+    return cargo_command_passes(project_path, ["cargo", "build", "--release"], timeout_seconds)
+
+
 def run_optional_rust_test_agent(args, config: Config, rust_project_path: str):
     """启用 RustTestAgent：用 C 项目的 sh 测试脚本验证 Rust 项目功能完整性，
     并对失败用例进入 LLM 修复循环。"""
@@ -85,6 +113,10 @@ def run_optional_rust_test_agent(args, config: Config, rust_project_path: str):
     if not args.c_project_path:
         prRed("\n⊘ 启用了 --use-rust-test-agent，但未提供 --c_project_path，跳过测试")
         return None
+    if not cargo_build_release_passes(rust_project_path):
+        prRed("\n⊘ Rust 项目仍未通过 cargo build --release，跳过 RustTestAgent")
+        prYellow("  请先完成编译修复；不能产出 release 二进制时进入功能测试没有意义。")
+        return None
 
     prBlue("\n" + "=" * 80)
     prYellow("步骤 4: RustTestAgent 功能测试与修复")
@@ -92,7 +124,9 @@ def run_optional_rust_test_agent(args, config: Config, rust_project_path: str):
 
     test_agent = RustTestAgent(
         config=config,
-        max_repair_iterations=getattr(args, "rust_test_agent_max_iterations", 5),
+        max_repair_iterations=getattr(args, "rust_test_agent_max_iterations", 20),
+        test_timeout_seconds=getattr(args, "rust_test_agent_timeout_seconds", 30),
+        translate_tests=getattr(args, "rust_test_agent_translate_tests", False),
     )
     summary = test_agent.run(
         rust_project_path=rust_project_path,
@@ -137,6 +171,11 @@ def run_optional_rust_repair_agent(args, config: Config, rust_project_path: str)
         config=config,
         max_iterations=getattr(args, "rust_repair_max_iterations", 15),
     )
+    c_docs_path = os.path.join(args.output_dir, "c_docs") if getattr(args, "output_dir", "") else ""
+    repair_agent.configure_context_sources(
+        c_project_path=getattr(args, "c_project_path", "") or "",
+        c_docs_path=c_docs_path,
+    )
     result = repair_agent.repair_project(
         project_path=rust_project_path,
         in_place=True,
@@ -144,9 +183,9 @@ def run_optional_rust_repair_agent(args, config: Config, rust_project_path: str)
     )
 
     if result.check_passed and result.test_passed:
-        prGreen("\n✓ RustRepairAgent 修复后 cargo check/test 通过")
+        prGreen("\n✓ RustRepairAgent 修复后 cargo check/build --release 通过")
     elif result.check_passed:
-        prYellow("\n⚠ RustRepairAgent 修复后 cargo check 通过，但测试仍未完全通过")
+        prYellow("\n⚠ RustRepairAgent 修复后 cargo check 通过，但 cargo build --release 仍未通过")
     else:
         prRed(f"\n⚠ RustRepairAgent 修复后仍有 {result.error_count} 个错误")
     return result
@@ -215,6 +254,12 @@ def main():
         help="使用可选的 ContextualRustAgent，按需读取 spec/source/Rust 上下文并维护符号表"
     )
     parser.add_argument(
+        "--rust-entry-kind",
+        choices=["auto", "main", "lib"],
+        default="auto",
+        help="ContextualRustAgent 的 crate 入口策略：auto 根据契约推断，main 强制生成可执行入口 src/main.rs，lib 强制生成库入口 src/lib.rs"
+    )
+    parser.add_argument(
         "--use-error-organizer-agent",
         action="store_true",
         help="可选开启错误梳理中间层，先归类并分批整理错误，再交给修复器处理"
@@ -254,8 +299,8 @@ def main():
     parser.add_argument(
         "--rust-repair-max-iterations",
         type=int,
-        default=15,
-        help="RustRepairAgent 最大修复迭代次数（默认：15）"
+        default=40,
+        help="RustRepairAgent 最大修复迭代次数（默认：40）"
     )
     parser.add_argument(
         "--use-rust-test-agent",
@@ -265,13 +310,24 @@ def main():
     parser.add_argument(
         "--rust-test-agent-max-iterations",
         type=int,
-        default=10,
-        help="RustTestAgent 单个失败用例的最大修复轮数（默认：10）"
+        default=20,
+        help="RustTestAgent 单个失败用例的最大修复轮数（默认：20）"
     )
     parser.add_argument(
         "--rust-test-agent-binary-name",
         default="",
         help="RustTestAgent 期望的 Rust 可执行文件名，默认与 C 项目目录名同名（例如 cat）"
+    )
+    parser.add_argument(
+        "--rust-test-agent-timeout-seconds",
+        type=int,
+        default=30,
+        help="RustTestAgent 单个 sh 测试脚本超时时间（默认：30 秒）"
+    )
+    parser.add_argument(
+        "--rust-test-agent-translate-tests",
+        action="store_true",
+        help="RustTestAgent 使用旧的 LLM 测试脚本翻译模式；默认原样复制并运行 C 项目 sh"
     )
     parser.add_argument(
         "--continue",
@@ -282,8 +338,8 @@ def main():
     parser.add_argument(
         "--max-fix-iterations",
         type=int,
-        default=10,
-        help="最大修复迭代次数（默认：10）"
+        default=20,
+        help="最大修复迭代次数（默认：20）"
     )
 
     args = parser.parse_args()
@@ -323,6 +379,7 @@ def main():
         prYellow(f"分析路径：{'SpecAgent' if args.use_spec_agent else 'CDocAgent'}")
         rust_agent_mode = selected_rust_agent_mode(args)
         prYellow(f"代码生成路径：{rust_agent_mode}")
+        prYellow(f"Rust 入口策略：{args.rust_entry_kind}")
         prYellow(f"续跑模式：{'开启' if args.continue_run else '关闭（默认全量重建）'}")
         prYellow(f"未完成实现检查：{'关闭' if args.skip_unfinished_check else '开启'}")
         prYellow(f"未完成实现最大续写轮数：{args.unfinished_max_passes}")
@@ -487,6 +544,7 @@ def main():
 
         if args.use_contextual_rust_agent:
             rust_agent = ContextualRustAgent(config=config)
+            rust_agent.entry_kind = args.rust_entry_kind
         elif args.use_growth_rust_agent:
             rust_agent = GrowthRustAgent(config=config)
         elif args.use_stable_rust_agent:
@@ -541,11 +599,14 @@ def main():
         else:
             prRed("\n⊘ 跳过未完成实现检查步骤")
 
+        compile_ready = False
+
         if should_run_rust_repair_stage(args):
             # =========================================================================
             # 步骤 3: 使用 RustRepairAgent 替代默认编译/测试修复链路
             # =========================================================================
-            run_optional_rust_repair_agent(args, config, rust_project_path)
+            repair_result = run_optional_rust_repair_agent(args, config, rust_project_path)
+            compile_ready = bool(repair_result and repair_result.check_passed and repair_result.test_passed)
         else:
             # =========================================================================
             # 步骤 3: 对生成的 Rust 代码进行编译修复
@@ -563,18 +624,24 @@ def main():
                 )
 
                 success = code_fixer.fix()
+                compile_ready = bool(success)
 
                 if success:
                     prGreen("\n✓ 代码编译修复成功")
                 else:
-                    prRed("\n⚠ 代码编译修复失败，但项目可能仍可使用")
+                    prRed("\n⚠ 代码编译修复失败，后续测试阶段将跳过")
             else:
                 prRed("\n⊘ 跳过代码编译修复步骤")
+                compile_ready = cargo_build_release_passes(rust_project_path)
+                if compile_ready:
+                    prGreen("  当前项目已通过 cargo build --release")
+                else:
+                    prRed("  当前项目未通过 cargo build --release")
 
             # =========================================================================
             # 步骤 4: 对生成的 Rust 代码进行测试修复
             # =========================================================================
-            if should_run_legacy_test_fix_stage(args):
+            if should_run_legacy_test_fix_stage(args) and compile_ready:
                 prBlue("\n" + "=" * 80)
                 prYellow("步骤 4: 测试修复 Rust 代码")
                 prBlue("=" * 80)
@@ -592,13 +659,19 @@ def main():
                     prGreen("\n✓ 所有测试通过")
                 else:
                     prRed("\n⚠ 测试修复失败，但项目可能仍可使用")
+            elif should_run_legacy_test_fix_stage(args):
+                prRed("\n⊘ 编译修复未完成，跳过测试修复步骤")
             else:
                 prRed("\n⊘ 跳过测试修复步骤")
 
         # =========================================================================
         # 步骤 4 (新): RustTestAgent —— 用 C 项目 sh 测试脚本验证 Rust 项目功能
         # =========================================================================
-        run_optional_rust_test_agent(args, config, rust_project_path)
+        if compile_ready or cargo_build_release_passes(rust_project_path):
+            run_optional_rust_test_agent(args, config, rust_project_path)
+        else:
+            prRed("\n⊘ 编译修复未完成，跳过 RustTestAgent 功能测试与修复")
+            prYellow("  可通过 --rust-repair-max-iterations 或 --max-fix-iterations 增加编译修复预算。")
 
         # =========================================================================
         # 完成

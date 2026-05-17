@@ -32,7 +32,12 @@ from config.config import Config
 
 from llm.model import Model
 
-from rust_structural_repair import try_deterministic_repair
+try:
+    from agent.rust_structural_repair import try_deterministic_repair
+except ModuleNotFoundError as exc:
+    if exc.name not in {"agent", "agent.rust_structural_repair"}:
+        raise
+    from rust_structural_repair import try_deterministic_repair
 
 
 
@@ -97,6 +102,10 @@ class RustRepairAgent:
         self.iteration_timeout_seconds = 600
 
         self.best_result: Optional[RepairRunResult] = None
+
+        self.c_project_path: str = ""
+
+        self.c_docs_path: str = ""
 
 
 
@@ -185,6 +194,56 @@ class RustRepairAgent:
     def _cargo_test(self, project_dir: str) -> Tuple[bool, str]:
 
         return self._run_command("cargo test", project_dir, timeout_seconds=240)
+
+
+
+    def _cargo_build_release(self, project_dir: str) -> Tuple[bool, str]:
+
+        return self._run_command("cargo build --release", project_dir, timeout_seconds=600)
+
+
+
+    def _compile_success_result(
+
+        self,
+
+        run_dir: str,
+
+        check_output: str,
+
+        round_summary: str,
+
+    ) -> RepairRunResult:
+
+        build_success, build_output = self._cargo_build_release(run_dir)
+
+        output = build_output if not build_success else (
+
+            check_output + ("\n" + build_output if build_output else "")
+
+        )
+
+        return RepairRunResult(
+
+            run_dir,
+
+            True,
+
+            build_success,
+
+            0 if build_success else self._count_errors(output),
+
+            output,
+
+            self._error_signature(output),
+
+            self._frontier_metrics(output),
+
+            round_summary=round_summary,
+
+            timed_out=False,
+
+        )
 
 
 
@@ -467,27 +526,10 @@ class RustRepairAgent:
 
     def _maybe_rebuild_lib_rs(self, project_dir: str, error_output: str) -> bool:
 
-        normalized = (error_output or "").lower()
+        del project_dir, error_output
 
-        if "src\\lib.rs" not in normalized and "src/lib.rs" not in normalized:
-
-            return False
-
-        if "unresolved import" not in normalized and "private field" not in normalized:
-
-            return False
-
-        lib_path = os.path.join(project_dir, "src", "lib.rs")
-
-        content = self._rebuild_minimal_lib_rs(project_dir)
-
-        with open(lib_path, "w", encoding="utf-8") as f:
-
-            f.write(content)
-
-        print("应用本地规则：重建最小 lib.rs")
-
-        return True
+        # 禁止本地 fallback 修补。crate 入口问题必须交给 LLM 在读取足够上下文后做显式编辑。
+        return False
 
 
 
@@ -606,6 +648,18 @@ class RustRepairAgent:
         if candidate.check_passed and not current_best.check_passed:
 
             return True, "编译已通过"
+
+        if (
+
+            candidate.check_passed
+
+            and candidate.test_passed
+
+            and not current_best.test_passed
+
+        ):
+
+            return True, "release 编译已通过"
 
 
 
@@ -767,9 +821,317 @@ class RustRepairAgent:
 
         sanitized = self._sanitize_file_content_before_write(path, content)
 
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
         with open(path, "w", encoding="utf-8") as f:
 
             f.write(sanitized)
+
+
+
+    def _resolve_project_path(self, project_dir: str, rel_path: str) -> Tuple[Optional[str], Optional[str]]:
+
+        normalized = (rel_path or "").strip().strip('"').strip("'").replace("\\", "/")
+
+        normalized = re.sub(r"/+", "/", normalized).lstrip("/")
+
+        if not normalized or normalized in {".", ".."}:
+
+            return None, None
+
+        if re.match(r"^[A-Za-z]:", normalized) or normalized.startswith("../") or "/../" in normalized:
+
+            return None, None
+
+        if normalized.startswith((".git/", "target/")) or "/.git/" in f"/{normalized}/" or "/target/" in f"/{normalized}/":
+
+            return None, None
+
+        root = os.path.abspath(project_dir)
+
+        full_path = os.path.abspath(os.path.join(root, normalized.replace("/", os.sep)))
+
+        try:
+
+            if os.path.commonpath([root, full_path]) != root:
+
+                return None, None
+
+        except ValueError:
+
+            return None, None
+
+        return full_path, normalized
+
+
+
+    def configure_context_sources(self, c_project_path: str = "", c_docs_path: str = "") -> None:
+
+        self.c_project_path = str(Path(c_project_path).resolve()) if c_project_path and os.path.isdir(c_project_path) else ""
+
+        self.c_docs_path = str(Path(c_docs_path).resolve()) if c_docs_path and os.path.isdir(c_docs_path) else ""
+
+
+
+    def _context_roots(self, project_dir: str) -> Dict[str, str]:
+
+        roots = {"rust": str(Path(project_dir).resolve())}
+
+        if self.c_project_path:
+
+            roots["c"] = self.c_project_path
+
+        if self.c_docs_path:
+
+            roots["spec"] = self.c_docs_path
+
+        return roots
+
+
+
+    def _parse_context_ref(self, request: Dict) -> Tuple[str, str]:
+
+        kind = str(request.get("kind") or request.get("scope") or "rust").strip().lower()
+
+        path = str(request.get("path") or "").strip().replace("\\", "/")
+
+        prefix_match = re.match(r"^(rust|c|spec):(.*)$", path, re.IGNORECASE)
+
+        if prefix_match:
+
+            kind = prefix_match.group(1).lower()
+
+            path = prefix_match.group(2).strip()
+
+        if kind not in {"rust", "c", "spec"}:
+
+            kind = "rust"
+
+        return kind, path
+
+
+
+    def _resolve_context_path(self, project_dir: str, kind: str, rel_path: str) -> Tuple[Optional[str], Optional[str], str]:
+
+        roots = self._context_roots(project_dir)
+
+        root = roots.get(kind)
+
+        if not root:
+
+            return None, None, kind
+
+        normalized = (rel_path or "").strip().strip('"').strip("'").replace("\\", "/")
+
+        normalized = re.sub(r"/+", "/", normalized).lstrip("/")
+
+        if not normalized or normalized in {".", ".."}:
+
+            return None, None, kind
+
+        if re.match(r"^[A-Za-z]:", normalized) or normalized.startswith("../") or "/../" in normalized:
+
+            return None, None, kind
+
+        if normalized.startswith((".git/", "target/")) or "/.git/" in f"/{normalized}/" or "/target/" in f"/{normalized}/":
+
+            return None, None, kind
+
+        root_abs = os.path.abspath(root)
+
+        full_path = os.path.abspath(os.path.join(root_abs, normalized.replace("/", os.sep)))
+
+        try:
+
+            if os.path.commonpath([root_abs, full_path]) != root_abs:
+
+                return None, None, kind
+
+        except ValueError:
+
+            return None, None, kind
+
+        return full_path, normalized, kind
+
+
+
+    def _read_context_file_slice(
+
+        self,
+
+        project_dir: str,
+
+        kind: str,
+
+        rel_path: str,
+
+        start_line: Optional[int] = None,
+
+        end_line: Optional[int] = None,
+
+    ) -> str:
+
+        full_path, _, _ = self._resolve_context_path(project_dir, kind, rel_path)
+
+        if not full_path or not os.path.isfile(full_path):
+
+            return ""
+
+        text = self._read_file(full_path)
+
+        if start_line is None or end_line is None:
+
+            return text
+
+        lines = text.splitlines()
+
+        start = max(1, start_line)
+
+        end = min(len(lines), end_line)
+
+        if end < start:
+
+            return ""
+
+        return "\n".join(lines[start - 1:end]) + ("\n" if end >= start else "")
+
+
+
+    def _allowed_context_file(self, rel_path: str) -> bool:
+
+        lowered = (rel_path or "").replace("\\", "/").lower()
+
+        if lowered.startswith((".git/", "target/")) or "/.git/" in f"/{lowered}/" or "/target/" in f"/{lowered}/":
+
+            return False
+
+        return lowered.endswith((".rs", ".toml", ".md", ".json", ".c", ".h", ".sh", ".txt", ".in", ".out"))
+
+
+
+    def _is_allowed_created_file(self, rel_path: str) -> bool:
+
+        normalized = (rel_path or "").replace("\\", "/").lower()
+
+        base = os.path.basename(normalized)
+
+        if normalized.startswith((".git/", "target/")) or "/.git/" in f"/{normalized}/" or "/target/" in f"/{normalized}/":
+
+            return False
+
+        if base in {"cargo.toml", "build.rs", "readme.md"}:
+
+            return True
+
+        return normalized.endswith((".rs", ".toml", ".md"))
+
+
+
+    def _looks_like_compile_only_stub(self, rel_path: str, content: str) -> bool:
+
+        normalized = (rel_path or "").replace("\\", "/").lower()
+
+        if not normalized.endswith(".rs"):
+
+            return False
+
+        text = content or ""
+
+        stripped = text.strip()
+
+        if not stripped:
+
+            return True
+
+        lowered = stripped.lower()
+
+        if any(marker in lowered for marker in ["todo!(", "unimplemented!(", "panic!(\"todo", "panic!(\"not implemented"]):
+
+            return True
+
+        nonempty_lines = [line.strip() for line in stripped.splitlines() if line.strip()]
+
+        function_count = len(re.findall(r"\b(?:pub\s+)?fn\s+[A-Za-z_][A-Za-z0-9_]*\s*\(", stripped))
+
+        default_return_patterns = [
+
+            r"->\s*i(?:8|16|32|64|size)\s*\{[^{};]*\b0\s*\}",
+
+            r"->\s*u(?:8|16|32|64|size)\s*\{[^{};]*\b0\s*\}",
+
+            r"->\s*bool\s*\{[^{};]*\bfalse\s*\}",
+
+            r"->\s*String\s*\{[^{};]*String::new\(\)\s*\}",
+
+            r"->\s*Vec\s*<[^>]+>\s*\{[^{};]*Vec::new\(\)\s*\}",
+
+            r"->\s*Option\s*<[^>]+>\s*\{[^{};]*None\s*\}",
+
+            r"->\s*Result\s*<[^>]+>\s*\{[^{};]*Ok\s*\([^)]*\)\s*\}",
+
+        ]
+
+        default_return_count = sum(len(re.findall(pattern, stripped, flags=re.DOTALL)) for pattern in default_return_patterns)
+
+        ignored_args = len(re.findall(r"\b_[A-Za-z][A-Za-z0-9_]*\b", stripped))
+
+        if function_count > 0 and default_return_count >= function_count and len(nonempty_lines) <= 20:
+
+            return True
+
+        if ignored_args > 0 and default_return_count > 0 and len(nonempty_lines) <= 24:
+
+            return True
+
+        if re.search(r"pub\s+struct\s+\w+\s*;\s*impl\s+\w+\s*\{[^{}]*pub\s+fn\s+main\s*\([^)]*\)[^{]*\{[^{}]*\b0\s*\}[^{}]*\}", stripped, re.DOTALL):
+
+            return True
+
+        return False
+
+
+
+    def _is_destructive_existing_file_edit(self, rel_path: str, before_lines: List[str], after_lines: List[str]) -> Tuple[bool, str]:
+
+        normalized = (rel_path or "").replace("\\", "/").lower()
+
+        if not normalized.endswith((".rs", ".toml", ".md")):
+
+            return False, ""
+
+        before_text = "".join(before_lines)
+
+        after_text = "".join(after_lines)
+
+        before_non_ws = len(re.sub(r"\s+", "", before_text))
+
+        after_non_ws = len(re.sub(r"\s+", "", after_text))
+
+        before_line_count = len([line for line in before_lines if line.strip()])
+
+        after_line_count = len([line for line in after_lines if line.strip()])
+
+        if before_non_ws < 600 and before_line_count < 30:
+
+            return False, ""
+
+        if after_non_ws < 120:
+
+            return True, f"edit reduces non-whitespace content to {after_non_ws} chars"
+
+        if after_non_ws < before_non_ws * 0.35:
+
+            return True, f"edit shrinks file content too much: {before_non_ws} -> {after_non_ws} non-whitespace chars"
+
+        if before_line_count >= 60 and after_line_count < before_line_count * 0.35:
+
+            return True, f"edit removes too many non-empty lines: {before_line_count} -> {after_line_count}"
+
+        if normalized.endswith(".rs") and self._looks_like_compile_only_stub(rel_path, after_text):
+
+            return True, "edit turns existing Rust file into a compile-only stub"
+
+        return False, ""
 
 
 
@@ -811,11 +1173,35 @@ class RustRepairAgent:
 
 
 
+    def _format_material_with_line_numbers(self, content: str, base_line: Optional[int] = None) -> str:
+
+        lines = (content or "").splitlines()
+
+        if not lines:
+
+            return ""
+
+        start = base_line if isinstance(base_line, int) and base_line > 0 else 1
+
+        end_line = start + len(lines) - 1
+
+        width = max(4, len(str(end_line)))
+
+        return "\n".join(
+
+            f"{line_no:>{width}} | {line}"
+
+            for line_no, line in enumerate(lines, start=start)
+
+        )
+
+
+
     def _build_project_overview(self, project_dir: str, max_files: int = 20) -> str:
 
         src_dir = os.path.join(project_dir, "src")
 
-        entries = []
+        entries = ["Rust 项目文件："]
 
         if os.path.isdir(src_dir):
 
@@ -841,17 +1227,75 @@ class RustRepairAgent:
 
                     headline = ""
 
-                entries.append(f"- src/{name} ({size} bytes) {headline}")
+                entries.append(f"- rust:src/{name} ({size} bytes) {headline}")
 
         if os.path.exists(os.path.join(project_dir, "Cargo.toml")):
 
-            entries.insert(0, "- Cargo.toml")
+            entries.insert(1, "- rust:Cargo.toml")
 
         if os.path.exists(os.path.join(project_dir, "src", "lib.rs")):
 
-            entries.insert(1, "- src/lib.rs")
+            entries.insert(2, "- rust:src/lib.rs")
 
-        return "\n".join(entries[:max_files]).strip()
+        if self.c_project_path:
+
+            entries.append("")
+
+            entries.append("可读取的 C 源码上下文（kind=c）：")
+
+            for rel_path in self._list_context_files(project_dir, "c", limit=40):
+
+                entries.append(f"- c:{rel_path}")
+
+        if self.c_docs_path:
+
+            entries.append("")
+
+            entries.append("可读取的 spec/c_docs 上下文（kind=spec）：")
+
+            for rel_path in self._list_context_files(project_dir, "spec", limit=60):
+
+                entries.append(f"- spec:{rel_path}")
+
+        return "\n".join(entries).strip()
+
+
+
+    def _list_context_files(self, project_dir: str, kind: str, limit: int = 80) -> List[str]:
+
+        root = self._context_roots(project_dir).get(kind)
+
+        if not root or not os.path.isdir(root):
+
+            return []
+
+        rel_paths: List[str] = []
+
+        for current_root, dirs, files in os.walk(root):
+
+            dirs[:] = [
+
+                name for name in dirs
+
+                if name not in {".git", "target", "__pycache__", ".pytest_cache"}
+
+            ]
+
+            for name in files:
+
+                rel_path = os.path.relpath(os.path.join(current_root, name), root).replace("\\", "/")
+
+                if not self._allowed_context_file(rel_path):
+
+                    continue
+
+                rel_paths.append(rel_path)
+
+                if len(rel_paths) >= limit:
+
+                    return sorted(rel_paths)
+
+        return sorted(rel_paths)
 
 
 
@@ -953,21 +1397,31 @@ class RustRepairAgent:
 
 4. 为什么这么读/搜
 
-5. 本轮预期采用哪些局部编辑动作
+5. 本轮预期采用哪些局部编辑动作；如果错误来自缺失模块/文件，必须先计划读取 C/spec/Rust 证据，再决定是否创建真实文件
 
 
 
 可用读取接口：
 
-- whole_file: 读取整个文件
+- whole_file: 读取整个文件。字段：kind=rust/c/spec，path，mode=whole_file
 
-- line_range: 读取文件的 start_line 到 end_line
+- line_range: 读取文件的 start_line 到 end_line。字段：kind=rust/c/spec，path，mode=line_range，start_line，end_line
 
 
 
 可用搜索接口：
 
-- search_requests: 提供 query 和可选 path_glob，程序会返回命中片段和文件位置，方便你再决定是否读取更大上下文
+- search_requests: 提供 kind=rust/c/spec/all、query 和可选 path_glob，程序会返回命中片段和文件位置，方便你再决定是否读取更大上下文
+
+
+
+关键约束：
+
+- 禁止规划 fallback、最小 stub、空行为实现、默认返回值实现。
+
+- 缺失核心业务模块时，read_requests/search_requests 必须覆盖相关 C 源码或 spec 文档；不能只读 main.rs/Cargo.toml 就创建业务模块。
+
+- 如果不知道对应 C/spec 文件路径，先用 search_requests 在 kind=all 中搜索模块名、函数名、类型名。
 
 
 
@@ -999,19 +1453,21 @@ class RustRepairAgent:
 
   "read_requests": [
 
-    {{"path": "src/a.rs", "mode": "whole_file"}},
+    {{"kind": "rust", "path": "src/a.rs", "mode": "whole_file"}},
 
-    {{"path": "src/b.rs", "mode": "line_range", "start_line": 10, "end_line": 80}}
+    {{"kind": "c", "path": "which.c", "mode": "line_range", "start_line": 1, "end_line": 160}},
+
+    {{"kind": "spec", "path": "docs/rewrite-context/00_repo_manifest.md", "mode": "whole_file"}}
 
   ],
 
   "search_requests": [
 
-    {{"query": "rotate_right", "path_glob": "src/*.rs", "context_lines": 2, "max_results": 6}}
+    {{"kind": "all", "query": "rotate_right", "path_glob": "**/*", "context_lines": 2, "max_results": 6}}
 
   ],
 
-  "edit_strategy": "replace_range / delete_range / insert_before / insert_after 的总体策略",
+  "edit_strategy": "replace_range / delete_range / insert_before / insert_after / create_file / create_dir 的总体策略",
 
   "reasoning": ["简短要点1", "简短要点2"]
 
@@ -1045,17 +1501,17 @@ class RustRepairAgent:
 
         return {
 
-            "summary": "回退到基于错误文件的默认诊断计划",
+            "summary": "诊断计划解析失败；不执行 fallback 修补，仅读取错误文件并要求下一轮重新诊断",
 
             "target_files": self._choose_target_files(grouped_errors, limit=2),
 
-            "read_requests": [{"path": p, "mode": "whole_file"} for p in self._choose_target_files(grouped_errors, limit=2)],
+            "read_requests": [{"kind": "rust", "path": p, "mode": "whole_file"} for p in self._choose_target_files(grouped_errors, limit=2)],
 
             "search_requests": [],
 
-            "edit_strategy": "优先 replace_range / delete_range / insert_before / insert_after",
+            "edit_strategy": "no fallback edits; collect context only",
 
-            "reasoning": ["LLM 诊断计划解析失败，使用默认计划"],
+            "reasoning": ["LLM 诊断计划解析失败，不生成修补代码，先收集错误文件上下文"],
 
         }
 
@@ -1071,7 +1527,7 @@ class RustRepairAgent:
 
         for request in read_requests:
 
-            path = (request.get("path") or "").replace("\\", "/")
+            kind, path = self._parse_context_ref(request)
 
             if not path:
 
@@ -1083,7 +1539,7 @@ class RustRepairAgent:
 
             end_line = request.get("end_line")
 
-            key = (path, mode, start_line, end_line)
+            key = (kind, path, mode, start_line, end_line)
 
             if key in seen:
 
@@ -1093,11 +1549,11 @@ class RustRepairAgent:
 
             if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int):
 
-                content = self._read_file_slice(project_dir, path, start_line, end_line)
+                content = self._read_context_file_slice(project_dir, kind, path, start_line, end_line)
 
             else:
 
-                content = self._read_file_slice(project_dir, path)
+                content = self._read_context_file_slice(project_dir, kind, path)
 
                 start_line = None
 
@@ -1122,6 +1578,8 @@ class RustRepairAgent:
             materials.append({
 
                 "path": path,
+
+                "kind": kind,
 
                 "mode": mode,
 
@@ -1155,7 +1613,7 @@ class RustRepairAgent:
 
             path = mat.get("path", "")
 
-            if path not in edited_paths:
+            if mat.get("kind", "rust") != "rust" or path not in edited_paths:
 
                 continue
 
@@ -1169,7 +1627,7 @@ class RustRepairAgent:
 
                 continue
 
-            new_content = self._read_file_slice(project_dir, path)
+            new_content = self._read_context_file_slice(project_dir, "rust", path)
 
             if new_content:
 
@@ -1187,25 +1645,63 @@ class RustRepairAgent:
 
 
 
-    def _iter_searchable_files(self, project_dir: str, path_glob: str = "") -> List[str]:
+    def _path_matches_glob(self, rel_path: str, path_glob: str) -> bool:
+
+        if not path_glob:
+
+            return True
+
+        normalized = rel_path.replace("\\", "/")
+
+        glob = path_glob.replace("\\", "/")
+
+        candidates = [glob]
+
+        if glob.startswith("**/"):
+
+            candidates.append(glob[3:])
+
+        return any(fnmatch.fnmatch(normalized, item) or Path(normalized).match(item) for item in candidates)
+
+
+
+    def _iter_searchable_files(self, project_dir: str, path_glob: str = "", kind: str = "rust") -> List[str]:
 
         candidates: List[str] = []
 
         normalized_glob = (path_glob or "").replace("\\", "/").strip()
 
-        for root, _, files in os.walk(project_dir):
+        root_dir = self._context_roots(project_dir).get(kind)
+
+        if not root_dir or not os.path.isdir(root_dir):
+
+            return []
+
+        for root, dirs, files in os.walk(root_dir):
+
+            dirs[:] = [
+
+                name for name in dirs
+
+                if name not in {".git", "target", "__pycache__", ".pytest_cache"}
+
+            ]
 
             for name in files:
 
-                rel_path = os.path.relpath(os.path.join(root, name), project_dir).replace("\\", "/")
+                rel_path = os.path.relpath(os.path.join(root, name), root_dir).replace("\\", "/")
 
                 lowered = rel_path.lower()
 
-                if not (lowered.endswith(".rs") or lowered.endswith("cargo.toml") or lowered.endswith("readme.md")):
+                if kind == "rust" and lowered.startswith(".cgr_"):
 
                     continue
 
-                if normalized_glob and not fnmatch.fnmatch(rel_path, normalized_glob):
+                if not self._allowed_context_file(lowered):
+
+                    continue
+
+                if normalized_glob and not self._path_matches_glob(rel_path, normalized_glob):
 
                     continue
 
@@ -1231,6 +1727,12 @@ class RustRepairAgent:
 
                 continue
 
+            kind = str(request.get("kind") or request.get("scope") or "rust").strip().lower()
+
+            if kind not in {"rust", "c", "spec", "all"}:
+
+                kind = "rust"
+
             path_glob = (request.get("path_glob") or "").replace("\\", "/").strip()
 
             try:
@@ -1253,7 +1755,7 @@ class RustRepairAgent:
 
             max_results = max(1, min(max_results, 20))
 
-            key = (query, path_glob, context_lines, max_results)
+            key = (kind, query, path_glob, context_lines, max_results)
 
             if key in seen:
 
@@ -1265,43 +1767,53 @@ class RustRepairAgent:
 
             hits: List[str] = []
 
-            for rel_path in self._iter_searchable_files(project_dir, path_glob):
+            query_lower = query.lower()
 
-                content = self._read_file_slice(project_dir, rel_path)
+            search_kinds = ["rust", "c", "spec"] if kind == "all" else [kind]
 
-                if not content:
+            for search_kind in search_kinds:
 
-                    continue
+                kind_hits = 0
 
-                lines = content.splitlines()
+                for rel_path in self._iter_searchable_files(project_dir, path_glob, kind=search_kind):
 
-                for index, line in enumerate(lines, start=1):
+                    content = self._read_context_file_slice(project_dir, search_kind, rel_path)
 
-                    if query not in line:
+                    if not content:
 
                         continue
 
-                    start = max(1, index - context_lines)
+                    lines = content.splitlines()
 
-                    end = min(len(lines), index + context_lines)
+                    for index, line in enumerate(lines, start=1):
 
-                    excerpt_lines = []
+                        if query_lower not in line.lower():
 
-                    for line_no in range(start, end + 1):
+                            continue
 
-                        prefix = ">" if line_no == index else " "
+                        start = max(1, index - context_lines)
 
-                        excerpt_lines.append(f"{prefix}{rel_path}:{line_no}: {lines[line_no - 1]}")
+                        end = min(len(lines), index + context_lines)
 
-                    hits.append("\n".join(excerpt_lines))
+                        excerpt_lines = []
 
-                    if len(hits) >= max_results:
+                        for line_no in range(start, end + 1):
+
+                            prefix = ">" if line_no == index else " "
+
+                            excerpt_lines.append(f"{prefix}{search_kind}:{rel_path}:{line_no}: {lines[line_no - 1]}")
+
+                        hits.append("\n".join(excerpt_lines))
+
+                        kind_hits += 1
+
+                        if kind_hits >= max_results:
+
+                            break
+
+                    if kind_hits >= max_results:
 
                         break
-
-                if len(hits) >= max_results:
-
-                    break
 
             if not hits:
 
@@ -1314,6 +1826,8 @@ class RustRepairAgent:
             if path_glob:
 
                 block += f"# path glob: {path_glob}\n"
+
+            block += f"# kind: {kind}\n"
 
             block += "\n" + "\n\n".join(hits) + "\n"
 
@@ -1329,7 +1843,9 @@ class RustRepairAgent:
 
             materials.append({
 
-                "path": path_glob or "<search>",
+                "path": f"{kind}:{path_glob or '<search>'}",
+
+                "kind": kind,
 
                 "mode": "search_results",
 
@@ -1349,13 +1865,95 @@ class RustRepairAgent:
 
 
 
-    def _build_edit_prompt(self, diagnosis_plan: Dict, grouped_errors: Dict[str, str], materials: List[Dict], cycle_index: int, current_summary: str = "", handoff_summary: str = "") -> str:
+    def _build_repair_tool_protocol(self, project_dir: str) -> str:
+
+        roots = self._context_roots(project_dir)
+
+        lines = [
+
+            "可用上下文与工具协议：",
+
+            "- more_read_requests：读取文件全文或行范围。字段：kind=rust/c/spec，path，mode=whole_file/line_range，start_line，end_line。",
+
+            "- search_requests：在文件中搜索关键词。字段：kind=rust/c/spec/all，query，path_glob，context_lines，max_results。",
+
+            "- edits：只在证据足够时修改 Rust 项目。mode 可为 replace_range/delete_range/insert_before/insert_after/create_file/create_dir。",
+
+            "- kind=rust 表示当前 Rust 项目，可读写；kind=c 表示原始 C 项目，只读；kind=spec 表示 c_docs/spec 文档，只读。",
+
+            "- 允许读取的上下文源：" + ", ".join(f"{kind}={path}" for kind, path in roots.items()),
+
+            "- 如果错误涉及缺失业务模块、空文件、行为未知、接口未知，必须先读取 c/spec/rust 证据；不要直接生成最小可编译实现。",
+
+            "- 如果当前已读材料不足以完成真实修复，返回空 edits，并通过 more_read_requests/search_requests 继续取证。",
+
+            "",
+
+            "读取请求示例：",
+
+            '{"kind":"rust","path":"src/main.rs","mode":"whole_file"}',
+
+            '{"kind":"c","path":"which.c","mode":"line_range","start_line":1,"end_line":160}',
+
+            '{"kind":"spec","path":"docs/rewrite-context/00_repo_manifest.md","mode":"whole_file"}',
+
+            "",
+
+            "搜索请求示例：",
+
+            '{"kind":"rust","query":"struct Which","path_glob":"src/*.rs","context_lines":2,"max_results":10}',
+
+            '{"kind":"c","query":"main","path_glob":"**/*.c","context_lines":4,"max_results":10}',
+
+            '{"kind":"spec","query":"Which","path_glob":"**/*.md","context_lines":3,"max_results":10}',
+
+        ]
+
+        return "\n".join(lines)
+
+
+
+    def _format_material_inventory(self, materials: List[Dict]) -> str:
+
+        if not materials:
+
+            return "- 当前没有可用材料；必须先通过 more_read_requests/search_requests 获取上下文。"
+
+        lines = []
+
+        for material in materials:
+
+            kind = material.get("kind", "rust")
+
+            path = material.get("path", "")
+
+            mode = material.get("mode", "")
+
+            suffix = ""
+
+            if mode == "line_range":
+
+                suffix = f":{material.get('start_line')}-{material.get('end_line')}"
+
+            if mode == "search_results":
+
+                suffix = f" search={material.get('query', '')}"
+
+            lines.append(f"- {kind}:{path}{suffix} ({len(material.get('content', ''))} chars)")
+
+        return "\n".join(lines)
+
+
+
+    def _build_edit_prompt(self, project_dir: str, diagnosis_plan: Dict, grouped_errors: Dict[str, str], materials: List[Dict], cycle_index: int, current_summary: str = "", handoff_summary: str = "") -> str:
 
         material_blocks = []
 
         for material in materials:
 
-            location = material["path"]
+            kind = material.get("kind", "rust")
+
+            location = f"{kind}:{material['path']}"
 
             if material["mode"] == "line_range":
 
@@ -1373,7 +1971,25 @@ class RustRepairAgent:
 
             else:
 
-                material_blocks.append(f"### {location}\n```rust\n{material['content']}\n```")
+                numbered = self._format_material_with_line_numbers(
+
+                    material.get("content", ""),
+
+                    material.get("start_line"),
+
+                )
+
+                material_blocks.append(
+
+                    f"### {location}\n"
+
+                    "下面代码块左侧 `NNNN |` 是真实文件行号；edit 的 start_line/end_line 必须使用这些行号，"
+
+                    "不要把行号前缀写进 content。\n"
+
+                    f"```text\n{numbered}\n```"
+
+                )
 
         error_sections = []
 
@@ -1453,6 +2069,10 @@ class RustRepairAgent:
 
 """
 
+        tool_protocol = self._build_repair_tool_protocol(project_dir)
+
+        material_inventory = self._format_material_inventory(materials)
+
         return f"""你现在开始真正生成修复方案。
 
 
@@ -1461,13 +2081,15 @@ class RustRepairAgent:
 
 1. 只返回 JSON，不要解释。
 
-2. 只允许局部编辑：replace_range / delete_range / insert_before / insert_after。
+2. 允许的编辑 mode：replace_range / delete_range / insert_before / insert_after / create_file / create_dir。
 
-3. 不允许 replace_file，也不要一次返回整个文件。
+3. 不允许 replace_file。只有创建新文件时才允许在 create_file.content 中返回完整文件内容；create_file 默认不覆盖已有文件，确需覆盖时必须显式设置 "overwrite": true。
 
-4. 不要修改未读取的文件。
+4. 不要修改未读取的已有文件；但如果编译错误明确说明缺失模块/文件，可以使用 create_file/create_dir 创建新路径。
 
 5. 返回前请确保行号是基于已读取文件的真实行号。
+
+   已读取材料使用 `NNNN | code` 展示，`NNNN` 就是应填写到 edit 中的真实行号。
 
 6. 如果当前材料不足以安全修复，可以不产出 edits，改为返回 more_read_requests 或 search_requests 继续读取更多上下文。
 
@@ -1476,6 +2098,26 @@ class RustRepairAgent:
 8. 只有在你基于当前编译结果判断“本轮不需要再继续读/改”时，才返回 complete=true。
 
 9. 如果本次响应包含 edits，程序会先应用 edits、重新编译，再决定是否继续本轮；不要把“改完后应该继续观察编译结果”的情况标为 complete。
+
+10. 如果 cargo 报 private field / private method，禁止继续在外部模块访问 private 成员；应改用已有 public API，或在拥有该类型的模块内部增加必要 public 方法。
+
+11. 给已有 impl 增加方法时，必须插入到该 impl 的 closing brace 之前；不要插入到后面的 `impl Default`、trait impl 或其它无关 impl 块里。
+
+12. create_file/create_dir 只能创建项目内路径，例如 `src/foo.rs`、`src/foo/mod.rs`、`tests/foo.rs`；禁止创建 `target/`、`.git/` 或项目外路径。
+
+13. 如果 create_file 创建了新模块文件，通常还需要同时编辑已有 `src/main.rs` 或 `src/lib.rs` 添加 `mod xxx;`，否则 Rust 不会编译该文件。
+
+14. 禁止为了通过编译创建空行为 stub 或 fallback，例如 `fn main(_args) -> i32 {{ 0 }}`、默认返回空 Vec/None/Ok、忽略所有参数的占位实现。
+
+15. 如果缺失的是核心业务模块，不要创建最小空实现；必须先通过 more_read_requests/search_requests 读取对应 C 源码、spec 或已有 Rust 相关模块，再做真实修复。
+
+16. 禁止用 delete_range/replace_range 把已有有效实现大幅删短。修复应保留原功能，只改导致当前错误的最小范围。
+
+17. create_file 只能用于“根据已读证据创建真实实现”或“创建纯模块声明文件”；不能创建返回默认值的占位业务模块。
+
+18. 如果当前错误是 `could not find module/type/function`，优先搜索和读取已有 Rust/C/spec 证据，判断是模块声明缺失、文件路径错误、命名不一致，还是代码生成缺失。
+
+{tool_protocol}
 
 
 
@@ -1488,6 +2130,16 @@ class RustRepairAgent:
 ```
 
 {summary_block}
+
+
+
+已读材料清单：
+
+```text
+
+{material_inventory}
+
+```
 
 
 
@@ -1529,13 +2181,17 @@ class RustRepairAgent:
 
   "more_read_requests": [
 
-    {{"path": "src/file.rs", "mode": "line_range", "start_line": 40, "end_line": 120}}
+    {{"kind": "rust", "path": "src/file.rs", "mode": "line_range", "start_line": 40, "end_line": 120}},
+
+    {{"kind": "c", "path": "which.c", "mode": "whole_file"}},
+
+    {{"kind": "spec", "path": "docs/rewrite-context/00_repo_manifest.md", "mode": "whole_file"}}
 
   ],
 
   "search_requests": [
 
-    {{"query": "rotate_right", "path_glob": "src/*.rs", "context_lines": 2, "max_results": 6}}
+    {{"kind": "all", "query": "rotate_right", "path_glob": "**/*", "context_lines": 2, "max_results": 6}}
 
   ],
 
@@ -1549,9 +2205,9 @@ class RustRepairAgent:
 
 
 
-    def _request_structured_edits(self, diagnosis_plan: Dict, grouped_errors: Dict[str, str], materials: List[Dict], cycle_index: int, current_summary: str = "", handoff_summary: str = "") -> Dict:
+    def _request_structured_edits(self, project_dir: str, diagnosis_plan: Dict, grouped_errors: Dict[str, str], materials: List[Dict], cycle_index: int, current_summary: str = "", handoff_summary: str = "") -> Dict:
 
-        prompt = self._build_edit_prompt(diagnosis_plan, grouped_errors, materials, cycle_index, current_summary, handoff_summary)
+        prompt = self._build_edit_prompt(project_dir, diagnosis_plan, grouped_errors, materials, cycle_index, current_summary, handoff_summary)
 
         self._set_request_label("结构化修复编辑")
 
@@ -2043,19 +2699,109 @@ class RustRepairAgent:
 
                 continue
 
+            mode = edit.get("mode") or "replace_range"
+
+            if mode == "create_dir":
+
+                full_path, normalized_path = self._resolve_project_path(project_dir, rel_path)
+
+                if not full_path or not normalized_path:
+
+                    audit_records.append({"path": rel_path, "mode": mode, "skipped": True, "reason": "invalid project path"})
+
+                    continue
+
+                os.makedirs(full_path, exist_ok=True)
+
+                audit_records.append({"path": normalized_path, "mode": mode, "created": True})
+
+                applied_any = True
+
+                continue
+
+            if mode == "create_file":
+
+                full_path, normalized_path = self._resolve_project_path(project_dir, rel_path)
+
+                if not full_path or not normalized_path:
+
+                    audit_records.append({"path": rel_path, "mode": mode, "skipped": True, "reason": "invalid project path"})
+
+                    continue
+
+                if not self._is_allowed_created_file(normalized_path):
+
+                    audit_records.append({"path": normalized_path, "mode": mode, "skipped": True, "reason": "unsupported created file type"})
+
+                    continue
+
+                overwrite = bool(edit.get("overwrite", False))
+
+                if os.path.exists(full_path) and not overwrite:
+
+                    audit_records.append({"path": normalized_path, "mode": mode, "skipped": True, "reason": "file already exists; use line edits or explicit overwrite"})
+
+                    continue
+
+                content = edit.get("content") or ""
+
+                if not str(content).strip():
+
+                    audit_records.append({"path": normalized_path, "mode": mode, "skipped": True, "reason": "empty create_file content"})
+
+                    continue
+
+                if self._looks_like_compile_only_stub(normalized_path, str(content)):
+
+                    audit_records.append({"path": normalized_path, "mode": mode, "skipped": True, "reason": "compile-only stub content is forbidden"})
+
+                    print(f"  跳过空行为 stub 文件创建：{normalized_path}")
+
+                    continue
+
+                self._write_file(full_path, content)
+
+                audit_records.append({
+
+                    "path": normalized_path,
+
+                    "mode": mode,
+
+                    "created": True,
+
+                    "overwrite": overwrite,
+
+                    "after": str(content)[:1200],
+
+                })
+
+                applied_any = True
+
+                continue
+
             edits_by_file.setdefault(rel_path, []).append(edit)
 
 
 
         for rel_path, file_edits in edits_by_file.items():
 
-            full_path = os.path.join(project_dir, rel_path.replace("/", os.sep))
+            full_path, normalized_rel_path = self._resolve_project_path(project_dir, rel_path)
 
-            if not os.path.exists(full_path):
+            if not full_path or not normalized_rel_path:
+
+                audit_records.append({"path": rel_path, "skipped": True, "reason": "invalid project path"})
 
                 continue
 
-            lines = self._read_file(full_path).splitlines(keepends=True)
+            if not os.path.exists(full_path):
+
+                audit_records.append({"path": rel_path, "skipped": True, "reason": "file does not exist; use create_file for new files"})
+
+                continue
+
+            original_lines = self._read_file(full_path).splitlines(keepends=True)
+
+            lines = list(original_lines)
 
             file_changed = False
 
@@ -2068,6 +2814,8 @@ class RustRepairAgent:
                 mode = edit.get("mode") or "replace_range"
 
                 if mode not in {"replace_range", "delete_range", "insert_before", "insert_after"}:
+
+                    audit_records.append({"path": normalized_rel_path, "mode": mode, "skipped": True, "reason": "unsupported edit mode"})
 
                     continue
 
@@ -2125,7 +2873,7 @@ class RustRepairAgent:
 
                     continue
 
-                record["path"] = rel_path
+                record["path"] = normalized_rel_path
 
                 audit_records.append(record)
 
@@ -2138,6 +2886,16 @@ class RustRepairAgent:
 
 
             if file_changed:
+
+                destructive, reason = self._is_destructive_existing_file_edit(normalized_rel_path, original_lines, lines)
+
+                if destructive:
+
+                    audit_records.append({"path": normalized_rel_path, "skipped": True, "reason": reason})
+
+                    print(f"  跳过破坏性编辑：{normalized_rel_path}，原因：{reason}")
+
+                    continue
 
                 self._write_file(full_path, "".join(lines))
 
@@ -2439,43 +3197,18 @@ class RustRepairAgent:
 
         if check_success:
 
-            test_success, test_output = self._cargo_test(run_dir)
-
-            output = test_output if not test_success else (check_output + ("\n" + test_output if test_output else ""))
-
-            return RepairRunResult(
-
-                run_dir,
-
-                True,
-
-                test_success,
-
-                0 if test_success else self._count_errors(output),
-
-                output,
-
-                self._error_signature(output),
-
-                self._frontier_metrics(output),
-
-                round_summary=handoff_summary,
-
-                timed_out=False,
-
-            )
+            compile_result = self._compile_success_result(run_dir, check_output, handoff_summary)
+            if compile_result.test_passed:
+                return compile_result
+            check_output = compile_result.output
 
 
-
-        self._maybe_rebuild_lib_rs(run_dir, check_output)
-
-        self._sanitize_project_locally(run_dir)
 
         self._append_repair_record(journal_path, {
 
             "iteration": iteration,
 
-            "stage": "local_rules",
+            "stage": "pre_llm_no_fallback",
 
             "error_count": self._count_errors(check_output),
 
@@ -2489,31 +3222,10 @@ class RustRepairAgent:
 
         if check_success:
 
-            test_success, test_output = self._cargo_test(run_dir)
-
-            output = test_output if not test_success else (check_output + ("\n" + test_output if test_output else ""))
-
-            return RepairRunResult(
-
-                run_dir,
-
-                True,
-
-                test_success,
-
-                0 if test_success else self._count_errors(output),
-
-                output,
-
-                self._error_signature(output),
-
-                self._frontier_metrics(output),
-
-                round_summary=handoff_summary,
-
-                timed_out=False,
-
-            )
+            compile_result = self._compile_success_result(run_dir, check_output, handoff_summary)
+            if compile_result.test_passed:
+                return compile_result
+            check_output = compile_result.output
 
 
 
@@ -2542,6 +3254,8 @@ class RustRepairAgent:
                 "materials_now": [
 
                     {
+
+                        "kind": material.get("kind", "rust"),
 
                         "path": material["path"],
 
@@ -2613,7 +3327,7 @@ class RustRepairAgent:
 
             grouped_errors = self._group_rust_errors_by_file(current_check_output)
 
-            structured = self._request_structured_edits(diagnosis_plan, grouped_errors, materials, cycle_index, current_summary, handoff_summary)
+            structured = self._request_structured_edits(run_dir, diagnosis_plan, grouped_errors, materials, cycle_index, current_summary, handoff_summary)
 
             more_reads = structured.get("more_read_requests", []) or []
 
@@ -2633,7 +3347,7 @@ class RustRepairAgent:
 
                 existing_keys = {
 
-                    (m["path"], m["mode"], m["start_line"], m["end_line"])
+                    (m.get("kind", "rust"), m["path"], m["mode"], m["start_line"], m["end_line"])
 
                     for m in materials
 
@@ -2641,7 +3355,7 @@ class RustRepairAgent:
 
                 for material in new_materials:
 
-                    key = (material["path"], material["mode"], material["start_line"], material["end_line"])
+                    key = (material.get("kind", "rust"), material["path"], material["mode"], material["start_line"], material["end_line"])
 
                     if key not in existing_keys:
 
@@ -2664,6 +3378,8 @@ class RustRepairAgent:
                     "materials_now": [
 
                         {
+
+                            "kind": material.get("kind", "rust"),
 
                             "path": material["path"],
 
@@ -2691,7 +3407,7 @@ class RustRepairAgent:
 
                 existing_keys = {
 
-                    (m.get("query"), m["path"], m["mode"], m["start_line"], m["end_line"])
+                    (m.get("kind", "rust"), m.get("query"), m["path"], m["mode"], m["start_line"], m["end_line"])
 
                     for m in materials
 
@@ -2701,7 +3417,7 @@ class RustRepairAgent:
 
                 for material in new_search_materials:
 
-                    key = (material.get("query"), material["path"], material["mode"], material["start_line"], material["end_line"])
+                    key = (material.get("kind", "rust"), material.get("query"), material["path"], material["mode"], material["start_line"], material["end_line"])
 
                     if key not in existing_keys:
 
@@ -2726,6 +3442,8 @@ class RustRepairAgent:
                     "materials_now": [
 
                         {
+
+                            "kind": material.get("kind", "rust"),
 
                             "path": material["path"],
 
@@ -2768,6 +3486,8 @@ class RustRepairAgent:
                     "materials": [
 
                         {
+
+                            "kind": material.get("kind", "rust"),
 
                             "path": material["path"],
 
@@ -2841,31 +3561,10 @@ class RustRepairAgent:
 
                 if current_check_success:
 
-                    test_success, test_output = self._cargo_test(run_dir)
-
-                    output = test_output if not test_success else (current_check_output + ("\n" + test_output if test_output else ""))
-
-                    return RepairRunResult(
-
-                        run_dir,
-
-                        True,
-
-                        test_success,
-
-                        0 if test_success else self._count_errors(output),
-
-                        output,
-
-                        self._error_signature(output),
-
-                        self._frontier_metrics(output),
-
-                        round_summary=current_summary,
-
-                        timed_out=False,
-
-                    )
+                    compile_result = self._compile_success_result(run_dir, current_check_output, current_summary)
+                    if compile_result.test_passed:
+                        return compile_result
+                    current_check_output = compile_result.output
 
 
 
@@ -3081,7 +3780,7 @@ class RustRepairAgent:
 
             print(f"check_passed: {result.check_passed}")
 
-            print(f"test_passed: {result.test_passed}")
+            print(f"build_release_passed: {result.test_passed}")
 
             print(f"error_count: {result.error_count}")
 
@@ -3181,6 +3880,10 @@ def main():
 
     parser.add_argument("--runs-root", default="")
 
+    parser.add_argument("--c-project-path", default="", help="原始 C 项目路径，供修复时按需读取")
+
+    parser.add_argument("--c-docs-path", default="", help="c_docs/spec 文档路径，供修复时按需读取")
+
     parser.add_argument("--copy-runs", action="store_true", help="使用旧模式：每轮复制项目到 runs 目录中修复")
 
     parser.add_argument("--apply-best", action="store_true", help="仅在 --copy-runs 模式下，把最佳结果回写到原项目目录")
@@ -3192,6 +3895,14 @@ def main():
     config = Config(config_path=args.config_file)
 
     agent = RustRepairAgent(config=config, max_iterations=args.max_iterations)
+
+    agent.configure_context_sources(
+
+        c_project_path=args.c_project_path,
+
+        c_docs_path=args.c_docs_path,
+
+    )
 
     result = agent.repair_project(
 
@@ -3213,7 +3924,7 @@ def main():
 
     print(f"check_passed: {result.check_passed}")
 
-    print(f"test_passed: {result.test_passed}")
+    print(f"build_release_passed: {result.test_passed}")
 
     print(f"error_count: {result.error_count}")
 

@@ -734,10 +734,10 @@
     "chunks": []
   },
   {
-    "func_defid": "tilde\\shell.c:get_home_dir",
-    "span": "tilde\\shell.c:59:1:70:2",
+    "func_defid": "tilde/shell.c:get_home_dir",
+    "span": "tilde/shell.c:59:1:70:2",
     "pieces": [
-      "tilde\\shell.c:59:1:70:2"
+      "tilde/shell.c:59:1:70:2"
     ],
     "sub_chunks": [],
     "num_lines": 12,
@@ -748,10 +748,10 @@
     "chunks": []
   },
   {
-    "func_defid": "tilde\\tilde.c:tilde_find_prefix",
-    "span": "tilde\\tilde.c:127:1:158:2",
+    "func_defid": "tilde/tilde.c:tilde_find_prefix",
+    "span": "tilde/tilde.c:127:1:158:2",
     "pieces": [
-      "tilde\\tilde.c:127:1:158:2"
+      "tilde/tilde.c:127:1:158:2"
     ],
     "sub_chunks": [],
     "num_lines": 32,
@@ -762,10 +762,10 @@
     "chunks": []
   },
   {
-    "func_defid": "tilde\\tilde.c:tilde_find_suffix",
-    "span": "tilde\\tilde.c:162:1:188:2",
+    "func_defid": "tilde/tilde.c:tilde_find_suffix",
+    "span": "tilde/tilde.c:162:1:188:2",
     "pieces": [
-      "tilde\\tilde.c:162:1:188:2"
+      "tilde/tilde.c:162:1:188:2"
     ],
     "sub_chunks": [],
     "num_lines": 27,
@@ -776,10 +776,10 @@
     "chunks": []
   },
   {
-    "func_defid": "tilde\\tilde.c:memory_error_and_abort",
-    "span": "tilde\\tilde.c:490:1:495:2",
+    "func_defid": "tilde/tilde.c:memory_error_and_abort",
+    "span": "tilde/tilde.c:490:1:495:2",
     "pieces": [
-      "tilde\\tilde.c:490:1:495:2"
+      "tilde/tilde.c:490:1:495:2"
     ],
     "sub_chunks": [],
     "num_lines": 6,

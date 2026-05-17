@@ -948,6 +948,7 @@ class ContextualRustAgent(RustAgent):
         self._plan_by_path: Dict[str, PlannedFile] = {}
         self._cfile_to_module: Dict[str, str] = {}
         self._module_spec_docs: Dict[str, Dict[str, str]] = {}
+        self.entry_kind = "auto"
 
     def _set_request_label(self, label: str):
         if hasattr(self.llm, "set_request_label"):
@@ -989,6 +990,97 @@ class ContextualRustAgent(RustAgent):
                 spec_queries=planned.spec_queries,
             )
         return self.spec_context_agent.rust_context_for_planned_file(planned)
+
+    def _requested_entry_kind(self) -> str:
+        value = str(getattr(self, "entry_kind", "auto") or "auto").strip().lower()
+        return value if value in {"auto", "main", "lib"} else "auto"
+
+    def _contract_project_kind(self) -> str:
+        project = (self.translation_contract or {}).get("project", {})
+        return str(project.get("kind", "") or "").strip().lower()
+
+    def _source_file_looks_like_test(self, path: str) -> bool:
+        normalized = (path or "").replace("\\", "/").lower()
+        base = os.path.basename(normalized)
+        if normalized.startswith(("tests/", "test/", "examples/", "example/", "bench/", "benches/")):
+            return True
+        return bool(re.search(r"(^|/)(test|tests|testmain|benchmark|bench)[._/-]", normalized)) or base in {
+            "test.c",
+            "tests.c",
+            "testmain.c",
+            "benchmark.c",
+        }
+
+    def _has_production_main_source(self) -> bool:
+        for item in self.source_records or []:
+            if str(item.get("name", "")).strip() != "main":
+                continue
+            if self._source_file_looks_like_test(str(item.get("file", ""))):
+                continue
+            return True
+        functions = (self.translation_contract or {}).get("functions", [])
+        for item in (functions if isinstance(functions, list) else []):
+            if str(item.get("name", "")).strip() != "main":
+                continue
+            if str(item.get("role", "")).strip().lower() in {"test_runner", "test_case", "test_helper", "example_entry"}:
+                continue
+            if self._source_file_looks_like_test(str(item.get("source", ""))):
+                continue
+            return True
+        return False
+
+    def _effective_entry_kind(self) -> str:
+        requested = self._requested_entry_kind()
+        if requested in {"main", "lib"}:
+            return requested
+        project_kind = self._contract_project_kind()
+        if project_kind in {"cli", "mixed", "executable", "binary", "bin"}:
+            return "main"
+        if project_kind in {"library", "lib"}:
+            return "lib"
+        return "main" if self._has_production_main_source() else "lib"
+
+    def _entry_kind_context(self) -> str:
+        entry_kind = self._effective_entry_kind()
+        requested = self._requested_entry_kind()
+        if entry_kind == "main":
+            return (
+                "Rust crate 入口策略：生成可执行项目。\n"
+                f"- 用户选择：{requested}\n"
+                "- `src/main.rs` 是 crate 入口，必须承载 CLI/main 流程。\n"
+                "- 不要规划、生成或依赖 `src/lib.rs`；不要把 `main.rs` 当作库模块再由 lib re-export。"
+            )
+        return (
+            "Rust crate 入口策略：生成库项目。\n"
+            f"- 用户选择：{requested}\n"
+            "- `src/lib.rs` 是 crate 入口，负责声明模块和必要 re-export。\n"
+            "- 不要规划、生成或依赖 `src/main.rs`，除非用户显式切换为 main。"
+        )
+
+    def _filter_entry_files(self, files: Sequence[str]) -> List[str]:
+        cleaned = self._sanitize_generation_file_list(list(files or []))
+        entry_kind = self._effective_entry_kind()
+        entry_file = "src/main.rs" if entry_kind == "main" else "src/lib.rs"
+        forbidden_entry = "src/lib.rs" if entry_kind == "main" else "src/main.rs"
+
+        filtered: List[str] = []
+        for item in cleaned:
+            normalized = item.replace("\\", "/")
+            if normalized == forbidden_entry:
+                continue
+            filtered.append(normalized)
+
+        if "Cargo.toml" not in filtered:
+            filtered.insert(0, "Cargo.toml")
+
+        if entry_file not in filtered:
+            insert_at = 1 if filtered and filtered[0] == "Cargo.toml" else 0
+            filtered.insert(insert_at, entry_file)
+
+        if "README.md" not in filtered:
+            filtered.append("README.md")
+
+        return _dedupe_keep_order(filtered)
 
     def _build_translation_contract_context(self, max_chars: int = 0) -> str:
         if not self.translation_contract:
@@ -1040,6 +1132,7 @@ class ContextualRustAgent(RustAgent):
             scope = self._contract_scope_instructions()
             if scope:
                 parts.append(scope)
+        parts.append(self._entry_kind_context())
 
         if self.source_interface_summary:
             parts.append("原始 C 对外接口事实：\n" + self.source_interface_summary)
@@ -1269,7 +1362,7 @@ class ContextualRustAgent(RustAgent):
             fallback_files = self._fallback_file_list()
             file_specs = self._spec_build_file_plan(allowed_files=fallback_files)
             plan = [self._planned_file_from_spec(item) for item in file_specs]
-            plan = self._sort_contextual_plan(plan)
+            plan = self._apply_entry_policy_to_plan(plan)
             self._plan_by_path = {item.path: item for item in plan}
             return plan
 
@@ -1298,7 +1391,7 @@ class ContextualRustAgent(RustAgent):
 
     def _fallback_file_list(self) -> List[str]:
         if self.allowed_rust_files:
-            return self._sanitize_generation_file_list(self.allowed_rust_files)
+            return self._filter_entry_files(self.allowed_rust_files)
 
         inferred = self._spec_infer_candidate_files()
         if len(inferred) <= 3 and self.source_records:
@@ -1313,7 +1406,22 @@ class ContextualRustAgent(RustAgent):
                 elif stem == "main":
                     inferred.append("src/main.rs")
             inferred.extend(["src/lib.rs", "README.md"])
-        return self._sanitize_generation_file_list(_dedupe_keep_order(inferred or ["Cargo.toml", "src/lib.rs", "README.md"]))
+        return self._filter_entry_files(_dedupe_keep_order(inferred or ["Cargo.toml", "src/lib.rs", "README.md"]))
+
+    def _apply_entry_policy_to_plan(self, plan: Sequence[PlannedFile]) -> List[PlannedFile]:
+        allowed_paths = self._filter_entry_files([item.path for item in plan])
+        by_path = {item.path.replace("\\", "/"): item for item in plan}
+        filtered: List[PlannedFile] = []
+        for path in allowed_paths:
+            item = by_path.get(path) or self._fallback_planned_file(path)
+            item.path = path
+            item.depends_on = [
+                dep.replace("\\", "/")
+                for dep in item.depends_on
+                if dep.replace("\\", "/") in allowed_paths
+            ]
+            filtered.append(item)
+        return self._sort_contextual_plan(filtered)
 
     def _normalize_plan_payload(self, payload, fallback_files: Sequence[str]) -> List[PlannedFile]:
         raw_files = []
@@ -1370,12 +1478,12 @@ class ContextualRustAgent(RustAgent):
         requested_order.extend(fallback_files)
         requested_order.extend(by_path.keys())
 
-        sanitized_paths = self._sanitize_generation_file_list(_dedupe_keep_order(requested_order))
+        sanitized_paths = self._filter_entry_files(_dedupe_keep_order(requested_order))
         if not sanitized_paths:
-            sanitized_paths = self._sanitize_generation_file_list(fallback_files)
+            sanitized_paths = self._filter_entry_files(fallback_files)
 
         plan = [by_path.get(path) or self._fallback_planned_file(path) for path in sanitized_paths]
-        plan = self._sort_contextual_plan(plan)
+        plan = self._apply_entry_policy_to_plan(plan)
         self._plan_by_path = {item.path: item for item in plan}
         return plan
 
@@ -1389,6 +1497,8 @@ class ContextualRustAgent(RustAgent):
             role = "Cargo package manifest，本地生成最小配置"
         elif normalized == "README.md":
             role = "项目说明文档"
+        elif normalized == "src/main.rs":
+            role = "可执行 crate 入口，负责 CLI/main 流程并调用内部模块；不要作为库模块被 lib.rs re-export"
         elif normalized == "src/lib.rs":
             role = "crate 入口，本地根据已生成模块重建"
         elif normalized.endswith(".rs"):
@@ -1407,15 +1517,17 @@ class ContextualRustAgent(RustAgent):
             base = os.path.basename(normalized)
             if base == "cargo.toml":
                 return (0, normalized)
-            if normalized.startswith("src/") and base != "lib.rs":
+            if normalized.startswith("src/") and base not in {"lib.rs", "main.rs"}:
                 if any(token in normalized for token in ["type", "data", "error", "const", "bound", "point", "node"]):
                     return (1, normalized)
                 return (2, normalized)
             if base == "lib.rs":
                 return (3, normalized)
-            if base == "readme.md":
+            if base == "main.rs":
                 return (4, normalized)
-            return (5, normalized)
+            if base == "readme.md":
+                return (5, normalized)
+            return (6, normalized)
 
         ordered_paths = sorted(ordered_paths, key=priority)
         emitted: List[str] = []
@@ -1540,6 +1652,7 @@ class ContextualRustAgent(RustAgent):
                 reordered.append(item)
                 seen.add(normalized)
         self.contextual_plan = reordered
+        self.contextual_plan = self._apply_entry_policy_to_plan(self.contextual_plan)
         self._plan_by_path = {item.path: item for item in self.contextual_plan}
 
     def _build_targeted_plan_summary(self, planned: PlannedFile) -> str:
@@ -2455,6 +2568,23 @@ class ContextualRustAgent(RustAgent):
             if content.strip():
                 self.registry.update_file(normalized, content)
 
+    def _remove_unplanned_entry_file(self, planned_files: Sequence[str]):
+        if self.continue_mode:
+            return
+        entry_kind = self._effective_entry_kind()
+        forbidden = "src/lib.rs" if entry_kind == "main" else "src/main.rs"
+        normalized_planned = {path.replace("\\", "/") for path in planned_files}
+        if forbidden in normalized_planned:
+            return
+        file_path = os.path.join(self.project_path, *forbidden.split("/"))
+        if not os.path.isfile(file_path):
+            return
+        try:
+            os.remove(file_path)
+            print(f"删除未规划入口文件：{forbidden}")
+        except OSError as exc:
+            print(f"删除未规划入口文件失败：{forbidden}: {exc}")
+
     def _update_api_contract_for_file(self, file_path: str, code: str):
         """
         Persist the same structured references that the contextual linker uses.
@@ -2491,6 +2621,7 @@ class ContextualRustAgent(RustAgent):
         # 1. 程序化推导初始文件计划
         self.contextual_plan = self._request_contextual_plan()
         planned_files = [item.path for item in self.contextual_plan]
+        self._remove_unplanned_entry_file(planned_files)
 
         # 2. LLM 项目结构设计
         self.project_structure = self._generate_contextual_project_structure()
@@ -2502,6 +2633,7 @@ class ContextualRustAgent(RustAgent):
 
         # 重排后更新 planned_files
         planned_files = [item.path for item in self.contextual_plan]
+        self._remove_unplanned_entry_file(planned_files)
 
         self._initialize_generation_plan(
             project_structure=self.project_structure,
@@ -2523,7 +2655,7 @@ class ContextualRustAgent(RustAgent):
                 continue
             self._generate_contextual_file(planned, planned_files)
 
-        if "src/lib.rs" not in planned_files:
+        if self._effective_entry_kind() == "lib" and "src/lib.rs" not in planned_files:
             lib_content = self._build_registry_lib_rs(planned_files)
             lib_path = os.path.join(self.project_path, "src", "lib.rs")
             self._write_file(lib_path, lib_content)

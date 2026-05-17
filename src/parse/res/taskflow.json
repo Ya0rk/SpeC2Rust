@@ -1,0 +1,1280 @@
+[
+  {
+    "func_defid": "main.c:trim_left",
+    "span": "main.c:8:1:13:2",
+    "pieces": [
+      "main.c:8:1:13:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 6,
+    "source": "static char *trim_left(char *text) {\n    while (*text && isspace((unsigned char)*text)) {\n        text++;\n    }\n    return text;\n}",
+    "calls": [
+      {
+        "caller": "main.c:parse_int_token",
+        "span": "main.c:31:13:31:31",
+        "source": "start = trim_left(*cursor);"
+      },
+      {
+        "caller": "main.c:next_word",
+        "span": "main.c:51:13:51:31",
+        "source": "start = trim_left(*cursor);"
+      },
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:108:17:108:34",
+        "source": "title = trim_left(cursor);"
+      },
+      {
+        "caller": "main.c:main",
+        "span": "main.c:201:23:201:38",
+        "source": "char *clean = trim_left(line);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "main.c:trim_right",
+    "span": "main.c:15:1:21:2",
+    "pieces": [
+      "main.c:15:1:21:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 7,
+    "source": "static void trim_right(char *text) {\n    size_t len = strlen(text);\n    while (len > 0 && isspace((unsigned char)text[len - 1])) {\n        text[len - 1] = '\\0';\n        len--;\n    }\n}",
+    "calls": [
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:109:9:109:26",
+        "source": "trim_right(title);"
+      },
+      {
+        "caller": "main.c:main",
+        "span": "main.c:202:9:202:26",
+        "source": "trim_right(clean);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "main.c:parse_int_token",
+    "span": "main.c:23:1:42:2",
+    "pieces": [
+      "main.c:23:1:42:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 20,
+    "source": "static int parse_int_token(char **cursor, int *out_value) {\n    char *start;\n    char *end;\n    long value;\n\n    if (!cursor || !*cursor || !out_value) {\n        return 0;\n    }\n    start = trim_left(*cursor);\n    if (!*start) {\n        return 0;\n    }\n    value = strtol(start, &end, 10);\n    if (start == end) {\n        return 0;\n    }\n    *out_value = (int)value;\n    *cursor = end;\n    return 1;\n}",
+    "calls": [
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:104:14:104:49",
+        "source": "if (!parse_int_token(&cursor, &priority) || !parse_int_token(&cursor, &estimate)) {"
+      },
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:104:54:104:89",
+        "source": "if (!parse_int_token(&cursor, &priority) || !parse_int_token(&cursor, &estimate)) {"
+      },
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:121:14:121:43",
+        "source": "if (!parse_int_token(&cursor, &id)) {"
+      },
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:139:14:139:43",
+        "source": "if (!parse_int_token(&cursor, &id)) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "main.c:next_word",
+    "span": "main.c:44:1:65:2",
+    "pieces": [
+      "main.c:44:1:65:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 22,
+    "source": "static char *next_word(char **cursor) {\n    char *start;\n    char *end;\n\n    if (!cursor || !*cursor) {\n        return NULL;\n    }\n    start = trim_left(*cursor);\n    if (!*start) {\n        return NULL;\n    }\n    end = start;\n    while (*end && !isspace((unsigned char)*end)) {\n        end++;\n    }\n    if (*end) {\n        *end = '\\0';\n        end++;\n    }\n    *cursor = end;\n    return start;\n}",
+    "calls": [
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:94:21:94:39",
+        "source": "char *command = next_word(&cursor);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "main.c:print_summary",
+    "span": "main.c:67:1:78:2",
+    "pieces": [
+      "main.c:67:1:78:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 12,
+    "source": "static void print_summary(const TaskList *list) {\n    printf(\n        \"summary total=%zu todo=%zu doing=%zu done=%zu estimate=%d remaining=%d\\n\",\n        list->len,\n        tasklist_count_status(list, TASK_TODO),\n        tasklist_count_status(list, TASK_DOING),\n        tasklist_count_status(list, TASK_DONE),\n        tasklist_total_estimate(list, TASK_TODO, 0),\n        tasklist_total_estimate(list, TASK_DONE, 0) -\n            tasklist_total_estimate(list, TASK_DONE, 1)\n    );\n}",
+    "calls": [
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:155:9:155:28",
+        "source": "print_summary(list);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "main.c:print_list",
+    "span": "main.c:80:1:90:2",
+    "pieces": [
+      "main.c:80:1:90:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 11,
+    "source": "static void print_list(TaskList *list) {\n    size_t i;\n    char line[512];\n\n    tasklist_sort_by_priority(list);\n    for (i = 0; i < list->len; i++) {\n        if (tasklist_format_task(&list->items[i], line, sizeof(line))) {\n            printf(\"%s\\n\", line);\n        }\n    }\n}",
+    "calls": [
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:151:9:151:25",
+        "source": "print_list(list);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "main.c:handle_command",
+    "span": "main.c:92:1:180:2",
+    "pieces": [
+      "main.c:92:1:180:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 89,
+    "source": "static int handle_command(TaskList *list, char *line) {\n    char *cursor = line;\n    char *command = next_word(&cursor);\n\n    if (!command || command[0] == '#') {\n        return 1;\n    }\n    if (strcmp(command, \"add\") == 0) {\n        int priority;\n        int estimate;\n        char *title;\n        Task *task;\n        if (!parse_int_token(&cursor, &priority) || !parse_int_token(&cursor, &estimate)) {\n            fprintf(stderr, \"error: add expects priority estimate title\\n\");\n            return 0;\n        }\n        title = trim_left(cursor);\n        trim_right(title);\n        task = tasklist_add(list, title, priority, estimate);\n        if (!task) {\n            fprintf(stderr, \"error: invalid task\\n\");\n            return 0;\n        }\n        printf(\"added #%d\\n\", task->id);\n        return 1;\n    }\n    if (strcmp(command, \"start\") == 0 || strcmp(command, \"done\") == 0 || strcmp(command, \"reopen\") == 0) {\n        int id;\n        TaskStatus status = TASK_TODO;\n        if (!parse_int_token(&cursor, &id)) {\n            fprintf(stderr, \"error: %s expects id\\n\", command);\n            return 0;\n        }\n        if (strcmp(command, \"start\") == 0) {\n            status = TASK_DOING;\n        } else if (strcmp(command, \"done\") == 0) {\n            status = TASK_DONE;\n        }\n        if (!tasklist_set_status(list, id, status)) {\n            fprintf(stderr, \"error: task #%d not found\\n\", id);\n            return 0;\n        }\n        printf(\"%s #%d\\n\", task_status_name(status), id);\n        return 1;\n    }\n    if (strcmp(command, \"remove\") == 0) {\n        int id;\n        if (!parse_int_token(&cursor, &id)) {\n            fprintf(stderr, \"error: remove expects id\\n\");\n            return 0;\n        }\n        if (!tasklist_remove(list, id)) {\n            fprintf(stderr, \"error: task #%d not found\\n\", id);\n            return 0;\n        }\n        printf(\"removed #%d\\n\", id);\n        return 1;\n    }\n    if (strcmp(command, \"list\") == 0) {\n        print_list(list);\n        return 1;\n    }\n    if (strcmp(command, \"summary\") == 0) {\n        print_summary(list);\n        return 1;\n    }\n    if (strcmp(command, \"best\") == 0) {\n        const Task *best = tasklist_highest_priority_open(list);\n        char formatted[512];\n        if (!best) {\n            printf(\"best none\\n\");\n            return 1;\n        }\n        tasklist_format_task(best, formatted, sizeof(formatted));\n        printf(\"best %s\\n\", formatted);\n        return 1;\n    }\n    if (strcmp(command, \"dump\") == 0) {\n        char dump[4096];\n        if (!tasklist_serialize(list, dump, sizeof(dump))) {\n            fprintf(stderr, \"error: dump buffer too small\\n\");\n            return 0;\n        }\n        printf(\"%s\", dump);\n        return 1;\n    }\n    fprintf(stderr, \"error: unknown command '%s'\\n\", command);\n    return 0;\n}",
+    "calls": [
+      {
+        "caller": "main.c:main",
+        "span": "main.c:203:14:203:42",
+        "source": "if (!handle_command(&list, clean)) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "main.c:main",
+    "span": "main.c:182:1:213:2",
+    "pieces": [
+      "main.c:182:1:213:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 32,
+    "source": "int main(int argc, char **argv) {\n    FILE *input = stdin;\n    TaskList list;\n    char line[1024];\n    int ok = 1;\n\n    if (argc > 2) {\n        fprintf(stderr, \"usage: %s [script]\\n\", argv[0]);\n        return 2;\n    }\n    if (argc == 2) {\n        input = fopen(argv[1], \"r\");\n        if (!input) {\n            perror(argv[1]);\n            return 2;\n        }\n    }\n    tasklist_init(&list);\n    while (fgets(line, sizeof(line), input)) {\n        char *clean = trim_left(line);\n        trim_right(clean);\n        if (!handle_command(&list, clean)) {\n            ok = 0;\n            break;\n        }\n    }\n    if (input != stdin) {\n        fclose(input);\n    }\n    tasklist_free(&list);\n    return ok ? 0 : 1;\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tf_strdup",
+    "span": "taskflow.c:8:1:22:2",
+    "pieces": [
+      "taskflow.c:8:1:22:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 15,
+    "source": "static char *tf_strdup(const char *text) {\n    size_t len;\n    char *copy;\n\n    if (!text) {\n        text = \"\";\n    }\n    len = strlen(text);\n    copy = (char *)malloc(len + 1);\n    if (!copy) {\n        return NULL;\n    }\n    memcpy(copy, text, len + 1);\n    return copy;\n}",
+    "calls": [
+      {
+        "caller": "taskflow.c:tasklist_add",
+        "span": "taskflow.c:138:18:138:34",
+        "source": "title_copy = tf_strdup(title);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tf_is_blank",
+    "span": "taskflow.c:24:1:36:2",
+    "pieces": [
+      "taskflow.c:24:1:36:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 13,
+    "source": "static int tf_is_blank(const char *text) {\n    const unsigned char *p = (const unsigned char *)text;\n    if (!p) {\n        return 1;\n    }\n    while (*p) {\n        if (!isspace(*p)) {\n            return 0;\n        }\n        p++;\n    }\n    return 1;\n}",
+    "calls": [
+      {
+        "caller": "taskflow.c:tasklist_add",
+        "span": "taskflow.c:132:18:132:36",
+        "source": "if (!list || tf_is_blank(title) || !tf_valid_priority(priority) || !tf_valid_estimate(estimate)) {"
+      },
+      {
+        "caller": "taskflow.c:tasklist_load_line",
+        "span": "taskflow.c:437:27:437:44",
+        "source": "if (!list || !line || tf_is_blank(line)) {"
+      },
+      {
+        "caller": "taskflow.c:tasklist_load_text",
+        "span": "taskflow.c:485:14:485:31",
+        "source": "if (!tf_is_blank(line) && !tasklist_load_line(list, line)) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tf_valid_priority",
+    "span": "taskflow.c:38:1:40:2",
+    "pieces": [
+      "taskflow.c:38:1:40:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 3,
+    "source": "static int tf_valid_priority(int priority) {\n    return priority >= 1 && priority <= 5;\n}",
+    "calls": [
+      {
+        "caller": "taskflow.c:tasklist_add",
+        "span": "taskflow.c:132:41:132:68",
+        "source": "if (!list || tf_is_blank(title) || !tf_valid_priority(priority) || !tf_valid_estimate(estimate)) {"
+      },
+      {
+        "caller": "taskflow.c:tasklist_load_line",
+        "span": "taskflow.c:446:21:446:48",
+        "source": "if (id <= 0 || !tf_valid_priority(priority) || !tf_valid_estimate(estimate)) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tf_valid_estimate",
+    "span": "taskflow.c:42:1:44:2",
+    "pieces": [
+      "taskflow.c:42:1:44:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 3,
+    "source": "static int tf_valid_estimate(int estimate) {\n    return estimate >= 0 && estimate <= 9999;\n}",
+    "calls": [
+      {
+        "caller": "taskflow.c:tasklist_add",
+        "span": "taskflow.c:132:73:132:100",
+        "source": "if (!list || tf_is_blank(title) || !tf_valid_priority(priority) || !tf_valid_estimate(estimate)) {"
+      },
+      {
+        "caller": "taskflow.c:tasklist_load_line",
+        "span": "taskflow.c:446:53:446:80",
+        "source": "if (id <= 0 || !tf_valid_priority(priority) || !tf_valid_estimate(estimate)) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_reserve",
+    "span": "taskflow.c:46:1:67:2",
+    "pieces": [
+      "taskflow.c:46:1:67:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 22,
+    "source": "static int tasklist_reserve(TaskList *list, size_t needed) {\n    size_t new_cap;\n    Task *new_items;\n\n    if (!list) {\n        return 0;\n    }\n    if (needed <= list->cap) {\n        return 1;\n    }\n    new_cap = list->cap ? list->cap : 4;\n    while (new_cap < needed) {\n        new_cap *= 2;\n    }\n    new_items = (Task *)realloc(list->items, new_cap * sizeof(Task));\n    if (!new_items) {\n        return 0;\n    }\n    list->items = new_items;\n    list->cap = new_cap;\n    return 1;\n}",
+    "calls": [
+      {
+        "caller": "taskflow.c:tasklist_add",
+        "span": "taskflow.c:135:10:135:47",
+        "source": "if (!tasklist_reserve(list, list->len + 1)) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_init",
+    "span": "taskflow.c:69:1:77:2",
+    "pieces": [
+      "taskflow.c:69:1:77:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "void tasklist_init(TaskList *list) {\n    if (!list) {\n        return;\n    }\n    list->items = NULL;\n    list->len = 0;\n    list->cap = 0;\n    list->next_id = 1;\n}",
+    "calls": [
+      {
+        "caller": "main.c:main",
+        "span": "main.c:199:5:199:25",
+        "source": "tasklist_init(&list);"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:22:5:22:25",
+        "source": "tasklist_init(&list);"
+      },
+      {
+        "caller": "test_taskflow.c:test_validation_and_remove",
+        "span": "test_taskflow.c:55:5:55:25",
+        "source": "tasklist_init(&list);"
+      },
+      {
+        "caller": "test_taskflow.c:test_highest_priority_and_sorting",
+        "span": "test_taskflow.c:80:5:80:25",
+        "source": "tasklist_init(&list);"
+      },
+      {
+        "caller": "test_taskflow.c:test_format_and_status_parse",
+        "span": "test_taskflow.c:109:5:109:25",
+        "source": "tasklist_init(&list);"
+      },
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:134:5:134:29",
+        "source": "tasklist_init(&original);"
+      },
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:135:5:135:27",
+        "source": "tasklist_init(&loaded);"
+      },
+      {
+        "caller": "test_taskflow.c:test_load_rejects_bad_lines",
+        "span": "test_taskflow.c:170:5:170:25",
+        "source": "tasklist_init(&list);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_free",
+    "span": "taskflow.c:79:1:94:2",
+    "pieces": [
+      "taskflow.c:79:1:94:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 16,
+    "source": "void tasklist_free(TaskList *list) {\n    size_t i;\n\n    if (!list) {\n        return;\n    }\n    for (i = 0; i < list->len; i++) {\n        free(list->items[i].title);\n        list->items[i].title = NULL;\n    }\n    free(list->items);\n    list->items = NULL;\n    list->len = 0;\n    list->cap = 0;\n    list->next_id = 1;\n}",
+    "calls": [
+      {
+        "caller": "main.c:main",
+        "span": "main.c:211:5:211:25",
+        "source": "tasklist_free(&list);"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:45:5:45:25",
+        "source": "tasklist_free(&list);"
+      },
+      {
+        "caller": "test_taskflow.c:test_validation_and_remove",
+        "span": "test_taskflow.c:73:5:73:25",
+        "source": "tasklist_free(&list);"
+      },
+      {
+        "caller": "test_taskflow.c:test_highest_priority_and_sorting",
+        "span": "test_taskflow.c:100:5:100:25",
+        "source": "tasklist_free(&list);"
+      },
+      {
+        "caller": "test_taskflow.c:test_format_and_status_parse",
+        "span": "test_taskflow.c:124:5:124:25",
+        "source": "tasklist_free(&list);"
+      },
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:163:5:163:29",
+        "source": "tasklist_free(&original);"
+      },
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:164:5:164:27",
+        "source": "tasklist_free(&loaded);"
+      },
+      {
+        "caller": "test_taskflow.c:test_load_rejects_bad_lines",
+        "span": "test_taskflow.c:177:5:177:25",
+        "source": "tasklist_free(&list);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:task_status_name",
+    "span": "taskflow.c:96:1:107:2",
+    "pieces": [
+      "taskflow.c:96:1:107:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 12,
+    "source": "const char *task_status_name(TaskStatus status) {\n    switch (status) {\n        case TASK_TODO:\n            return \"todo\";\n        case TASK_DOING:\n            return \"doing\";\n        case TASK_DONE:\n            return \"done\";\n        default:\n            return \"unknown\";\n    }\n}",
+    "calls": [
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:134:28:134:52",
+        "source": "printf(\"%s #%d\\n\", task_status_name(status), id);"
+      },
+      {
+        "caller": "taskflow.c:tasklist_format_task",
+        "span": "taskflow.c:306:9:306:39",
+        "source": "task_status_name(task->status),"
+      },
+      {
+        "caller": "taskflow.c:tasklist_serialize",
+        "span": "taskflow.c:376:13:376:52",
+        "source": "task_status_name(list->items[i].status)"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:task_status_parse",
+    "span": "taskflow.c:109:1:126:2",
+    "pieces": [
+      "taskflow.c:109:1:126:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 18,
+    "source": "int task_status_parse(const char *text, TaskStatus *out_status) {\n    if (!text || !out_status) {\n        return 0;\n    }\n    if (strcmp(text, \"todo\") == 0) {\n        *out_status = TASK_TODO;\n        return 1;\n    }\n    if (strcmp(text, \"doing\") == 0) {\n        *out_status = TASK_DOING;\n        return 1;\n    }\n    if (strcmp(text, \"done\") == 0) {\n        *out_status = TASK_DONE;\n        return 1;\n    }\n    return 0;\n}",
+    "calls": [
+      {
+        "caller": "taskflow.c:tasklist_load_line",
+        "span": "taskflow.c:449:10:449:47",
+        "source": "if (!task_status_parse(fields[3], &status)) {"
+      },
+      {
+        "caller": "test_taskflow.c:test_format_and_status_parse",
+        "span": "test_taskflow.c:112:11:112:45",
+        "source": "CHECK(task_status_parse(\"todo\", &status));"
+      },
+      {
+        "caller": "test_taskflow.c:test_format_and_status_parse",
+        "span": "test_taskflow.c:114:11:114:46",
+        "source": "CHECK(task_status_parse(\"doing\", &status));"
+      },
+      {
+        "caller": "test_taskflow.c:test_format_and_status_parse",
+        "span": "test_taskflow.c:116:11:116:45",
+        "source": "CHECK(task_status_parse(\"done\", &status));"
+      },
+      {
+        "caller": "test_taskflow.c:test_format_and_status_parse",
+        "span": "test_taskflow.c:118:12:118:49",
+        "source": "CHECK(!task_status_parse(\"blocked\", &status));"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_add",
+    "span": "taskflow.c:128:1:149:2",
+    "pieces": [
+      "taskflow.c:128:1:149:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 22,
+    "source": "Task *tasklist_add(TaskList *list, const char *title, int priority, int estimate) {\n    Task *task;\n    char *title_copy;\n\n    if (!list || tf_is_blank(title) || !tf_valid_priority(priority) || !tf_valid_estimate(estimate)) {\n        return NULL;\n    }\n    if (!tasklist_reserve(list, list->len + 1)) {\n        return NULL;\n    }\n    title_copy = tf_strdup(title);\n    if (!title_copy) {\n        return NULL;\n    }\n    task = &list->items[list->len++];\n    task->id = list->next_id++;\n    task->title = title_copy;\n    task->priority = priority;\n    task->estimate = estimate;\n    task->status = TASK_TODO;\n    return task;\n}",
+    "calls": [
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:110:16:110:61",
+        "source": "task = tasklist_add(list, title, priority, estimate);"
+      },
+      {
+        "caller": "taskflow.c:tasklist_load_line",
+        "span": "taskflow.c:452:12:452:61",
+        "source": "task = tasklist_add(list, fields[4], priority, estimate);"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:23:9:23:50",
+        "source": "a = tasklist_add(&list, \"write parser\", 5, 3);"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:24:9:24:49",
+        "source": "b = tasklist_add(&list, \"build tests\", 4, 2);"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:25:9:25:50",
+        "source": "c = tasklist_add(&list, \"ship release\", 3, 1);"
+      },
+      {
+        "caller": "test_taskflow.c:test_validation_and_remove",
+        "span": "test_taskflow.c:56:11:56:40",
+        "source": "CHECK(tasklist_add(&list, \"\", 3, 1) == NULL);"
+      },
+      {
+        "caller": "test_taskflow.c:test_validation_and_remove",
+        "span": "test_taskflow.c:57:11:57:52",
+        "source": "CHECK(tasklist_add(&list, \"bad priority\", 0, 1) == NULL);"
+      },
+      {
+        "caller": "test_taskflow.c:test_validation_and_remove",
+        "span": "test_taskflow.c:58:11:58:53",
+        "source": "CHECK(tasklist_add(&list, \"bad estimate\", 3, -1) == NULL);"
+      },
+      {
+        "caller": "test_taskflow.c:test_validation_and_remove",
+        "span": "test_taskflow.c:60:13:60:47",
+        "source": "first = tasklist_add(&list, \"first\", 2, 4);"
+      },
+      {
+        "caller": "test_taskflow.c:test_validation_and_remove",
+        "span": "test_taskflow.c:61:14:61:49",
+        "source": "second = tasklist_add(&list, \"second\", 5, 1);"
+      },
+      {
+        "caller": "test_taskflow.c:test_highest_priority_and_sorting",
+        "span": "test_taskflow.c:81:5:81:46",
+        "source": "tasklist_add(&list, \"low priority\", 1, 5);"
+      },
+      {
+        "caller": "test_taskflow.c:test_highest_priority_and_sorting",
+        "span": "test_taskflow.c:82:5:82:45",
+        "source": "tasklist_add(&list, \"urgent long\", 5, 8);"
+      },
+      {
+        "caller": "test_taskflow.c:test_highest_priority_and_sorting",
+        "span": "test_taskflow.c:83:5:83:46",
+        "source": "tasklist_add(&list, \"urgent short\", 5, 2);"
+      },
+      {
+        "caller": "test_taskflow.c:test_highest_priority_and_sorting",
+        "span": "test_taskflow.c:84:5:84:40",
+        "source": "tasklist_add(&list, \"medium\", 3, 1);"
+      },
+      {
+        "caller": "test_taskflow.c:test_format_and_status_parse",
+        "span": "test_taskflow.c:110:12:110:53",
+        "source": "task = tasklist_add(&list, \"document api\", 2, 6);"
+      },
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:136:5:136:51",
+        "source": "tasklist_add(&original, \"escape | pipe\", 4, 3);"
+      },
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:137:5:137:59",
+        "source": "tasklist_add(&original, \"escape slash \\\\ value\", 2, 5);"
+      },
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:138:5:138:49",
+        "source": "tasklist_add(&original, \"line\\nbreak\", 3, 1);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_find",
+    "span": "taskflow.c:151:1:163:2",
+    "pieces": [
+      "taskflow.c:151:1:163:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 13,
+    "source": "Task *tasklist_find(TaskList *list, int id) {\n    size_t i;\n\n    if (!list) {\n        return NULL;\n    }\n    for (i = 0; i < list->len; i++) {\n        if (list->items[i].id == id) {\n            return &list->items[i];\n        }\n    }\n    return NULL;\n}",
+    "calls": [
+      {
+        "caller": "taskflow.c:tasklist_set_status",
+        "span": "taskflow.c:199:18:199:41",
+        "source": "Task *task = tasklist_find(list, id);"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:33:11:33:34",
+        "source": "CHECK(tasklist_find(&list, 2) == b);"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:34:11:34:35",
+        "source": "CHECK(tasklist_find(&list, 99) == NULL);"
+      },
+      {
+        "caller": "test_taskflow.c:test_validation_and_remove",
+        "span": "test_taskflow.c:69:11:69:41",
+        "source": "CHECK(tasklist_find(&list, first_id) == NULL);"
+      },
+      {
+        "caller": "test_taskflow.c:test_validation_and_remove",
+        "span": "test_taskflow.c:70:11:70:42",
+        "source": "CHECK(tasklist_find(&list, second_id) != NULL);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_find_const",
+    "span": "taskflow.c:165:1:177:2",
+    "pieces": [
+      "taskflow.c:165:1:177:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 13,
+    "source": "const Task *tasklist_find_const(const TaskList *list, int id) {\n    size_t i;\n\n    if (!list) {\n        return NULL;\n    }\n    for (i = 0; i < list->len; i++) {\n        if (list->items[i].id == id) {\n            return &list->items[i];\n        }\n    }\n    return NULL;\n}",
+    "calls": [
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:148:12:148:43",
+        "source": "task = tasklist_find_const(&loaded, 1);"
+      },
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:151:12:151:43",
+        "source": "task = tasklist_find_const(&loaded, 2);"
+      },
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:155:12:155:43",
+        "source": "task = tasklist_find_const(&loaded, 3);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_remove",
+    "span": "taskflow.c:179:1:196:2",
+    "pieces": [
+      "taskflow.c:179:1:196:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 18,
+    "source": "int tasklist_remove(TaskList *list, int id) {\n    size_t i;\n\n    if (!list) {\n        return 0;\n    }\n    for (i = 0; i < list->len; i++) {\n        if (list->items[i].id == id) {\n            free(list->items[i].title);\n            if (i + 1 < list->len) {\n                memmove(&list->items[i], &list->items[i + 1], (list->len - i - 1) * sizeof(Task));\n            }\n            list->len--;\n            return 1;\n        }\n    }\n    return 0;\n}",
+    "calls": [
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:143:14:143:39",
+        "source": "if (!tasklist_remove(list, id)) {"
+      },
+      {
+        "caller": "test_taskflow.c:test_validation_and_remove",
+        "span": "test_taskflow.c:67:11:67:43",
+        "source": "CHECK(tasklist_remove(&list, first_id));"
+      },
+      {
+        "caller": "test_taskflow.c:test_validation_and_remove",
+        "span": "test_taskflow.c:71:12:71:39",
+        "source": "CHECK(!tasklist_remove(&list, 404));"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_set_status",
+    "span": "taskflow.c:198:1:208:2",
+    "pieces": [
+      "taskflow.c:198:1:208:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 11,
+    "source": "int tasklist_set_status(TaskList *list, int id, TaskStatus status) {\n    Task *task = tasklist_find(list, id);\n    if (!task) {\n        return 0;\n    }\n    if (status != TASK_TODO && status != TASK_DOING && status != TASK_DONE) {\n        return 0;\n    }\n    task->status = status;\n    return 1;\n}",
+    "calls": [
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:130:14:130:51",
+        "source": "if (!tasklist_set_status(list, id, status)) {"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:37:11:37:52",
+        "source": "CHECK(tasklist_set_status(&list, 2, TASK_DOING));"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:38:11:38:51",
+        "source": "CHECK(tasklist_set_status(&list, 3, TASK_DONE));"
+      },
+      {
+        "caller": "test_taskflow.c:test_highest_priority_and_sorting",
+        "span": "test_taskflow.c:85:11:85:52",
+        "source": "CHECK(tasklist_set_status(&list, 3, TASK_DOING));"
+      },
+      {
+        "caller": "test_taskflow.c:test_highest_priority_and_sorting",
+        "span": "test_taskflow.c:91:11:91:58",
+        "source": "CHECK(tasklist_set_status(&list, best->id, TASK_DONE));"
+      },
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:139:11:139:56",
+        "source": "CHECK(tasklist_set_status(&original, 2, TASK_DOING));"
+      },
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:140:11:140:55",
+        "source": "CHECK(tasklist_set_status(&original, 3, TASK_DONE));"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_count_status",
+    "span": "taskflow.c:210:1:223:2",
+    "pieces": [
+      "taskflow.c:210:1:223:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 14,
+    "source": "size_t tasklist_count_status(const TaskList *list, TaskStatus status) {\n    size_t i;\n    size_t count = 0;\n\n    if (!list) {\n        return 0;\n    }\n    for (i = 0; i < list->len; i++) {\n        if (list->items[i].status == status) {\n            count++;\n        }\n    }\n    return count;\n}",
+    "calls": [
+      {
+        "caller": "main.c:print_summary",
+        "span": "main.c:71:9:71:47",
+        "source": "tasklist_count_status(list, TASK_TODO),"
+      },
+      {
+        "caller": "main.c:print_summary",
+        "span": "main.c:72:9:72:48",
+        "source": "tasklist_count_status(list, TASK_DOING),"
+      },
+      {
+        "caller": "main.c:print_summary",
+        "span": "main.c:73:9:73:47",
+        "source": "tasklist_count_status(list, TASK_DONE),"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:35:11:35:50",
+        "source": "CHECK(tasklist_count_status(&list, TASK_TODO) == 3);"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:39:11:39:50",
+        "source": "CHECK(tasklist_count_status(&list, TASK_TODO) == 1);"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:40:11:40:51",
+        "source": "CHECK(tasklist_count_status(&list, TASK_DOING) == 1);"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:41:11:41:50",
+        "source": "CHECK(tasklist_count_status(&list, TASK_DONE) == 1);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_total_estimate",
+    "span": "taskflow.c:225:1:238:2",
+    "pieces": [
+      "taskflow.c:225:1:238:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 14,
+    "source": "int tasklist_total_estimate(const TaskList *list, TaskStatus status, int filter_by_status) {\n    size_t i;\n    int total = 0;\n\n    if (!list) {\n        return 0;\n    }\n    for (i = 0; i < list->len; i++) {\n        if (!filter_by_status || list->items[i].status == status) {\n            total += list->items[i].estimate;\n        }\n    }\n    return total;\n}",
+    "calls": [
+      {
+        "caller": "main.c:print_summary",
+        "span": "main.c:74:9:74:52",
+        "source": "tasklist_total_estimate(list, TASK_TODO, 0),"
+      },
+      {
+        "caller": "main.c:print_summary",
+        "span": "main.c:75:9:75:52",
+        "source": "tasklist_total_estimate(list, TASK_DONE, 0) -"
+      },
+      {
+        "caller": "main.c:print_summary",
+        "span": "main.c:76:13:76:56",
+        "source": "tasklist_total_estimate(list, TASK_DONE, 1)"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:42:11:42:55",
+        "source": "CHECK(tasklist_total_estimate(&list, TASK_TODO, 0) == 6);"
+      },
+      {
+        "caller": "test_taskflow.c:test_add_find_and_status_counts",
+        "span": "test_taskflow.c:43:11:43:55",
+        "source": "CHECK(tasklist_total_estimate(&list, TASK_DONE, 1) == 1);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_highest_priority_open",
+    "span": "taskflow.c:240:1:260:2",
+    "pieces": [
+      "taskflow.c:240:1:260:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 21,
+    "source": "const Task *tasklist_highest_priority_open(const TaskList *list) {\n    size_t i;\n    const Task *best = NULL;\n\n    if (!list) {\n        return NULL;\n    }\n    for (i = 0; i < list->len; i++) {\n        const Task *task = &list->items[i];\n        if (task->status == TASK_DONE) {\n            continue;\n        }\n        if (!best ||\n            task->priority > best->priority ||\n            (task->priority == best->priority && task->estimate < best->estimate) ||\n            (task->priority == best->priority && task->estimate == best->estimate && task->id < best->id)) {\n            best = task;\n        }\n    }\n    return best;\n}",
+    "calls": [
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:159:28:159:64",
+        "source": "const Task *best = tasklist_highest_priority_open(list);"
+      },
+      {
+        "caller": "test_taskflow.c:test_highest_priority_and_sorting",
+        "span": "test_taskflow.c:87:12:87:49",
+        "source": "best = tasklist_highest_priority_open(&list);"
+      },
+      {
+        "caller": "test_taskflow.c:test_highest_priority_and_sorting",
+        "span": "test_taskflow.c:92:12:92:49",
+        "source": "best = tasklist_highest_priority_open(&list);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:compare_task_priority",
+    "span": "taskflow.c:262:1:273:2",
+    "pieces": [
+      "taskflow.c:262:1:273:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 12,
+    "source": "static int compare_task_priority(const Task *a, const Task *b) {\n    if (a->status != b->status) {\n        return (int)a->status - (int)b->status;\n    }\n    if (a->priority != b->priority) {\n        return b->priority - a->priority;\n    }\n    if (a->estimate != b->estimate) {\n        return a->estimate - b->estimate;\n    }\n    return a->id - b->id;\n}",
+    "calls": [
+      {
+        "caller": "taskflow.c:tasklist_sort_by_priority",
+        "span": "taskflow.c:285:17:285:76",
+        "source": "if (compare_task_priority(&list->items[i - 1], &list->items[i]) > 0) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_sort_by_priority",
+    "span": "taskflow.c:275:1:293:2",
+    "pieces": [
+      "taskflow.c:275:1:293:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 19,
+    "source": "void tasklist_sort_by_priority(TaskList *list) {\n    size_t i;\n    int changed;\n\n    if (!list || list->len < 2) {\n        return;\n    }\n    do {\n        changed = 0;\n        for (i = 1; i < list->len; i++) {\n            if (compare_task_priority(&list->items[i - 1], &list->items[i]) > 0) {\n                Task tmp = list->items[i - 1];\n                list->items[i - 1] = list->items[i];\n                list->items[i] = tmp;\n                changed = 1;\n            }\n        }\n    } while (changed);\n}",
+    "calls": [
+      {
+        "caller": "main.c:print_list",
+        "span": "main.c:84:5:84:36",
+        "source": "tasklist_sort_by_priority(list);"
+      },
+      {
+        "caller": "test_taskflow.c:test_highest_priority_and_sorting",
+        "span": "test_taskflow.c:96:5:96:37",
+        "source": "tasklist_sort_by_priority(&list);"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_format_task",
+    "span": "taskflow.c:295:1:312:2",
+    "pieces": [
+      "taskflow.c:295:1:312:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 18,
+    "source": "int tasklist_format_task(const Task *task, char *buffer, size_t buffer_size) {\n    int written;\n\n    if (!task || !buffer || buffer_size == 0) {\n        return 0;\n    }\n    written = snprintf(\n        buffer,\n        buffer_size,\n        \"#%d [%s] P%d %dh %s\",\n        task->id,\n        task_status_name(task->status),\n        task->priority,\n        task->estimate,\n        task->title ? task->title : \"\"\n    );\n    return written >= 0 && (size_t)written < buffer_size;\n}",
+    "calls": [
+      {
+        "caller": "main.c:print_list",
+        "span": "main.c:86:13:86:70",
+        "source": "if (tasklist_format_task(&list->items[i], line, sizeof(line))) {"
+      },
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:165:9:165:65",
+        "source": "tasklist_format_task(best, formatted, sizeof(formatted));"
+      },
+      {
+        "caller": "test_taskflow.c:test_format_and_status_parse",
+        "span": "test_taskflow.c:120:11:120:61",
+        "source": "CHECK(tasklist_format_task(task, buffer, sizeof(buffer)));"
+      },
+      {
+        "caller": "test_taskflow.c:test_format_and_status_parse",
+        "span": "test_taskflow.c:122:12:122:49",
+        "source": "CHECK(!tasklist_format_task(task, buffer, 4));"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:append_char",
+    "span": "taskflow.c:314:1:322:2",
+    "pieces": [
+      "taskflow.c:314:1:322:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "static int append_char(char *buffer, size_t buffer_size, size_t *offset, char ch) {\n    if (*offset + 1 >= buffer_size) {\n        return 0;\n    }\n    buffer[*offset] = ch;\n    (*offset)++;\n    buffer[*offset] = '\\0';\n    return 1;\n}",
+    "calls": [
+      {
+        "caller": "taskflow.c:append_text",
+        "span": "taskflow.c:326:14:326:61",
+        "source": "if (!append_char(buffer, buffer_size, offset, *text)) {"
+      },
+      {
+        "caller": "taskflow.c:append_escaped",
+        "span": "taskflow.c:339:18:339:64",
+        "source": "if (!append_char(buffer, buffer_size, offset, '\\\\')) {"
+      },
+      {
+        "caller": "taskflow.c:append_escaped",
+        "span": "taskflow.c:342:18:342:62",
+        "source": "if (!append_char(buffer, buffer_size, offset, *p)) {"
+      },
+      {
+        "caller": "taskflow.c:append_escaped",
+        "span": "taskflow.c:350:18:350:62",
+        "source": "if (!append_char(buffer, buffer_size, offset, *p)) {"
+      },
+      {
+        "caller": "taskflow.c:tasklist_serialize",
+        "span": "taskflow.c:387:14:387:61",
+        "source": "if (!append_char(buffer, buffer_size, &offset, '\\n')) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:append_text",
+    "span": "taskflow.c:324:1:332:2",
+    "pieces": [
+      "taskflow.c:324:1:332:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "static int append_text(char *buffer, size_t buffer_size, size_t *offset, const char *text) {\n    while (text && *text) {\n        if (!append_char(buffer, buffer_size, offset, *text)) {\n            return 0;\n        }\n        text++;\n    }\n    return 1;\n}",
+    "calls": [
+      {
+        "caller": "taskflow.c:append_escaped",
+        "span": "taskflow.c:346:18:346:65",
+        "source": "if (!append_text(buffer, buffer_size, offset, \"\\\\n\")) {"
+      },
+      {
+        "caller": "taskflow.c:tasklist_serialize",
+        "span": "taskflow.c:381:14:381:63",
+        "source": "if (!append_text(buffer, buffer_size, &offset, header)) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:append_escaped",
+    "span": "taskflow.c:334:1:357:2",
+    "pieces": [
+      "taskflow.c:334:1:357:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 24,
+    "source": "static int append_escaped(char *buffer, size_t buffer_size, size_t *offset, const char *text) {\n    const char *p = text ? text : \"\";\n\n    while (*p) {\n        if (*p == '\\\\' || *p == '|') {\n            if (!append_char(buffer, buffer_size, offset, '\\\\')) {\n                return 0;\n            }\n            if (!append_char(buffer, buffer_size, offset, *p)) {\n                return 0;\n            }\n        } else if (*p == '\\n') {\n            if (!append_text(buffer, buffer_size, offset, \"\\\\n\")) {\n                return 0;\n            }\n        } else {\n            if (!append_char(buffer, buffer_size, offset, *p)) {\n                return 0;\n            }\n        }\n        p++;\n    }\n    return 1;\n}",
+    "calls": [
+      {
+        "caller": "taskflow.c:tasklist_serialize",
+        "span": "taskflow.c:384:14:384:80",
+        "source": "if (!append_escaped(buffer, buffer_size, &offset, list->items[i].title)) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_serialize",
+    "span": "taskflow.c:359:1:392:2",
+    "pieces": [
+      "taskflow.c:359:1:392:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 34,
+    "source": "int tasklist_serialize(const TaskList *list, char *buffer, size_t buffer_size) {\n    size_t i;\n    size_t offset = 0;\n\n    if (!list || !buffer || buffer_size == 0) {\n        return 0;\n    }\n    buffer[0] = '\\0';\n    for (i = 0; i < list->len; i++) {\n        char header[96];\n        int written = snprintf(\n            header,\n            sizeof(header),\n            \"%d|%d|%d|%s|\",\n            list->items[i].id,\n            list->items[i].priority,\n            list->items[i].estimate,\n            task_status_name(list->items[i].status)\n        );\n        if (written < 0 || (size_t)written >= sizeof(header)) {\n            return 0;\n        }\n        if (!append_text(buffer, buffer_size, &offset, header)) {\n            return 0;\n        }\n        if (!append_escaped(buffer, buffer_size, &offset, list->items[i].title)) {\n            return 0;\n        }\n        if (!append_char(buffer, buffer_size, &offset, '\\n')) {\n            return 0;\n        }\n    }\n    return 1;\n}",
+    "calls": [
+      {
+        "caller": "main.c:handle_command",
+        "span": "main.c:171:14:171:58",
+        "source": "if (!tasklist_serialize(list, dump, sizeof(dump))) {"
+      },
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:142:11:142:60",
+        "source": "CHECK(tasklist_serialize(&original, dump, sizeof(dump)));"
+      },
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:160:11:160:70",
+        "source": "CHECK(tasklist_serialize(&loaded, dump_again, sizeof(dump_again)));"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:split_serialized_line",
+    "span": "taskflow.c:394:1:427:2",
+    "pieces": [
+      "taskflow.c:394:1:427:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 34,
+    "source": "static int split_serialized_line(const char *line, char fields[5][256]) {\n    int field = 0;\n    size_t offset = 0;\n    const char *p = line;\n\n    memset(fields, 0, 5 * 256);\n    while (*p && *p != '\\n' && *p != '\\r') {\n        if (*p == '\\\\') {\n            p++;\n            if (*p == 'n') {\n                fields[field][offset++] = '\\n';\n            } else if (*p) {\n                fields[field][offset++] = *p;\n            }\n        } else if (*p == '|' && field < 4) {\n            fields[field][offset] = '\\0';\n            field++;\n            offset = 0;\n        } else {\n            if (offset + 1 >= 256) {\n                return 0;\n            }\n            fields[field][offset++] = *p;\n        }\n        if (offset + 1 >= 256) {\n            return 0;\n        }\n        if (*p) {\n            p++;\n        }\n    }\n    fields[field][offset] = '\\0';\n    return field == 4;\n}",
+    "calls": [
+      {
+        "caller": "taskflow.c:tasklist_load_line",
+        "span": "taskflow.c:440:10:440:45",
+        "source": "if (!split_serialized_line(line, fields)) {"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_load_line",
+    "span": "taskflow.c:429:1:462:2",
+    "pieces": [
+      "taskflow.c:429:1:462:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 34,
+    "source": "int tasklist_load_line(TaskList *list, const char *line) {\n    char fields[5][256];\n    TaskStatus status;\n    Task *task;\n    int id;\n    int priority;\n    int estimate;\n\n    if (!list || !line || tf_is_blank(line)) {\n        return 0;\n    }\n    if (!split_serialized_line(line, fields)) {\n        return 0;\n    }\n    id = atoi(fields[0]);\n    priority = atoi(fields[1]);\n    estimate = atoi(fields[2]);\n    if (id <= 0 || !tf_valid_priority(priority) || !tf_valid_estimate(estimate)) {\n        return 0;\n    }\n    if (!task_status_parse(fields[3], &status)) {\n        return 0;\n    }\n    task = tasklist_add(list, fields[4], priority, estimate);\n    if (!task) {\n        return 0;\n    }\n    task->id = id;\n    task->status = status;\n    if (list->next_id <= id) {\n        list->next_id = id + 1;\n    }\n    return 1;\n}",
+    "calls": [
+      {
+        "caller": "taskflow.c:tasklist_load_text",
+        "span": "taskflow.c:485:36:485:66",
+        "source": "if (!tf_is_blank(line) && !tasklist_load_line(list, line)) {"
+      },
+      {
+        "caller": "test_taskflow.c:test_load_rejects_bad_lines",
+        "span": "test_taskflow.c:171:12:171:58",
+        "source": "CHECK(!tasklist_load_line(&list, \"not|enough|fields\"));"
+      },
+      {
+        "caller": "test_taskflow.c:test_load_rejects_bad_lines",
+        "span": "test_taskflow.c:172:12:172:58",
+        "source": "CHECK(!tasklist_load_line(&list, \"0|3|1|todo|bad id\"));"
+      },
+      {
+        "caller": "test_taskflow.c:test_load_rejects_bad_lines",
+        "span": "test_taskflow.c:173:12:173:64",
+        "source": "CHECK(!tasklist_load_line(&list, \"1|9|1|todo|bad priority\"));"
+      },
+      {
+        "caller": "test_taskflow.c:test_load_rejects_bad_lines",
+        "span": "test_taskflow.c:174:12:174:65",
+        "source": "CHECK(!tasklist_load_line(&list, \"1|3|-1|todo|bad estimate\"));"
+      },
+      {
+        "caller": "test_taskflow.c:test_load_rejects_bad_lines",
+        "span": "test_taskflow.c:175:12:175:65",
+        "source": "CHECK(!tasklist_load_line(&list, \"1|3|1|blocked|bad status\"));"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "taskflow.c:tasklist_load_text",
+    "span": "taskflow.c:464:1:491:2",
+    "pieces": [
+      "taskflow.c:464:1:491:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 28,
+    "source": "int tasklist_load_text(TaskList *list, const char *text) {\n    const char *start;\n    const char *end;\n    char line[512];\n\n    if (!list || !text) {\n        return 0;\n    }\n    start = text;\n    while (*start) {\n        size_t len;\n        end = strchr(start, '\\n');\n        if (!end) {\n            end = start + strlen(start);\n        }\n        len = (size_t)(end - start);\n        if (len >= sizeof(line)) {\n            return 0;\n        }\n        memcpy(line, start, len);\n        line[len] = '\\0';\n        if (!tf_is_blank(line) && !tasklist_load_line(list, line)) {\n            return 0;\n        }\n        start = *end == '\\n' ? end + 1 : end;\n    }\n    return 1;\n}",
+    "calls": [
+      {
+        "caller": "test_taskflow.c:test_serialize_and_load_roundtrip",
+        "span": "test_taskflow.c:145:11:145:44",
+        "source": "CHECK(tasklist_load_text(&loaded, dump));"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test_taskflow.c:test_add_find_and_status_counts",
+    "span": "test_taskflow.c:16:1:46:2",
+    "pieces": [
+      "test_taskflow.c:16:1:46:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 31,
+    "source": "static void test_add_find_and_status_counts(void) {\n    TaskList list;\n    Task *a;\n    Task *b;\n    Task *c;\n\n    tasklist_init(&list);\n    a = tasklist_add(&list, \"write parser\", 5, 3);\n    b = tasklist_add(&list, \"build tests\", 4, 2);\n    c = tasklist_add(&list, \"ship release\", 3, 1);\n\n    CHECK(a != NULL);\n    CHECK(b != NULL);\n    CHECK(c != NULL);\n    CHECK(list.len == 3);\n    CHECK(a->id == 1);\n    CHECK(b->id == 2);\n    CHECK(tasklist_find(&list, 2) == b);\n    CHECK(tasklist_find(&list, 99) == NULL);\n    CHECK(tasklist_count_status(&list, TASK_TODO) == 3);\n\n    CHECK(tasklist_set_status(&list, 2, TASK_DOING));\n    CHECK(tasklist_set_status(&list, 3, TASK_DONE));\n    CHECK(tasklist_count_status(&list, TASK_TODO) == 1);\n    CHECK(tasklist_count_status(&list, TASK_DOING) == 1);\n    CHECK(tasklist_count_status(&list, TASK_DONE) == 1);\n    CHECK(tasklist_total_estimate(&list, TASK_TODO, 0) == 6);\n    CHECK(tasklist_total_estimate(&list, TASK_DONE, 1) == 1);\n\n    tasklist_free(&list);\n}",
+    "calls": [
+      {
+        "caller": "test_taskflow.c:main",
+        "span": "test_taskflow.c:181:5:181:38",
+        "source": "test_add_find_and_status_counts();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test_taskflow.c:test_validation_and_remove",
+    "span": "test_taskflow.c:48:1:74:2",
+    "pieces": [
+      "test_taskflow.c:48:1:74:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 27,
+    "source": "static void test_validation_and_remove(void) {\n    TaskList list;\n    Task *first;\n    Task *second;\n    int first_id;\n    int second_id;\n\n    tasklist_init(&list);\n    CHECK(tasklist_add(&list, \"\", 3, 1) == NULL);\n    CHECK(tasklist_add(&list, \"bad priority\", 0, 1) == NULL);\n    CHECK(tasklist_add(&list, \"bad estimate\", 3, -1) == NULL);\n\n    first = tasklist_add(&list, \"first\", 2, 4);\n    second = tasklist_add(&list, \"second\", 5, 1);\n    CHECK(first != NULL);\n    CHECK(second != NULL);\n    CHECK(list.len == 2);\n    first_id = first->id;\n    second_id = second->id;\n    CHECK(tasklist_remove(&list, first_id));\n    CHECK(list.len == 1);\n    CHECK(tasklist_find(&list, first_id) == NULL);\n    CHECK(tasklist_find(&list, second_id) != NULL);\n    CHECK(!tasklist_remove(&list, 404));\n\n    tasklist_free(&list);\n}",
+    "calls": [
+      {
+        "caller": "test_taskflow.c:main",
+        "span": "test_taskflow.c:182:5:182:33",
+        "source": "test_validation_and_remove();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test_taskflow.c:test_highest_priority_and_sorting",
+    "span": "test_taskflow.c:76:1:101:2",
+    "pieces": [
+      "test_taskflow.c:76:1:101:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 26,
+    "source": "static void test_highest_priority_and_sorting(void) {\n    TaskList list;\n    const Task *best;\n\n    tasklist_init(&list);\n    tasklist_add(&list, \"low priority\", 1, 5);\n    tasklist_add(&list, \"urgent long\", 5, 8);\n    tasklist_add(&list, \"urgent short\", 5, 2);\n    tasklist_add(&list, \"medium\", 3, 1);\n    CHECK(tasklist_set_status(&list, 3, TASK_DOING));\n\n    best = tasklist_highest_priority_open(&list);\n    CHECK(best != NULL);\n    CHECK(strcmp(best->title, \"urgent short\") == 0);\n\n    CHECK(tasklist_set_status(&list, best->id, TASK_DONE));\n    best = tasklist_highest_priority_open(&list);\n    CHECK(best != NULL);\n    CHECK(strcmp(best->title, \"urgent long\") == 0);\n\n    tasklist_sort_by_priority(&list);\n    CHECK(strcmp(list.items[0].title, \"urgent long\") == 0);\n    CHECK(strcmp(list.items[list.len - 1].title, \"urgent short\") == 0);\n\n    tasklist_free(&list);\n}",
+    "calls": [
+      {
+        "caller": "test_taskflow.c:main",
+        "span": "test_taskflow.c:183:5:183:40",
+        "source": "test_highest_priority_and_sorting();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test_taskflow.c:test_format_and_status_parse",
+    "span": "test_taskflow.c:103:1:125:2",
+    "pieces": [
+      "test_taskflow.c:103:1:125:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 23,
+    "source": "static void test_format_and_status_parse(void) {\n    TaskList list;\n    TaskStatus status;\n    Task *task;\n    char buffer[128];\n\n    tasklist_init(&list);\n    task = tasklist_add(&list, \"document api\", 2, 6);\n    CHECK(task != NULL);\n    CHECK(task_status_parse(\"todo\", &status));\n    CHECK(status == TASK_TODO);\n    CHECK(task_status_parse(\"doing\", &status));\n    CHECK(status == TASK_DOING);\n    CHECK(task_status_parse(\"done\", &status));\n    CHECK(status == TASK_DONE);\n    CHECK(!task_status_parse(\"blocked\", &status));\n\n    CHECK(tasklist_format_task(task, buffer, sizeof(buffer)));\n    CHECK(strstr(buffer, \"#1 [todo] P2 6h document api\") != NULL);\n    CHECK(!tasklist_format_task(task, buffer, 4));\n\n    tasklist_free(&list);\n}",
+    "calls": [
+      {
+        "caller": "test_taskflow.c:main",
+        "span": "test_taskflow.c:184:5:184:35",
+        "source": "test_format_and_status_parse();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test_taskflow.c:test_serialize_and_load_roundtrip",
+    "span": "test_taskflow.c:127:1:165:2",
+    "pieces": [
+      "test_taskflow.c:127:1:165:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 39,
+    "source": "static void test_serialize_and_load_roundtrip(void) {\n    TaskList original;\n    TaskList loaded;\n    char dump[2048];\n    char dump_again[2048];\n    const Task *task;\n\n    tasklist_init(&original);\n    tasklist_init(&loaded);\n    tasklist_add(&original, \"escape | pipe\", 4, 3);\n    tasklist_add(&original, \"escape slash \\\\ value\", 2, 5);\n    tasklist_add(&original, \"line\\nbreak\", 3, 1);\n    CHECK(tasklist_set_status(&original, 2, TASK_DOING));\n    CHECK(tasklist_set_status(&original, 3, TASK_DONE));\n\n    CHECK(tasklist_serialize(&original, dump, sizeof(dump)));\n    CHECK(strstr(dump, \"escape \\\\| pipe\") != NULL);\n    CHECK(strstr(dump, \"line\\\\nbreak\") != NULL);\n    CHECK(tasklist_load_text(&loaded, dump));\n    CHECK(loaded.len == original.len);\n\n    task = tasklist_find_const(&loaded, 1);\n    CHECK(task != NULL);\n    CHECK(strcmp(task->title, \"escape | pipe\") == 0);\n    task = tasklist_find_const(&loaded, 2);\n    CHECK(task != NULL);\n    CHECK(task->status == TASK_DOING);\n    CHECK(strcmp(task->title, \"escape slash \\\\ value\") == 0);\n    task = tasklist_find_const(&loaded, 3);\n    CHECK(task != NULL);\n    CHECK(task->status == TASK_DONE);\n    CHECK(strcmp(task->title, \"line\\nbreak\") == 0);\n\n    CHECK(tasklist_serialize(&loaded, dump_again, sizeof(dump_again)));\n    CHECK(strcmp(dump, dump_again) == 0);\n\n    tasklist_free(&original);\n    tasklist_free(&loaded);\n}",
+    "calls": [
+      {
+        "caller": "test_taskflow.c:main",
+        "span": "test_taskflow.c:185:5:185:40",
+        "source": "test_serialize_and_load_roundtrip();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test_taskflow.c:test_load_rejects_bad_lines",
+    "span": "test_taskflow.c:167:1:178:2",
+    "pieces": [
+      "test_taskflow.c:167:1:178:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 12,
+    "source": "static void test_load_rejects_bad_lines(void) {\n    TaskList list;\n\n    tasklist_init(&list);\n    CHECK(!tasklist_load_line(&list, \"not|enough|fields\"));\n    CHECK(!tasklist_load_line(&list, \"0|3|1|todo|bad id\"));\n    CHECK(!tasklist_load_line(&list, \"1|9|1|todo|bad priority\"));\n    CHECK(!tasklist_load_line(&list, \"1|3|-1|todo|bad estimate\"));\n    CHECK(!tasklist_load_line(&list, \"1|3|1|blocked|bad status\"));\n    CHECK(list.len == 0);\n    tasklist_free(&list);\n}",
+    "calls": [
+      {
+        "caller": "test_taskflow.c:main",
+        "span": "test_taskflow.c:186:5:186:34",
+        "source": "test_load_rejects_bad_lines();"
+      }
+    ],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test_taskflow.c:main",
+    "span": "test_taskflow.c:180:1:194:2",
+    "pieces": [
+      "test_taskflow.c:180:1:194:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 15,
+    "source": "int main(void) {\n    test_add_find_and_status_counts();\n    test_validation_and_remove();\n    test_highest_priority_and_sorting();\n    test_format_and_status_parse();\n    test_serialize_and_load_roundtrip();\n    test_load_rejects_bad_lines();\n\n    if (failures) {\n        fprintf(stderr, \"%d taskflow tests failed\\n\", failures);\n        return 1;\n    }\n    printf(\"all taskflow unit tests passed\\n\");\n    return 0;\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  }
+]

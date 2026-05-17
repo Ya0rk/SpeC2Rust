@@ -1,6 +1,9 @@
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [string]$ProjectName
+    [string]$ProjectName,
+
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$ExtraArgs
 )
 
 $ErrorActionPreference = 'Continue'
@@ -78,7 +81,10 @@ if ($pythonExe) {
         --rust-project-name $rustProjectName `
         --use-rust-repair-agent `
         --use-contextual-rust-agent `
-        --use-spec-agent 2>&1 | Tee-Object -FilePath $logFile
+        --use-rust-test-agent `
+        --use-spec-agent `
+        --rust-test-agent-max-iterations 20 `
+        @ExtraArgs 2>&1 | Tee-Object -FilePath $logFile
 }
 else {
     Write-Host 'Runner: conda run -n tcode'
@@ -89,7 +95,10 @@ else {
         --rust-project-name $rustProjectName `
         --use-rust-repair-agent `
         --use-contextual-rust-agent `
-        --use-spec-agent 2>&1 | Tee-Object -FilePath $logFile
+        --use-rust-test-agent `
+        --use-spec-agent `
+        --rust-test-agent-max-iterations 20 `
+        @ExtraArgs 2>&1 | Tee-Object -FilePath $logFile
 }
 
 exit $LASTEXITCODE

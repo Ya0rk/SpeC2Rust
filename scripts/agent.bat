@@ -7,5 +7,6 @@ if "%~1"=="" (
 )
 
 set "C_NAME=%~1"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0agent.ps1" "%C_NAME%"
+shift
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0agent.ps1" "%C_NAME%" %*
 exit /b %ERRORLEVEL%

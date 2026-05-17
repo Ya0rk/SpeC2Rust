@@ -4,6 +4,17 @@
 然后用 sh 脚本驱动测试；若有失败用例，逐个喂给 LLM 进行修复。
 """
 
-from .rust_test_agent import RustTestAgent, TestCaseResult, TestRunSummary
+from __future__ import annotations
+
+from importlib import import_module
+from typing import Any
 
 __all__ = ["RustTestAgent", "TestCaseResult", "TestRunSummary"]
+
+
+def __getattr__(name: str) -> Any:
+    if name not in __all__:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module("agent.rtest.rust_test_agent"), name)
+    globals()[name] = value
+    return value
