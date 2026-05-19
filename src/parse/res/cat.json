@@ -107,8 +107,8 @@
         "source": ": c_strcasecmp (locale_charset (), \"UTF-8\") == 0 ? name_utf8"
       },
       {
-        "caller": "include\\c-strcaseeq.h:strcaseeq9",
-        "span": "include\\c-strcaseeq.h:49:10:49:39",
+        "caller": "include/c-strcaseeq.h:strcaseeq9",
+        "span": "include/c-strcaseeq.h:49:10:49:39",
         "source": "return c_strcasecmp (s1 + 9, s2 + 9) == 0;"
       }
     ],
@@ -658,8 +658,8 @@
         "source": "int result = fpurge (fp);"
       },
       {
-        "caller": "include\\system.h:write_error",
-        "span": "include\\system.h:771:3:771:18",
+        "caller": "include/system.h:write_error",
+        "span": "include/system.h:771:3:771:18",
         "source": "fpurge (stdout);    /* Ensure nothing buffered that might induce an error. */"
       }
     ],
@@ -727,8 +727,8 @@
         "source": "locale_code = locale_charset ();"
       },
       {
-        "caller": "include\\c32is-impl.h:FUNC",
-        "span": "include\\c32is-impl.h:51:30:51:47",
+        "caller": "include/c32is-impl.h:FUNC",
+        "span": "include/c32is-impl.h:51:30:51:47",
         "source": "const char *encoding = locale_charset ();"
       }
     ],
@@ -2241,10 +2241,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\safe-read.c:safe_rw",
-    "span": "include\\safe-read.c:55:1:71:2",
+    "func_defid": "include/safe-read.c:safe_rw",
+    "span": "include/safe-read.c:55:1:71:2",
     "pieces": [
-      "include\\safe-read.c:55:1:71:2"
+      "include/safe-read.c:55:1:71:2"
     ],
     "sub_chunks": [],
     "num_lines": 17,
@@ -2261,10 +2261,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\alignalloc.h:alignfree",
-    "span": "include\\alignalloc.h:74:1:78:2",
+    "func_defid": "include/alignalloc.h:alignfree",
+    "span": "include/alignalloc.h:74:1:78:2",
     "pieces": [
-      "include\\alignalloc.h:74:1:78:2"
+      "include/alignalloc.h:74:1:78:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -2286,10 +2286,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\alignalloc.h:alignalloc",
-    "span": "include\\alignalloc.h:89:1:110:2",
+    "func_defid": "include/alignalloc.h:alignalloc",
+    "span": "include/alignalloc.h:89:1:110:2",
     "pieces": [
-      "include\\alignalloc.h:89:1:110:2"
+      "include/alignalloc.h:89:1:110:2"
     ],
     "sub_chunks": [],
     "num_lines": 22,
@@ -2306,10 +2306,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\binary-io.h:__gl_setmode",
-    "span": "include\\binary-io.h:51:1:55:2",
+    "func_defid": "include/binary-io.h:__gl_setmode",
+    "span": "include/binary-io.h:51:1:55:2",
     "pieces": [
-      "include\\binary-io.h:51:1:55:2"
+      "include/binary-io.h:51:1:55:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -2321,8 +2321,8 @@
         "source": "return __gl_setmode (fd, mode);"
       },
       {
-        "caller": "include\\binary-io.h:set_binary_mode",
-        "span": "include\\binary-io.h:75:10:75:33",
+        "caller": "include/binary-io.h:set_binary_mode",
+        "span": "include/binary-io.h:75:10:75:33",
         "source": "return __gl_setmode (fd, mode);"
       }
     ],
@@ -2331,18 +2331,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\binary-io.h:set_binary_mode",
-    "span": "include\\binary-io.h:72:1:76:2",
+    "func_defid": "include/binary-io.h:set_binary_mode",
+    "span": "include/binary-io.h:72:1:76:2",
     "pieces": [
-      "include\\binary-io.h:72:1:76:2"
+      "include/binary-io.h:72:1:76:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "BINARY_IO_INLINE int\nset_binary_mode (int fd, int mode)\n{\n  return __gl_setmode (fd, mode);\n}",
     "calls": [
       {
-        "caller": "include\\xbinary-io.h:xset_binary_mode",
-        "span": "include\\xbinary-io.h:49:7:49:33",
+        "caller": "include/xbinary-io.h:xset_binary_mode",
+        "span": "include/xbinary-io.h:49:7:49:33",
         "source": "if (set_binary_mode (fd, mode) < 0)"
       }
     ],
@@ -2351,10 +2351,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isalnum",
-    "span": "include\\c-ctype.h:168:1:180:2",
+    "func_defid": "include/c-ctype.h:c_isalnum",
+    "span": "include/c-ctype.h:168:1:180:2",
     "pieces": [
-      "include\\c-ctype.h:168:1:180:2"
+      "include/c-ctype.h:168:1:180:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
@@ -2365,10 +2365,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isalpha",
-    "span": "include\\c-ctype.h:182:1:193:2",
+    "func_defid": "include/c-ctype.h:c_isalpha",
+    "span": "include/c-ctype.h:182:1:193:2",
     "pieces": [
-      "include\\c-ctype.h:182:1:193:2"
+      "include/c-ctype.h:182:1:193:2"
     ],
     "sub_chunks": [],
     "num_lines": 12,
@@ -2379,10 +2379,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isascii",
-    "span": "include\\c-ctype.h:197:1:212:2",
+    "func_defid": "include/c-ctype.h:c_isascii",
+    "span": "include/c-ctype.h:197:1:212:2",
     "pieces": [
-      "include\\c-ctype.h:197:1:212:2"
+      "include/c-ctype.h:197:1:212:2"
     ],
     "sub_chunks": [],
     "num_lines": 16,
@@ -2393,10 +2393,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isblank",
-    "span": "include\\c-ctype.h:214:1:218:2",
+    "func_defid": "include/c-ctype.h:c_isblank",
+    "span": "include/c-ctype.h:214:1:218:2",
     "pieces": [
-      "include\\c-ctype.h:214:1:218:2"
+      "include/c-ctype.h:214:1:218:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -2407,10 +2407,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_iscntrl",
-    "span": "include\\c-ctype.h:220:1:230:2",
+    "func_defid": "include/c-ctype.h:c_iscntrl",
+    "span": "include/c-ctype.h:220:1:230:2",
     "pieces": [
-      "include\\c-ctype.h:220:1:230:2"
+      "include/c-ctype.h:220:1:230:2"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2421,10 +2421,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isdigit",
-    "span": "include\\c-ctype.h:232:1:242:2",
+    "func_defid": "include/c-ctype.h:c_isdigit",
+    "span": "include/c-ctype.h:232:1:242:2",
     "pieces": [
-      "include\\c-ctype.h:232:1:242:2"
+      "include/c-ctype.h:232:1:242:2"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2435,10 +2435,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isgraph",
-    "span": "include\\c-ctype.h:244:1:257:2",
+    "func_defid": "include/c-ctype.h:c_isgraph",
+    "span": "include/c-ctype.h:244:1:257:2",
     "pieces": [
-      "include\\c-ctype.h:244:1:257:2"
+      "include/c-ctype.h:244:1:257:2"
     ],
     "sub_chunks": [],
     "num_lines": 14,
@@ -2449,10 +2449,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_islower",
-    "span": "include\\c-ctype.h:259:1:269:2",
+    "func_defid": "include/c-ctype.h:c_islower",
+    "span": "include/c-ctype.h:259:1:269:2",
     "pieces": [
-      "include\\c-ctype.h:259:1:269:2"
+      "include/c-ctype.h:259:1:269:2"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2463,10 +2463,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isprint",
-    "span": "include\\c-ctype.h:271:1:285:2",
+    "func_defid": "include/c-ctype.h:c_isprint",
+    "span": "include/c-ctype.h:271:1:285:2",
     "pieces": [
-      "include\\c-ctype.h:271:1:285:2"
+      "include/c-ctype.h:271:1:285:2"
     ],
     "sub_chunks": [],
     "num_lines": 15,
@@ -2477,10 +2477,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_ispunct",
-    "span": "include\\c-ctype.h:287:1:297:2",
+    "func_defid": "include/c-ctype.h:c_ispunct",
+    "span": "include/c-ctype.h:287:1:297:2",
     "pieces": [
-      "include\\c-ctype.h:287:1:297:2"
+      "include/c-ctype.h:287:1:297:2"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2491,10 +2491,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isspace",
-    "span": "include\\c-ctype.h:299:1:309:2",
+    "func_defid": "include/c-ctype.h:c_isspace",
+    "span": "include/c-ctype.h:299:1:309:2",
     "pieces": [
-      "include\\c-ctype.h:299:1:309:2"
+      "include/c-ctype.h:299:1:309:2"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2505,10 +2505,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isupper",
-    "span": "include\\c-ctype.h:311:1:321:2",
+    "func_defid": "include/c-ctype.h:c_isupper",
+    "span": "include/c-ctype.h:311:1:321:2",
     "pieces": [
-      "include\\c-ctype.h:311:1:321:2"
+      "include/c-ctype.h:311:1:321:2"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2519,10 +2519,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isxdigit",
-    "span": "include\\c-ctype.h:323:1:334:2",
+    "func_defid": "include/c-ctype.h:c_isxdigit",
+    "span": "include/c-ctype.h:323:1:334:2",
     "pieces": [
-      "include\\c-ctype.h:323:1:334:2"
+      "include/c-ctype.h:323:1:334:2"
     ],
     "sub_chunks": [],
     "num_lines": 12,
@@ -2533,10 +2533,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_tolower",
-    "span": "include\\c-ctype.h:336:1:346:2",
+    "func_defid": "include/c-ctype.h:c_tolower",
+    "span": "include/c-ctype.h:336:1:346:2",
     "pieces": [
-      "include\\c-ctype.h:336:1:346:2"
+      "include/c-ctype.h:336:1:346:2"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2547,10 +2547,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_toupper",
-    "span": "include\\c-ctype.h:348:1:358:2",
+    "func_defid": "include/c-ctype.h:c_toupper",
+    "span": "include/c-ctype.h:348:1:358:2",
     "pieces": [
-      "include\\c-ctype.h:348:1:358:2"
+      "include/c-ctype.h:348:1:358:2"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2561,10 +2561,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:diacritics",
-    "span": "include\\c-ctype.h:32:1:361:1",
+    "func_defid": "include/c-ctype.h:diacritics",
+    "span": "include/c-ctype.h:32:1:361:1",
     "pieces": [
-      "include\\c-ctype.h:32:1:361:1"
+      "include/c-ctype.h:32:1:361:1"
     ],
     "sub_chunks": [],
     "num_lines": 330,
@@ -2575,10 +2575,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:diacritics",
-    "span": "include\\c-ctype.h:33:1:361:1",
+    "func_defid": "include/c-ctype.h:diacritics",
+    "span": "include/c-ctype.h:33:1:361:1",
     "pieces": [
-      "include\\c-ctype.h:33:1:361:1"
+      "include/c-ctype.h:33:1:361:1"
     ],
     "sub_chunks": [],
     "num_lines": 329,
@@ -2589,10 +2589,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isalnum",
-    "span": "include\\c-ctype.h:168:1:180:1",
+    "func_defid": "include/c-ctype.h:c_isalnum",
+    "span": "include/c-ctype.h:168:1:180:1",
     "pieces": [
-      "include\\c-ctype.h:168:1:180:1"
+      "include/c-ctype.h:168:1:180:1"
     ],
     "sub_chunks": [],
     "num_lines": 13,
@@ -2603,10 +2603,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isalpha",
-    "span": "include\\c-ctype.h:182:1:193:1",
+    "func_defid": "include/c-ctype.h:c_isalpha",
+    "span": "include/c-ctype.h:182:1:193:1",
     "pieces": [
-      "include\\c-ctype.h:182:1:193:1"
+      "include/c-ctype.h:182:1:193:1"
     ],
     "sub_chunks": [],
     "num_lines": 12,
@@ -2617,10 +2617,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isascii",
-    "span": "include\\c-ctype.h:197:1:212:1",
+    "func_defid": "include/c-ctype.h:c_isascii",
+    "span": "include/c-ctype.h:197:1:212:1",
     "pieces": [
-      "include\\c-ctype.h:197:1:212:1"
+      "include/c-ctype.h:197:1:212:1"
     ],
     "sub_chunks": [],
     "num_lines": 16,
@@ -2631,10 +2631,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isblank",
-    "span": "include\\c-ctype.h:214:1:218:1",
+    "func_defid": "include/c-ctype.h:c_isblank",
+    "span": "include/c-ctype.h:214:1:218:1",
     "pieces": [
-      "include\\c-ctype.h:214:1:218:1"
+      "include/c-ctype.h:214:1:218:1"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -2645,10 +2645,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_iscntrl",
-    "span": "include\\c-ctype.h:220:1:230:1",
+    "func_defid": "include/c-ctype.h:c_iscntrl",
+    "span": "include/c-ctype.h:220:1:230:1",
     "pieces": [
-      "include\\c-ctype.h:220:1:230:1"
+      "include/c-ctype.h:220:1:230:1"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2659,10 +2659,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isdigit",
-    "span": "include\\c-ctype.h:232:1:242:1",
+    "func_defid": "include/c-ctype.h:c_isdigit",
+    "span": "include/c-ctype.h:232:1:242:1",
     "pieces": [
-      "include\\c-ctype.h:232:1:242:1"
+      "include/c-ctype.h:232:1:242:1"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2673,10 +2673,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isgraph",
-    "span": "include\\c-ctype.h:244:1:257:1",
+    "func_defid": "include/c-ctype.h:c_isgraph",
+    "span": "include/c-ctype.h:244:1:257:1",
     "pieces": [
-      "include\\c-ctype.h:244:1:257:1"
+      "include/c-ctype.h:244:1:257:1"
     ],
     "sub_chunks": [],
     "num_lines": 14,
@@ -2687,10 +2687,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_islower",
-    "span": "include\\c-ctype.h:259:1:269:1",
+    "func_defid": "include/c-ctype.h:c_islower",
+    "span": "include/c-ctype.h:259:1:269:1",
     "pieces": [
-      "include\\c-ctype.h:259:1:269:1"
+      "include/c-ctype.h:259:1:269:1"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2701,10 +2701,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isprint",
-    "span": "include\\c-ctype.h:271:1:285:1",
+    "func_defid": "include/c-ctype.h:c_isprint",
+    "span": "include/c-ctype.h:271:1:285:1",
     "pieces": [
-      "include\\c-ctype.h:271:1:285:1"
+      "include/c-ctype.h:271:1:285:1"
     ],
     "sub_chunks": [],
     "num_lines": 15,
@@ -2715,10 +2715,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_ispunct",
-    "span": "include\\c-ctype.h:287:1:297:1",
+    "func_defid": "include/c-ctype.h:c_ispunct",
+    "span": "include/c-ctype.h:287:1:297:1",
     "pieces": [
-      "include\\c-ctype.h:287:1:297:1"
+      "include/c-ctype.h:287:1:297:1"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2729,10 +2729,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isspace",
-    "span": "include\\c-ctype.h:299:1:309:1",
+    "func_defid": "include/c-ctype.h:c_isspace",
+    "span": "include/c-ctype.h:299:1:309:1",
     "pieces": [
-      "include\\c-ctype.h:299:1:309:1"
+      "include/c-ctype.h:299:1:309:1"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2743,10 +2743,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isupper",
-    "span": "include\\c-ctype.h:311:1:321:1",
+    "func_defid": "include/c-ctype.h:c_isupper",
+    "span": "include/c-ctype.h:311:1:321:1",
     "pieces": [
-      "include\\c-ctype.h:311:1:321:1"
+      "include/c-ctype.h:311:1:321:1"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2757,10 +2757,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_isxdigit",
-    "span": "include\\c-ctype.h:323:1:334:1",
+    "func_defid": "include/c-ctype.h:c_isxdigit",
+    "span": "include/c-ctype.h:323:1:334:1",
     "pieces": [
-      "include\\c-ctype.h:323:1:334:1"
+      "include/c-ctype.h:323:1:334:1"
     ],
     "sub_chunks": [],
     "num_lines": 12,
@@ -2771,10 +2771,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_tolower",
-    "span": "include\\c-ctype.h:336:1:346:1",
+    "func_defid": "include/c-ctype.h:c_tolower",
+    "span": "include/c-ctype.h:336:1:346:1",
     "pieces": [
-      "include\\c-ctype.h:336:1:346:1"
+      "include/c-ctype.h:336:1:346:1"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2796,10 +2796,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-ctype.h:c_toupper",
-    "span": "include\\c-ctype.h:348:1:358:1",
+    "func_defid": "include/c-ctype.h:c_toupper",
+    "span": "include/c-ctype.h:348:1:358:1",
     "pieces": [
-      "include\\c-ctype.h:348:1:358:1"
+      "include/c-ctype.h:348:1:358:1"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -2810,18 +2810,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-strcaseeq.h:strcaseeq9",
-    "span": "include\\c-strcaseeq.h:46:1:50:2",
+    "func_defid": "include/c-strcaseeq.h:strcaseeq9",
+    "span": "include/c-strcaseeq.h:46:1:50:2",
     "pieces": [
-      "include\\c-strcaseeq.h:46:1:50:2"
+      "include/c-strcaseeq.h:46:1:50:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "static inline int\nstrcaseeq9 (const char *s1, const char *s2)\n{\n  return c_strcasecmp (s1 + 9, s2 + 9) == 0;\n}",
     "calls": [
       {
-        "caller": "include\\c-strcaseeq.h:strcaseeq8",
-        "span": "include\\c-strcaseeq.h:60:16:60:35",
+        "caller": "include/c-strcaseeq.h:strcaseeq8",
+        "span": "include/c-strcaseeq.h:60:16:60:35",
         "source": "return strcaseeq9 (s1, s2);"
       }
     ],
@@ -2830,18 +2830,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-strcaseeq.h:strcaseeq8",
-    "span": "include\\c-strcaseeq.h:52:1:64:2",
+    "func_defid": "include/c-strcaseeq.h:strcaseeq8",
+    "span": "include/c-strcaseeq.h:52:1:64:2",
     "pieces": [
-      "include\\c-strcaseeq.h:52:1:64:2"
+      "include/c-strcaseeq.h:52:1:64:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstrcaseeq8 (const char *s1, const char *s2, char s28)\n{\n  if (CASEEQ (s1[8], s28))\n    {\n      if (s28 == 0)\n        return 1;\n      else\n        return strcaseeq9 (s1, s2);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\c-strcaseeq.h:strcaseeq7",
-        "span": "include\\c-strcaseeq.h:74:16:74:40",
+        "caller": "include/c-strcaseeq.h:strcaseeq7",
+        "span": "include/c-strcaseeq.h:74:16:74:40",
         "source": "return strcaseeq8 (s1, s2, s28);"
       }
     ],
@@ -2850,18 +2850,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-strcaseeq.h:strcaseeq7",
-    "span": "include\\c-strcaseeq.h:66:1:78:2",
+    "func_defid": "include/c-strcaseeq.h:strcaseeq7",
+    "span": "include/c-strcaseeq.h:66:1:78:2",
     "pieces": [
-      "include\\c-strcaseeq.h:66:1:78:2"
+      "include/c-strcaseeq.h:66:1:78:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstrcaseeq7 (const char *s1, const char *s2, char s27, char s28)\n{\n  if (CASEEQ (s1[7], s27))\n    {\n      if (s27 == 0)\n        return 1;\n      else\n        return strcaseeq8 (s1, s2, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\c-strcaseeq.h:strcaseeq6",
-        "span": "include\\c-strcaseeq.h:88:16:88:45",
+        "caller": "include/c-strcaseeq.h:strcaseeq6",
+        "span": "include/c-strcaseeq.h:88:16:88:45",
         "source": "return strcaseeq7 (s1, s2, s27, s28);"
       }
     ],
@@ -2870,18 +2870,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-strcaseeq.h:strcaseeq6",
-    "span": "include\\c-strcaseeq.h:80:1:92:2",
+    "func_defid": "include/c-strcaseeq.h:strcaseeq6",
+    "span": "include/c-strcaseeq.h:80:1:92:2",
     "pieces": [
-      "include\\c-strcaseeq.h:80:1:92:2"
+      "include/c-strcaseeq.h:80:1:92:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstrcaseeq6 (const char *s1, const char *s2, char s26, char s27, char s28)\n{\n  if (CASEEQ (s1[6], s26))\n    {\n      if (s26 == 0)\n        return 1;\n      else\n        return strcaseeq7 (s1, s2, s27, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\c-strcaseeq.h:strcaseeq5",
-        "span": "include\\c-strcaseeq.h:102:16:102:50",
+        "caller": "include/c-strcaseeq.h:strcaseeq5",
+        "span": "include/c-strcaseeq.h:102:16:102:50",
         "source": "return strcaseeq6 (s1, s2, s26, s27, s28);"
       }
     ],
@@ -2890,18 +2890,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-strcaseeq.h:strcaseeq5",
-    "span": "include\\c-strcaseeq.h:94:1:106:2",
+    "func_defid": "include/c-strcaseeq.h:strcaseeq5",
+    "span": "include/c-strcaseeq.h:94:1:106:2",
     "pieces": [
-      "include\\c-strcaseeq.h:94:1:106:2"
+      "include/c-strcaseeq.h:94:1:106:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstrcaseeq5 (const char *s1, const char *s2, char s25, char s26, char s27, char s28)\n{\n  if (CASEEQ (s1[5], s25))\n    {\n      if (s25 == 0)\n        return 1;\n      else\n        return strcaseeq6 (s1, s2, s26, s27, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\c-strcaseeq.h:strcaseeq4",
-        "span": "include\\c-strcaseeq.h:116:16:116:55",
+        "caller": "include/c-strcaseeq.h:strcaseeq4",
+        "span": "include/c-strcaseeq.h:116:16:116:55",
         "source": "return strcaseeq5 (s1, s2, s25, s26, s27, s28);"
       }
     ],
@@ -2910,18 +2910,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-strcaseeq.h:strcaseeq4",
-    "span": "include\\c-strcaseeq.h:108:1:120:2",
+    "func_defid": "include/c-strcaseeq.h:strcaseeq4",
+    "span": "include/c-strcaseeq.h:108:1:120:2",
     "pieces": [
-      "include\\c-strcaseeq.h:108:1:120:2"
+      "include/c-strcaseeq.h:108:1:120:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstrcaseeq4 (const char *s1, const char *s2, char s24, char s25, char s26, char s27, char s28)\n{\n  if (CASEEQ (s1[4], s24))\n    {\n      if (s24 == 0)\n        return 1;\n      else\n        return strcaseeq5 (s1, s2, s25, s26, s27, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\c-strcaseeq.h:strcaseeq3",
-        "span": "include\\c-strcaseeq.h:130:16:130:60",
+        "caller": "include/c-strcaseeq.h:strcaseeq3",
+        "span": "include/c-strcaseeq.h:130:16:130:60",
         "source": "return strcaseeq4 (s1, s2, s24, s25, s26, s27, s28);"
       }
     ],
@@ -2930,18 +2930,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-strcaseeq.h:strcaseeq3",
-    "span": "include\\c-strcaseeq.h:122:1:134:2",
+    "func_defid": "include/c-strcaseeq.h:strcaseeq3",
+    "span": "include/c-strcaseeq.h:122:1:134:2",
     "pieces": [
-      "include\\c-strcaseeq.h:122:1:134:2"
+      "include/c-strcaseeq.h:122:1:134:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstrcaseeq3 (const char *s1, const char *s2, char s23, char s24, char s25, char s26, char s27, char s28)\n{\n  if (CASEEQ (s1[3], s23))\n    {\n      if (s23 == 0)\n        return 1;\n      else\n        return strcaseeq4 (s1, s2, s24, s25, s26, s27, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\c-strcaseeq.h:strcaseeq2",
-        "span": "include\\c-strcaseeq.h:144:16:144:65",
+        "caller": "include/c-strcaseeq.h:strcaseeq2",
+        "span": "include/c-strcaseeq.h:144:16:144:65",
         "source": "return strcaseeq3 (s1, s2, s23, s24, s25, s26, s27, s28);"
       }
     ],
@@ -2950,18 +2950,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-strcaseeq.h:strcaseeq2",
-    "span": "include\\c-strcaseeq.h:136:1:148:2",
+    "func_defid": "include/c-strcaseeq.h:strcaseeq2",
+    "span": "include/c-strcaseeq.h:136:1:148:2",
     "pieces": [
-      "include\\c-strcaseeq.h:136:1:148:2"
+      "include/c-strcaseeq.h:136:1:148:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstrcaseeq2 (const char *s1, const char *s2, char s22, char s23, char s24, char s25, char s26, char s27, char s28)\n{\n  if (CASEEQ (s1[2], s22))\n    {\n      if (s22 == 0)\n        return 1;\n      else\n        return strcaseeq3 (s1, s2, s23, s24, s25, s26, s27, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\c-strcaseeq.h:strcaseeq1",
-        "span": "include\\c-strcaseeq.h:158:16:158:70",
+        "caller": "include/c-strcaseeq.h:strcaseeq1",
+        "span": "include/c-strcaseeq.h:158:16:158:70",
         "source": "return strcaseeq2 (s1, s2, s22, s23, s24, s25, s26, s27, s28);"
       }
     ],
@@ -2970,18 +2970,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-strcaseeq.h:strcaseeq1",
-    "span": "include\\c-strcaseeq.h:150:1:162:2",
+    "func_defid": "include/c-strcaseeq.h:strcaseeq1",
+    "span": "include/c-strcaseeq.h:150:1:162:2",
     "pieces": [
-      "include\\c-strcaseeq.h:150:1:162:2"
+      "include/c-strcaseeq.h:150:1:162:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstrcaseeq1 (const char *s1, const char *s2, char s21, char s22, char s23, char s24, char s25, char s26, char s27, char s28)\n{\n  if (CASEEQ (s1[1], s21))\n    {\n      if (s21 == 0)\n        return 1;\n      else\n        return strcaseeq2 (s1, s2, s22, s23, s24, s25, s26, s27, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\c-strcaseeq.h:strcaseeq0",
-        "span": "include\\c-strcaseeq.h:172:16:172:75",
+        "caller": "include/c-strcaseeq.h:strcaseeq0",
+        "span": "include/c-strcaseeq.h:172:16:172:75",
         "source": "return strcaseeq1 (s1, s2, s21, s22, s23, s24, s25, s26, s27, s28);"
       }
     ],
@@ -2990,10 +2990,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c-strcaseeq.h:strcaseeq0",
-    "span": "include\\c-strcaseeq.h:164:1:176:2",
+    "func_defid": "include/c-strcaseeq.h:strcaseeq0",
+    "span": "include/c-strcaseeq.h:164:1:176:2",
     "pieces": [
-      "include\\c-strcaseeq.h:164:1:176:2"
+      "include/c-strcaseeq.h:164:1:176:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
@@ -3004,10 +3004,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\c32is-impl.h:FUNC",
-    "span": "include\\c32is-impl.h:40:1:105:2",
+    "func_defid": "include/c32is-impl.h:FUNC",
+    "span": "include/c32is-impl.h:40:1:105:2",
     "pieces": [
-      "include\\c32is-impl.h:40:1:105:2"
+      "include/c32is-impl.h:40:1:105:2"
     ],
     "sub_chunks": [],
     "num_lines": 66,
@@ -3018,10 +3018,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\gettext.h:pgettext_aux",
-    "span": "include\\gettext.h:148:1:158:2",
+    "func_defid": "include/gettext.h:pgettext_aux",
+    "span": "include/gettext.h:148:1:158:2",
     "pieces": [
-      "include\\gettext.h:148:1:158:2"
+      "include/gettext.h:148:1:158:2"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -3032,10 +3032,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\gettext.h:npgettext_aux",
-    "span": "include\\gettext.h:167:1:179:2",
+    "func_defid": "include/gettext.h:npgettext_aux",
+    "span": "include/gettext.h:167:1:179:2",
     "pieces": [
-      "include\\gettext.h:167:1:179:2"
+      "include/gettext.h:167:1:179:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
@@ -3046,10 +3046,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\gettext.h:dcpgettext_expr",
-    "span": "include\\gettext.h:217:1:250:2",
+    "func_defid": "include/gettext.h:dcpgettext_expr",
+    "span": "include/gettext.h:217:1:250:2",
     "pieces": [
-      "include\\gettext.h:217:1:250:2"
+      "include/gettext.h:217:1:250:2"
     ],
     "sub_chunks": [],
     "num_lines": 34,
@@ -3060,10 +3060,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\gettext.h:dcnpgettext_expr",
-    "span": "include\\gettext.h:264:1:298:2",
+    "func_defid": "include/gettext.h:dcnpgettext_expr",
+    "span": "include/gettext.h:264:1:298:2",
     "pieces": [
-      "include\\gettext.h:264:1:298:2"
+      "include/gettext.h:264:1:298:2"
     ],
     "sub_chunks": [],
     "num_lines": 35,
@@ -3074,10 +3074,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\ialloc.h:imalloc",
-    "span": "include\\ialloc.h:57:1:61:2",
+    "func_defid": "include/ialloc.h:imalloc",
+    "span": "include/ialloc.h:57:1:61:2",
     "pieces": [
-      "include\\ialloc.h:57:1:61:2"
+      "include/ialloc.h:57:1:61:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3088,10 +3088,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\ialloc.h:irealloc",
-    "span": "include\\ialloc.h:66:1:84:2",
+    "func_defid": "include/ialloc.h:irealloc",
+    "span": "include/ialloc.h:66:1:84:2",
     "pieces": [
-      "include\\ialloc.h:66:1:84:2"
+      "include/ialloc.h:66:1:84:2"
     ],
     "sub_chunks": [],
     "num_lines": 19,
@@ -3102,10 +3102,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\ialloc.h:icalloc",
-    "span": "include\\ialloc.h:91:1:107:2",
+    "func_defid": "include/ialloc.h:icalloc",
+    "span": "include/ialloc.h:91:1:107:2",
     "pieces": [
-      "include\\ialloc.h:91:1:107:2"
+      "include/ialloc.h:91:1:107:2"
     ],
     "sub_chunks": [],
     "num_lines": 17,
@@ -3116,10 +3116,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\ialloc.h:ireallocarray",
-    "span": "include\\ialloc.h:112:1:132:2",
+    "func_defid": "include/ialloc.h:ireallocarray",
+    "span": "include/ialloc.h:112:1:132:2",
     "pieces": [
-      "include\\ialloc.h:112:1:132:2"
+      "include/ialloc.h:112:1:132:2"
     ],
     "sub_chunks": [],
     "num_lines": 21,
@@ -3130,10 +3130,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\ialloc.h:_gl_alloc_nomem",
-    "span": "include\\ialloc.h:37:1:135:1",
+    "func_defid": "include/ialloc.h:_gl_alloc_nomem",
+    "span": "include/ialloc.h:37:1:135:1",
     "pieces": [
-      "include\\ialloc.h:37:1:135:1"
+      "include/ialloc.h:37:1:135:1"
     ],
     "sub_chunks": [],
     "num_lines": 99,
@@ -3144,10 +3144,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\ialloc.h:_gl_alloc_nomem",
-    "span": "include\\ialloc.h:38:1:135:1",
+    "func_defid": "include/ialloc.h:_gl_alloc_nomem",
+    "span": "include/ialloc.h:38:1:135:1",
     "pieces": [
-      "include\\ialloc.h:38:1:135:1"
+      "include/ialloc.h:38:1:135:1"
     ],
     "sub_chunks": [],
     "num_lines": 98,
@@ -3158,38 +3158,38 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\ialloc.h:_gl_alloc_nomem",
-    "span": "include\\ialloc.h:45:1:50:1",
+    "func_defid": "include/ialloc.h:_gl_alloc_nomem",
+    "span": "include/ialloc.h:45:1:50:1",
     "pieces": [
-      "include\\ialloc.h:45:1:50:1"
+      "include/ialloc.h:45:1:50:1"
     ],
     "sub_chunks": [],
     "num_lines": 6,
     "source": "IALLOC_INLINE void * _GL_ATTRIBUTE_COLD\n_gl_alloc_nomem (void)\n{\n  errno = ENOMEM;\n  return NULL;\n}",
     "calls": [
       {
-        "caller": "include\\ialloc.h:imalloc",
-        "span": "include\\ialloc.h:60:39:60:57",
+        "caller": "include/ialloc.h:imalloc",
+        "span": "include/ialloc.h:60:39:60:57",
         "source": "return s <= SIZE_MAX ? malloc (s) : _gl_alloc_nomem ();"
       },
       {
-        "caller": "include\\ialloc.h:irealloc",
-        "span": "include\\ialloc.h:83:12:83:30",
+        "caller": "include/ialloc.h:irealloc",
+        "span": "include/ialloc.h:83:12:83:30",
         "source": "return _gl_alloc_nomem ();"
       },
       {
-        "caller": "include\\ialloc.h:icalloc",
-        "span": "include\\ialloc.h:97:16:97:34",
+        "caller": "include/ialloc.h:icalloc",
+        "span": "include/ialloc.h:97:16:97:34",
         "source": "return _gl_alloc_nomem ();"
       },
       {
-        "caller": "include\\ialloc.h:icalloc",
-        "span": "include\\ialloc.h:103:16:103:34",
+        "caller": "include/ialloc.h:icalloc",
+        "span": "include/ialloc.h:103:16:103:34",
         "source": "return _gl_alloc_nomem ();"
       },
       {
-        "caller": "include\\ialloc.h:ireallocarray",
-        "span": "include\\ialloc.h:131:12:131:30",
+        "caller": "include/ialloc.h:ireallocarray",
+        "span": "include/ialloc.h:131:12:131:30",
         "source": "return _gl_alloc_nomem ();"
       }
     ],
@@ -3198,10 +3198,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\ialloc.h:imalloc",
-    "span": "include\\ialloc.h:55:1:61:1",
+    "func_defid": "include/ialloc.h:imalloc",
+    "span": "include/ialloc.h:55:1:61:1",
     "pieces": [
-      "include\\ialloc.h:55:1:61:1"
+      "include/ialloc.h:55:1:61:1"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -3218,10 +3218,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\ialloc.h:irealloc",
-    "span": "include\\ialloc.h:66:1:84:1",
+    "func_defid": "include/ialloc.h:irealloc",
+    "span": "include/ialloc.h:66:1:84:1",
     "pieces": [
-      "include\\ialloc.h:66:1:84:1"
+      "include/ialloc.h:66:1:84:1"
     ],
     "sub_chunks": [],
     "num_lines": 19,
@@ -3238,10 +3238,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\ialloc.h:icalloc",
-    "span": "include\\ialloc.h:89:1:107:1",
+    "func_defid": "include/ialloc.h:icalloc",
+    "span": "include/ialloc.h:89:1:107:1",
     "pieces": [
-      "include\\ialloc.h:89:1:107:1"
+      "include/ialloc.h:89:1:107:1"
     ],
     "sub_chunks": [],
     "num_lines": 19,
@@ -3258,10 +3258,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\ialloc.h:ireallocarray",
-    "span": "include\\ialloc.h:112:1:132:1",
+    "func_defid": "include/ialloc.h:ireallocarray",
+    "span": "include/ialloc.h:112:1:132:1",
     "pieces": [
-      "include\\ialloc.h:112:1:132:1"
+      "include/ialloc.h:112:1:132:1"
     ],
     "sub_chunks": [],
     "num_lines": 21,
@@ -3278,10 +3278,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\ioblksize.h:io_blksize",
-    "span": "include\\ioblksize.h:79:1:110:2",
+    "func_defid": "include/ioblksize.h:io_blksize",
+    "span": "include/ioblksize.h:79:1:110:2",
     "pieces": [
-      "include\\ioblksize.h:79:1:110:2"
+      "include/ioblksize.h:79:1:110:2"
     ],
     "sub_chunks": [],
     "num_lines": 32,
@@ -3303,10 +3303,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\openat.h:chownat",
-    "span": "include\\openat.h:68:1:72:2",
+    "func_defid": "include/openat.h:chownat",
+    "span": "include/openat.h:68:1:72:2",
     "pieces": [
-      "include\\openat.h:68:1:72:2"
+      "include/openat.h:68:1:72:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3317,10 +3317,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\openat.h:lchownat",
-    "span": "include\\openat.h:74:1:78:2",
+    "func_defid": "include/openat.h:lchownat",
+    "span": "include/openat.h:74:1:78:2",
     "pieces": [
-      "include\\openat.h:74:1:78:2"
+      "include/openat.h:74:1:78:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3331,10 +3331,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\openat.h:chmodat",
-    "span": "include\\openat.h:88:1:92:2",
+    "func_defid": "include/openat.h:chmodat",
+    "span": "include/openat.h:88:1:92:2",
     "pieces": [
-      "include\\openat.h:88:1:92:2"
+      "include/openat.h:88:1:92:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3345,10 +3345,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\openat.h:lchmodat",
-    "span": "include\\openat.h:94:1:98:2",
+    "func_defid": "include/openat.h:lchmodat",
+    "span": "include/openat.h:94:1:98:2",
     "pieces": [
-      "include\\openat.h:94:1:98:2"
+      "include/openat.h:94:1:98:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3359,10 +3359,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\openat.h:statat",
-    "span": "include\\openat.h:109:15:113:2",
+    "func_defid": "include/openat.h:statat",
+    "span": "include/openat.h:109:15:113:2",
     "pieces": [
-      "include\\openat.h:109:15:113:2"
+      "include/openat.h:109:15:113:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3373,10 +3373,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\openat.h:lstatat",
-    "span": "include\\openat.h:116:15:120:2",
+    "func_defid": "include/openat.h:lstatat",
+    "span": "include/openat.h:116:15:120:2",
     "pieces": [
-      "include\\openat.h:116:15:120:2"
+      "include/openat.h:116:15:120:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3387,10 +3387,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\same-inode.h:psame_inode",
-    "span": "include\\same-inode.h:82:1:86:2",
+    "func_defid": "include/same-inode.h:psame_inode",
+    "span": "include/same-inode.h:82:1:86:2",
     "pieces": [
-      "include\\same-inode.h:82:1:86:2"
+      "include/same-inode.h:82:1:86:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3401,10 +3401,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_clz",
-    "span": "include\\stdbit.h:137:1:141:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_clz",
+    "span": "include/stdbit.h:137:1:141:2",
     "pieces": [
-      "include\\stdbit.h:137:1:141:2"
+      "include/stdbit.h:137:1:141:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3415,10 +3415,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_clzl",
-    "span": "include\\stdbit.h:142:1:146:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_clzl",
+    "span": "include/stdbit.h:142:1:146:2",
     "pieces": [
-      "include\\stdbit.h:142:1:146:2"
+      "include/stdbit.h:142:1:146:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3429,10 +3429,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_clzll",
-    "span": "include\\stdbit.h:147:1:151:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_clzll",
+    "span": "include/stdbit.h:147:1:151:2",
     "pieces": [
-      "include\\stdbit.h:147:1:151:2"
+      "include/stdbit.h:147:1:151:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3443,10 +3443,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_clzl",
-    "span": "include\\stdbit.h:157:1:162:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_clzl",
+    "span": "include/stdbit.h:157:1:162:2",
     "pieces": [
-      "include\\stdbit.h:157:1:162:2"
+      "include/stdbit.h:157:1:162:2"
     ],
     "sub_chunks": [],
     "num_lines": 6,
@@ -3457,10 +3457,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_clz",
-    "span": "include\\stdbit.h:163:1:167:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_clz",
+    "span": "include/stdbit.h:163:1:167:2",
     "pieces": [
-      "include\\stdbit.h:163:1:167:2"
+      "include/stdbit.h:163:1:167:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3471,10 +3471,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_clzll",
-    "span": "include\\stdbit.h:168:1:178:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_clzll",
+    "span": "include/stdbit.h:168:1:178:2",
     "pieces": [
-      "include\\stdbit.h:168:1:178:2"
+      "include/stdbit.h:168:1:178:2"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -3485,33 +3485,33 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_clzll",
-    "span": "include\\stdbit.h:182:1:195:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_clzll",
+    "span": "include/stdbit.h:182:1:195:2",
     "pieces": [
-      "include\\stdbit.h:182:1:195:2"
+      "include/stdbit.h:182:1:195:2"
     ],
     "sub_chunks": [],
     "num_lines": 14,
     "source": "L_STDBIT_INLINE int\n__gl_stdbit_clzll (unsigned long long int n)\n{\n  int r = 0;\n  for (int i = 8 * sizeof n >> 1; 1 << 6 <= i; i >>= 1)\n    {\n      int a = (1ull << i <= n) * i; n >>= a; r += a;\n    }\n  int a5 = (0x00000000ffffffff < n) << 5; n >>= a5; r += a5;\n  int a4 = (0x000000000000ffff < n) << 4; n >>= a4; r += a4;\n  int a3 = (0x00000000000000ff < n) << 3; n >>= a3; r += a3;\n  int a2 = (0x000000000000000f < n) << 2; n >>= a2; r += a2;\n  return (8 * sizeof n - (1 << 2) - r) + ((0x11112234ull >> (n << 2)) & 0xf);\n}\n_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_clz",
-        "span": "include\\stdbit.h:199:10:199:31",
+        "caller": "include/stdbit.h:__gl_stdbit_clz",
+        "span": "include/stdbit.h:199:10:199:31",
         "source": "return __gl_stdbit_clzll (n) - 8 * (sizeof 0ull - sizeof 0u);"
       },
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_clzl",
-        "span": "include\\stdbit.h:204:10:204:31",
+        "caller": "include/stdbit.h:__gl_stdbit_clzl",
+        "span": "include/stdbit.h:204:10:204:31",
         "source": "return __gl_stdbit_clzll (n) - 8 * (sizeof 0ull - sizeof 0ul);"
       },
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_ctzll",
-        "span": "include\\stdbit.h:269:30:269:56",
+        "caller": "include/stdbit.h:__gl_stdbit_ctzll",
+        "span": "include/stdbit.h:269:30:269:56",
         "source": "return 8 * sizeof n - (n ? __gl_stdbit_clzll (n & -n) + 1 : 0);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_leading_zeros_ull",
-        "span": "include\\stdbit.h:421:10:421:31",
+        "caller": "include/stdbit.h:stdc_leading_zeros_ull",
+        "span": "include/stdbit.h:421:10:421:31",
         "source": "return __gl_stdbit_clzll (n);"
       }
     ],
@@ -3520,23 +3520,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_clz",
-    "span": "include\\stdbit.h:196:1:200:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_clz",
+    "span": "include/stdbit.h:196:1:200:2",
     "pieces": [
-      "include\\stdbit.h:196:1:200:2"
+      "include/stdbit.h:196:1:200:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "L_STDBIT_INLINE int\n__gl_stdbit_clz (unsigned int n)\n{\n  return __gl_stdbit_clzll (n) - 8 * (sizeof 0ull - sizeof 0u);\n}\n_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_ctz",
-        "span": "include\\stdbit.h:259:30:259:54",
+        "caller": "include/stdbit.h:__gl_stdbit_ctz",
+        "span": "include/stdbit.h:259:30:259:54",
         "source": "return 8 * sizeof n - (n ? __gl_stdbit_clz (n & -n) + 1 : 0);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_leading_zeros_ui",
-        "span": "include\\stdbit.h:397:10:397:29",
+        "caller": "include/stdbit.h:stdc_leading_zeros_ui",
+        "span": "include/stdbit.h:397:10:397:29",
         "source": "return __gl_stdbit_clz (n);"
       }
     ],
@@ -3545,33 +3545,33 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_clzl",
-    "span": "include\\stdbit.h:201:1:205:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_clzl",
+    "span": "include/stdbit.h:201:1:205:2",
     "pieces": [
-      "include\\stdbit.h:201:1:205:2"
+      "include/stdbit.h:201:1:205:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "L_STDBIT_INLINE int\n__gl_stdbit_clzl (unsigned long int n)\n{\n  return __gl_stdbit_clzll (n) - 8 * (sizeof 0ull - sizeof 0ul);\n}\n#",
     "calls": [
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_clz",
-        "span": "include\\stdbit.h:166:10:166:30",
+        "caller": "include/stdbit.h:__gl_stdbit_clz",
+        "span": "include/stdbit.h:166:10:166:30",
         "source": "return __gl_stdbit_clzl (n) - 8 * (sizeof 0ul - sizeof n);"
       },
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_clzll",
-        "span": "include\\stdbit.h:176:10:176:40",
+        "caller": "include/stdbit.h:__gl_stdbit_clzll",
+        "span": "include/stdbit.h:176:10:176:40",
         "source": "return __gl_stdbit_clzl (hi ? hi : n) + (hi ? 0 : 32);"
       },
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_ctzl",
-        "span": "include\\stdbit.h:264:30:264:55",
+        "caller": "include/stdbit.h:__gl_stdbit_ctzl",
+        "span": "include/stdbit.h:264:30:264:55",
         "source": "return 8 * sizeof n - (n ? __gl_stdbit_clzl (n & -n) + 1 : 0);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_leading_zeros_ul",
-        "span": "include\\stdbit.h:415:10:415:30",
+        "caller": "include/stdbit.h:stdc_leading_zeros_ul",
+        "span": "include/stdbit.h:415:10:415:30",
         "source": "return __gl_stdbit_clzl (n);"
       }
     ],
@@ -3580,10 +3580,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_ctz",
-    "span": "include\\stdbit.h:210:1:214:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_ctz",
+    "span": "include/stdbit.h:210:1:214:2",
     "pieces": [
-      "include\\stdbit.h:210:1:214:2"
+      "include/stdbit.h:210:1:214:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3594,10 +3594,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_ctzl",
-    "span": "include\\stdbit.h:215:1:219:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_ctzl",
+    "span": "include/stdbit.h:215:1:219:2",
     "pieces": [
-      "include\\stdbit.h:215:1:219:2"
+      "include/stdbit.h:215:1:219:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3608,10 +3608,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_ctzll",
-    "span": "include\\stdbit.h:220:1:224:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_ctzll",
+    "span": "include/stdbit.h:220:1:224:2",
     "pieces": [
-      "include\\stdbit.h:220:1:224:2"
+      "include/stdbit.h:220:1:224:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3622,10 +3622,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_ctzl",
-    "span": "include\\stdbit.h:230:1:235:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_ctzl",
+    "span": "include/stdbit.h:230:1:235:2",
     "pieces": [
-      "include\\stdbit.h:230:1:235:2"
+      "include/stdbit.h:230:1:235:2"
     ],
     "sub_chunks": [],
     "num_lines": 6,
@@ -3636,10 +3636,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_ctz",
-    "span": "include\\stdbit.h:236:1:240:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_ctz",
+    "span": "include/stdbit.h:236:1:240:2",
     "pieces": [
-      "include\\stdbit.h:236:1:240:2"
+      "include/stdbit.h:236:1:240:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -3650,10 +3650,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_ctzll",
-    "span": "include\\stdbit.h:241:1:252:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_ctzll",
+    "span": "include/stdbit.h:241:1:252:2",
     "pieces": [
-      "include\\stdbit.h:241:1:252:2"
+      "include/stdbit.h:241:1:252:2"
     ],
     "sub_chunks": [],
     "num_lines": 12,
@@ -3664,18 +3664,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_ctz",
-    "span": "include\\stdbit.h:256:1:260:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_ctz",
+    "span": "include/stdbit.h:256:1:260:2",
     "pieces": [
-      "include\\stdbit.h:256:1:260:2"
+      "include/stdbit.h:256:1:260:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "L_STDBIT_INLINE int\n__gl_stdbit_ctz (unsigned int n)\n{\n  return 8 * sizeof n - (n ? __gl_stdbit_clz (n & -n) + 1 : 0);\n}\n_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_trailing_zeros_ui",
-        "span": "include\\stdbit.h:485:10:485:29",
+        "caller": "include/stdbit.h:stdc_trailing_zeros_ui",
+        "span": "include/stdbit.h:485:10:485:29",
         "source": "return __gl_stdbit_ctz (n);"
       }
     ],
@@ -3684,28 +3684,28 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_ctzl",
-    "span": "include\\stdbit.h:261:1:265:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_ctzl",
+    "span": "include/stdbit.h:261:1:265:2",
     "pieces": [
-      "include\\stdbit.h:261:1:265:2"
+      "include/stdbit.h:261:1:265:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "L_STDBIT_INLINE int\n__gl_stdbit_ctzl (unsigned long int n)\n{\n  return 8 * sizeof n - (n ? __gl_stdbit_clzl (n & -n) + 1 : 0);\n}\n_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_ctz",
-        "span": "include\\stdbit.h:239:10:239:65",
+        "caller": "include/stdbit.h:__gl_stdbit_ctz",
+        "span": "include/stdbit.h:239:10:239:65",
         "source": "return __gl_stdbit_ctzl (n | (1ul << (8 * sizeof n - 1) << 1));"
       },
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_ctzll",
-        "span": "include\\stdbit.h:249:10:249:46",
+        "caller": "include/stdbit.h:__gl_stdbit_ctzll",
+        "span": "include/stdbit.h:249:10:249:46",
         "source": "return __gl_stdbit_ctzl (lo ? lo : n >> 32) + (lo ? 0 : 32);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_trailing_zeros_ul",
-        "span": "include\\stdbit.h:503:10:503:30",
+        "caller": "include/stdbit.h:stdc_trailing_zeros_ul",
+        "span": "include/stdbit.h:503:10:503:30",
         "source": "return __gl_stdbit_ctzl (n);"
       }
     ],
@@ -3714,18 +3714,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_ctzll",
-    "span": "include\\stdbit.h:266:1:270:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_ctzll",
+    "span": "include/stdbit.h:266:1:270:2",
     "pieces": [
-      "include\\stdbit.h:266:1:270:2"
+      "include/stdbit.h:266:1:270:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "L_STDBIT_INLINE int\n__gl_stdbit_ctzll (unsigned long long int n)\n{\n  return 8 * sizeof n - (n ? __gl_stdbit_clzll (n & -n) + 1 : 0);\n}\n#",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_trailing_zeros_ull",
-        "span": "include\\stdbit.h:509:10:509:31",
+        "caller": "include/stdbit.h:stdc_trailing_zeros_ull",
+        "span": "include/stdbit.h:509:10:509:31",
         "source": "return __gl_stdbit_ctzll (n);"
       }
     ],
@@ -3734,28 +3734,28 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_popcount_wide",
-    "span": "include\\stdbit.h:280:1:325:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_popcount_wide",
+    "span": "include/stdbit.h:280:1:325:2",
     "pieces": [
-      "include\\stdbit.h:280:1:325:2"
+      "include/stdbit.h:280:1:325:2"
     ],
     "sub_chunks": [],
     "num_lines": 46,
     "source": "L_STDC_COUNT_ONES_INLINE int\n__gl_stdbit_popcount_wide (unsigned long long int n)\n{\n  if (sizeof n & (sizeof n - 1))\n    {\n      /* Use a simple O(log N) loop on theoretical platforms where N's\n         width is not a power of 2.  */\n      int count = 0;\n      for (int i = 0; i < 8 * sizeof n; i++, n >>= 1)\n        count += n & 1;\n      return count;\n    }\n  else\n    {\n      /* N's width is a power of 2; count in parallel.  */\n      unsigned long long int\n        max = -1ull,\n        x555555 = max / (1 << 1 | 1),\t/* 0x555555... */\n        x333333 = max / (1 << 2 | 1),\t/* 0x333333... */\n        x0f0f0f = max / (1 << 4 | 1),\t/* 0x0f0f0f... */\n        x010101 = max / ((1 << 8) - 1),\t/* 0x010101... */\n        x000_7f = max / 0xffffffffffffffff * 0x7f; /* 0x000000000000007f... */\n      n -= (n >> 1) & x555555;\n      n = (n & x333333) + ((n >> 2) & x333333);\n      n = (n + (n >> 4)) & x0f0f0f;\n\n      /* If the popcount always fits in 8 bits, multiply so that the\n         popcount is in the leading 8 bits of the product; these days\n         this is typically faster than the alternative below.  */\n      if (8 * sizeof n < 1 << 8)\n        return n * x010101 >> 8 * (sizeof n - 1);\n\n      /* N is at least 256 bits wide!  Fall back on an O(log log N)\n         loop that a compiler could unroll.  Unroll the first three\n         iterations by hand, to skip some division and masking.  This\n         is the most we can easily do without hassling with constants\n         that a typical-platform compiler would reject.  */\n      n += n >> (1 << 3);\n      n += n >> (1 << 4);\n      n += n >> (1 << 5);\n      n &= x000_7f;\n      for (int i = 64; i < 8 * sizeof n; i <<= 1)\n        n = (n + (n >> i)) & max / (1ull << i | 1);\n      return n;\n    }\n}\n\n",
     "calls": [
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_popcount",
-        "span": "include\\stdbit.h:365:13:365:42",
+        "caller": "include/stdbit.h:__gl_stdbit_popcount",
+        "span": "include/stdbit.h:365:13:365:42",
         "source": ": __gl_stdbit_popcount_wide (n));"
       },
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_popcountl",
-        "span": "include\\stdbit.h:372:13:372:42",
+        "caller": "include/stdbit.h:__gl_stdbit_popcountl",
+        "span": "include/stdbit.h:372:13:372:42",
         "source": ": __gl_stdbit_popcount_wide (n));"
       },
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_popcountll",
-        "span": "include\\stdbit.h:379:13:379:42",
+        "caller": "include/stdbit.h:__gl_stdbit_popcountll",
+        "span": "include/stdbit.h:379:13:379:42",
         "source": ": __gl_stdbit_popcount_wide (n));"
       }
     ],
@@ -3764,18 +3764,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__popcnt64",
-    "span": "include\\stdbit.h:334:1:338:2",
+    "func_defid": "include/stdbit.h:__popcnt64",
+    "span": "include/stdbit.h:334:1:338:2",
     "pieces": [
-      "include\\stdbit.h:334:1:338:2"
+      "include/stdbit.h:334:1:338:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "L_STDC_COUNT_ONES_INLINE int\n__popcnt64 (unsigned long long int n)\n{\n  return __popcnt (n >> 32) + __popcnt (n);\n}\n#",
     "calls": [
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_popcountll",
-        "span": "include\\stdbit.h:378:13:378:27",
+        "caller": "include/stdbit.h:__gl_stdbit_popcountll",
+        "span": "include/stdbit.h:378:13:378:27",
         "source": "? __popcnt64 (n)"
       }
     ],
@@ -3784,28 +3784,28 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_popcount_supported",
-    "span": "include\\stdbit.h:345:1:359:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_popcount_supported",
+    "span": "include/stdbit.h:345:1:359:2",
     "pieces": [
-      "include\\stdbit.h:345:1:359:2"
+      "include/stdbit.h:345:1:359:2"
     ],
     "sub_chunks": [],
     "num_lines": 15,
     "source": "L_STDC_COUNT_ONES_INLINE bool\n__gl_stdbit_popcount_supported (void)\n{\n  if (!__gl_stdbit_popcount_support)\n    {\n      /* Do as described in\n         <https://docs.microsoft.com/en-us/cpp/intrinsics/popcnt16-popcnt-popcnt64>\n         Although Microsoft started requiring POPCNT in MS-Windows 11 24H2,\n         we'll be more cautious.  */\n      int cpu_info[4];\n      __cpuid (cpu_info, 1);\n      __gl_stdbit_popcount_support = cpu_info[2] & 1 << 23 ? 1 : -1;\n    }\n  return 0 < __gl_stdbit_popcount_support;\n}\n_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_popcount",
-        "span": "include\\stdbit.h:363:11:363:44",
+        "caller": "include/stdbit.h:__gl_stdbit_popcount",
+        "span": "include/stdbit.h:363:11:363:44",
         "source": "return (__gl_stdbit_popcount_supported ()"
       },
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_popcountl",
-        "span": "include\\stdbit.h:370:11:370:44",
+        "caller": "include/stdbit.h:__gl_stdbit_popcountl",
+        "span": "include/stdbit.h:370:11:370:44",
         "source": "return (__gl_stdbit_popcount_supported ()"
       },
       {
-        "caller": "include\\stdbit.h:__gl_stdbit_popcountll",
-        "span": "include\\stdbit.h:377:11:377:44",
+        "caller": "include/stdbit.h:__gl_stdbit_popcountll",
+        "span": "include/stdbit.h:377:11:377:44",
         "source": "return (__gl_stdbit_popcount_supported ()"
       }
     ],
@@ -3814,18 +3814,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_popcount",
-    "span": "include\\stdbit.h:360:1:366:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_popcount",
+    "span": "include/stdbit.h:360:1:366:2",
     "pieces": [
-      "include\\stdbit.h:360:1:366:2"
+      "include/stdbit.h:360:1:366:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
     "source": "L_STDC_COUNT_ONES_INLINE int\n__gl_stdbit_popcount (unsigned int n)\n{\n  return (__gl_stdbit_popcount_supported ()\n          ? __popcnt (n)\n          : __gl_stdbit_popcount_wide (n));\n}\n_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_count_ones_ui",
-        "span": "include\\stdbit.h:789:10:789:34",
+        "caller": "include/stdbit.h:stdc_count_ones_ui",
+        "span": "include/stdbit.h:789:10:789:34",
         "source": "return __gl_stdbit_popcount (n);"
       }
     ],
@@ -3834,18 +3834,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_popcountl",
-    "span": "include\\stdbit.h:367:1:373:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_popcountl",
+    "span": "include/stdbit.h:367:1:373:2",
     "pieces": [
-      "include\\stdbit.h:367:1:373:2"
+      "include/stdbit.h:367:1:373:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
     "source": "L_STDC_COUNT_ONES_INLINE int\n__gl_stdbit_popcountl (unsigned long int n)\n{\n  return (__gl_stdbit_popcount_supported ()\n          ? __popcnt (n)\n          : __gl_stdbit_popcount_wide (n));\n}\n_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_count_ones_ul",
-        "span": "include\\stdbit.h:807:10:807:35",
+        "caller": "include/stdbit.h:stdc_count_ones_ul",
+        "span": "include/stdbit.h:807:10:807:35",
         "source": "return __gl_stdbit_popcountl (n);"
       }
     ],
@@ -3854,18 +3854,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:__gl_stdbit_popcountll",
-    "span": "include\\stdbit.h:374:1:380:2",
+    "func_defid": "include/stdbit.h:__gl_stdbit_popcountll",
+    "span": "include/stdbit.h:374:1:380:2",
     "pieces": [
-      "include\\stdbit.h:374:1:380:2"
+      "include/stdbit.h:374:1:380:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
     "source": "L_STDC_COUNT_ONES_INLINE int\n__gl_stdbit_popcountll (unsigned long long int n)\n{\n  return (__gl_stdbit_popcount_supported ()\n          ? __popcnt64 (n)\n          : __gl_stdbit_popcount_wide (n));\n}\n#",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_count_ones_ull",
-        "span": "include\\stdbit.h:813:10:813:36",
+        "caller": "include/stdbit.h:stdc_count_ones_ull",
+        "span": "include/stdbit.h:813:10:813:36",
         "source": "return __gl_stdbit_popcountll (n);"
       }
     ],
@@ -3874,38 +3874,38 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_leading_zeros_ui",
-    "span": "include\\stdbit.h:394:1:398:2",
+    "func_defid": "include/stdbit.h:stdc_leading_zeros_ui",
+    "span": "include/stdbit.h:394:1:398:2",
     "pieces": [
-      "include\\stdbit.h:394:1:398:2"
+      "include/stdbit.h:394:1:398:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "_STDC_LEADING_ZEROS_INLINE unsigned int\nstdc_leading_zeros_ui (unsigned int n)\n{\n  return __gl_stdbit_clz (n);\n}\n\n_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_leading_zeros_uc",
-        "span": "include\\stdbit.h:403:10:403:35",
+        "caller": "include/stdbit.h:stdc_leading_zeros_uc",
+        "span": "include/stdbit.h:403:10:403:35",
         "source": "return stdc_leading_zeros_ui (n) - 8 * (sizeof 0u - sizeof n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_leading_zeros_us",
-        "span": "include\\stdbit.h:409:10:409:35",
+        "caller": "include/stdbit.h:stdc_leading_zeros_us",
+        "span": "include/stdbit.h:409:10:409:35",
         "source": "return stdc_leading_zeros_ui (n) - 8 * (sizeof 0u - sizeof n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_leading_ones_ui",
-        "span": "include\\stdbit.h:453:10:453:36",
+        "caller": "include/stdbit.h:stdc_leading_ones_ui",
+        "span": "include/stdbit.h:453:10:453:36",
         "source": "return stdc_leading_zeros_ui (~n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_first_leading_one_ui",
-        "span": "include\\stdbit.h:643:24:643:49",
+        "caller": "include/stdbit.h:stdc_first_leading_one_ui",
+        "span": "include/stdbit.h:643:24:643:49",
         "source": "unsigned int count = stdc_leading_zeros_ui (n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_bit_width_ui",
-        "span": "include\\stdbit.h:939:25:939:50",
+        "caller": "include/stdbit.h:stdc_bit_width_ui",
+        "span": "include/stdbit.h:939:25:939:50",
         "source": "return 8 * sizeof n - stdc_leading_zeros_ui (n);"
       }
     ],
@@ -3914,28 +3914,28 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_leading_zeros_uc",
-    "span": "include\\stdbit.h:400:1:404:2",
+    "func_defid": "include/stdbit.h:stdc_leading_zeros_uc",
+    "span": "include/stdbit.h:400:1:404:2",
     "pieces": [
-      "include\\stdbit.h:400:1:404:2"
+      "include/stdbit.h:400:1:404:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "_STDC_LEADING_ZEROS_INLINE unsigned int\nstdc_leading_zeros_uc (unsigned char n)\n{\n  return stdc_leading_zeros_ui (n) - 8 * (sizeof 0u - sizeof n);\n}\n\n_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_leading_ones_uc",
-        "span": "include\\stdbit.h:441:10:441:36",
+        "caller": "include/stdbit.h:stdc_leading_ones_uc",
+        "span": "include/stdbit.h:441:10:441:36",
         "source": "return stdc_leading_zeros_uc (~n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_first_leading_one_uc",
-        "span": "include\\stdbit.h:627:24:627:49",
+        "caller": "include/stdbit.h:stdc_first_leading_one_uc",
+        "span": "include/stdbit.h:627:24:627:49",
         "source": "unsigned int count = stdc_leading_zeros_uc (n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_bit_width_uc",
-        "span": "include\\stdbit.h:927:25:927:50",
+        "caller": "include/stdbit.h:stdc_bit_width_uc",
+        "span": "include/stdbit.h:927:25:927:50",
         "source": "return 8 * sizeof n - stdc_leading_zeros_uc (n);"
       }
     ],
@@ -3944,28 +3944,28 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_leading_zeros_us",
-    "span": "include\\stdbit.h:406:1:410:2",
+    "func_defid": "include/stdbit.h:stdc_leading_zeros_us",
+    "span": "include/stdbit.h:406:1:410:2",
     "pieces": [
-      "include\\stdbit.h:406:1:410:2"
+      "include/stdbit.h:406:1:410:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "_STDC_LEADING_ZEROS_INLINE unsigned int\nstdc_leading_zeros_us (unsigned short int n)\n{\n  return stdc_leading_zeros_ui (n) - 8 * (sizeof 0u - sizeof n);\n}\n\n_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_leading_ones_us",
-        "span": "include\\stdbit.h:447:10:447:36",
+        "caller": "include/stdbit.h:stdc_leading_ones_us",
+        "span": "include/stdbit.h:447:10:447:36",
         "source": "return stdc_leading_zeros_us (~n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_first_leading_one_us",
-        "span": "include\\stdbit.h:635:24:635:49",
+        "caller": "include/stdbit.h:stdc_first_leading_one_us",
+        "span": "include/stdbit.h:635:24:635:49",
         "source": "unsigned int count = stdc_leading_zeros_us (n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_bit_width_us",
-        "span": "include\\stdbit.h:933:25:933:50",
+        "caller": "include/stdbit.h:stdc_bit_width_us",
+        "span": "include/stdbit.h:933:25:933:50",
         "source": "return 8 * sizeof n - stdc_leading_zeros_us (n);"
       }
     ],
@@ -3974,28 +3974,28 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_leading_zeros_ul",
-    "span": "include\\stdbit.h:412:1:416:2",
+    "func_defid": "include/stdbit.h:stdc_leading_zeros_ul",
+    "span": "include/stdbit.h:412:1:416:2",
     "pieces": [
-      "include\\stdbit.h:412:1:416:2"
+      "include/stdbit.h:412:1:416:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "_STDC_LEADING_ZEROS_INLINE unsigned int\nstdc_leading_zeros_ul (unsigned long int n)\n{\n  return __gl_stdbit_clzl (n);\n}\n\n_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_leading_ones_ul",
-        "span": "include\\stdbit.h:459:10:459:36",
+        "caller": "include/stdbit.h:stdc_leading_ones_ul",
+        "span": "include/stdbit.h:459:10:459:36",
         "source": "return stdc_leading_zeros_ul (~n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_first_leading_one_ul",
-        "span": "include\\stdbit.h:651:24:651:49",
+        "caller": "include/stdbit.h:stdc_first_leading_one_ul",
+        "span": "include/stdbit.h:651:24:651:49",
         "source": "unsigned int count = stdc_leading_zeros_ul (n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_bit_width_ul",
-        "span": "include\\stdbit.h:945:25:945:50",
+        "caller": "include/stdbit.h:stdc_bit_width_ul",
+        "span": "include/stdbit.h:945:25:945:50",
         "source": "return 8 * sizeof n - stdc_leading_zeros_ul (n);"
       }
     ],
@@ -4004,33 +4004,33 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_leading_zeros_ull",
-    "span": "include\\stdbit.h:418:1:422:2",
+    "func_defid": "include/stdbit.h:stdc_leading_zeros_ull",
+    "span": "include/stdbit.h:418:1:422:2",
     "pieces": [
-      "include\\stdbit.h:418:1:422:2"
+      "include/stdbit.h:418:1:422:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "_STDC_LEADING_ZEROS_INLINE unsigned int\nstdc_leading_zeros_ull (unsigned long long int n)\n{\n  return __gl_stdbit_clzll (n);\n}\n\n#",
     "calls": [
       {
-        "caller": "include\\ioblksize.h:io_blksize",
-        "span": "include\\ioblksize.h:97:27:97:61",
+        "caller": "include/ioblksize.h:io_blksize",
+        "span": "include/ioblksize.h:97:27:97:61",
         "source": "int leading_zeros = stdc_leading_zeros_ull (blocksize);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_leading_ones_ull",
-        "span": "include\\stdbit.h:465:10:465:37",
+        "caller": "include/stdbit.h:stdc_leading_ones_ull",
+        "span": "include/stdbit.h:465:10:465:37",
         "source": "return stdc_leading_zeros_ull (~n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_first_leading_one_ull",
-        "span": "include\\stdbit.h:659:24:659:50",
+        "caller": "include/stdbit.h:stdc_first_leading_one_ull",
+        "span": "include/stdbit.h:659:24:659:50",
         "source": "unsigned int count = stdc_leading_zeros_ull (n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_bit_width_ull",
-        "span": "include\\stdbit.h:951:25:951:51",
+        "caller": "include/stdbit.h:stdc_bit_width_ull",
+        "span": "include/stdbit.h:951:25:951:51",
         "source": "return 8 * sizeof n - stdc_leading_zeros_ull (n);"
       }
     ],
@@ -4039,18 +4039,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_leading_ones_uc",
-    "span": "include\\stdbit.h:438:1:442:2",
+    "func_defid": "include/stdbit.h:stdc_leading_ones_uc",
+    "span": "include/stdbit.h:438:1:442:2",
     "pieces": [
-      "include\\stdbit.h:438:1:442:2"
+      "include/stdbit.h:438:1:442:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "STDC_LEADING_ONES_INLINE unsigned int\nstdc_leading_ones_uc (unsigned char n)\n{\n  return stdc_leading_zeros_uc (~n);\n}\n\n_G",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_first_leading_zero_uc",
-        "span": "include\\stdbit.h:573:24:573:48",
+        "caller": "include/stdbit.h:stdc_first_leading_zero_uc",
+        "span": "include/stdbit.h:573:24:573:48",
         "source": "unsigned int count = stdc_leading_ones_uc (n);"
       }
     ],
@@ -4059,18 +4059,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_leading_ones_us",
-    "span": "include\\stdbit.h:444:1:448:2",
+    "func_defid": "include/stdbit.h:stdc_leading_ones_us",
+    "span": "include/stdbit.h:444:1:448:2",
     "pieces": [
-      "include\\stdbit.h:444:1:448:2"
+      "include/stdbit.h:444:1:448:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "STDC_LEADING_ONES_INLINE unsigned int\nstdc_leading_ones_us (unsigned short int n)\n{\n  return stdc_leading_zeros_us (~n);\n}\n\n_G",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_first_leading_zero_us",
-        "span": "include\\stdbit.h:581:24:581:48",
+        "caller": "include/stdbit.h:stdc_first_leading_zero_us",
+        "span": "include/stdbit.h:581:24:581:48",
         "source": "unsigned int count = stdc_leading_ones_us (n);"
       }
     ],
@@ -4079,18 +4079,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_leading_ones_ui",
-    "span": "include\\stdbit.h:450:1:454:2",
+    "func_defid": "include/stdbit.h:stdc_leading_ones_ui",
+    "span": "include/stdbit.h:450:1:454:2",
     "pieces": [
-      "include\\stdbit.h:450:1:454:2"
+      "include/stdbit.h:450:1:454:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "STDC_LEADING_ONES_INLINE unsigned int\nstdc_leading_ones_ui (unsigned int n)\n{\n  return stdc_leading_zeros_ui (~n);\n}\n\n_G",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_first_leading_zero_ui",
-        "span": "include\\stdbit.h:589:24:589:48",
+        "caller": "include/stdbit.h:stdc_first_leading_zero_ui",
+        "span": "include/stdbit.h:589:24:589:48",
         "source": "unsigned int count = stdc_leading_ones_ui (n);"
       }
     ],
@@ -4099,18 +4099,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_leading_ones_ul",
-    "span": "include\\stdbit.h:456:1:460:2",
+    "func_defid": "include/stdbit.h:stdc_leading_ones_ul",
+    "span": "include/stdbit.h:456:1:460:2",
     "pieces": [
-      "include\\stdbit.h:456:1:460:2"
+      "include/stdbit.h:456:1:460:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "STDC_LEADING_ONES_INLINE unsigned int\nstdc_leading_ones_ul (unsigned long int n)\n{\n  return stdc_leading_zeros_ul (~n);\n}\n\n_G",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_first_leading_zero_ul",
-        "span": "include\\stdbit.h:597:24:597:48",
+        "caller": "include/stdbit.h:stdc_first_leading_zero_ul",
+        "span": "include/stdbit.h:597:24:597:48",
         "source": "unsigned int count = stdc_leading_ones_ul (n);"
       }
     ],
@@ -4119,18 +4119,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_leading_ones_ull",
-    "span": "include\\stdbit.h:462:1:466:2",
+    "func_defid": "include/stdbit.h:stdc_leading_ones_ull",
+    "span": "include/stdbit.h:462:1:466:2",
     "pieces": [
-      "include\\stdbit.h:462:1:466:2"
+      "include/stdbit.h:462:1:466:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "STDC_LEADING_ONES_INLINE unsigned int\nstdc_leading_ones_ull (unsigned long long int n)\n{\n  return stdc_leading_zeros_ull (~n);\n}\n\n# ",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_first_leading_zero_ull",
-        "span": "include\\stdbit.h:605:24:605:49",
+        "caller": "include/stdbit.h:stdc_first_leading_zero_ull",
+        "span": "include/stdbit.h:605:24:605:49",
         "source": "unsigned int count = stdc_leading_ones_ull (n);"
       }
     ],
@@ -4139,33 +4139,33 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_trailing_zeros_ui",
-    "span": "include\\stdbit.h:482:1:486:2",
+    "func_defid": "include/stdbit.h:stdc_trailing_zeros_ui",
+    "span": "include/stdbit.h:482:1:486:2",
     "pieces": [
-      "include\\stdbit.h:482:1:486:2"
+      "include/stdbit.h:482:1:486:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "TDC_TRAILING_ZEROS_INLINE unsigned int\nstdc_trailing_zeros_ui (unsigned int n)\n{\n  return __gl_stdbit_ctz (n);\n}\n\n_GL",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_trailing_zeros_uc",
-        "span": "include\\stdbit.h:491:10:491:63",
+        "caller": "include/stdbit.h:stdc_trailing_zeros_uc",
+        "span": "include/stdbit.h:491:10:491:63",
         "source": "return stdc_trailing_zeros_ui (n | (1 + (unsigned char) -1));"
       },
       {
-        "caller": "include\\stdbit.h:stdc_trailing_zeros_us",
-        "span": "include\\stdbit.h:497:10:497:68",
+        "caller": "include/stdbit.h:stdc_trailing_zeros_us",
+        "span": "include/stdbit.h:497:10:497:68",
         "source": "return stdc_trailing_zeros_ui (n | (1 + (unsigned short int) -1));"
       },
       {
-        "caller": "include\\stdbit.h:stdc_trailing_ones_ui",
-        "span": "include\\stdbit.h:541:10:541:37",
+        "caller": "include/stdbit.h:stdc_trailing_ones_ui",
+        "span": "include/stdbit.h:541:10:541:37",
         "source": "return stdc_trailing_zeros_ui (~n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_first_trailing_one_ui",
-        "span": "include\\stdbit.h:751:24:751:50",
+        "caller": "include/stdbit.h:stdc_first_trailing_one_ui",
+        "span": "include/stdbit.h:751:24:751:50",
         "source": "unsigned int count = stdc_trailing_zeros_ui (n);"
       }
     ],
@@ -4174,23 +4174,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_trailing_zeros_uc",
-    "span": "include\\stdbit.h:488:1:492:2",
+    "func_defid": "include/stdbit.h:stdc_trailing_zeros_uc",
+    "span": "include/stdbit.h:488:1:492:2",
     "pieces": [
-      "include\\stdbit.h:488:1:492:2"
+      "include/stdbit.h:488:1:492:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "TDC_TRAILING_ZEROS_INLINE unsigned int\nstdc_trailing_zeros_uc (unsigned char n)\n{\n  return stdc_trailing_zeros_ui (n | (1 + (unsigned char) -1));\n}\n\n_GL",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_trailing_ones_uc",
-        "span": "include\\stdbit.h:529:10:529:37",
+        "caller": "include/stdbit.h:stdc_trailing_ones_uc",
+        "span": "include/stdbit.h:529:10:529:37",
         "source": "return stdc_trailing_zeros_uc (~n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_first_trailing_one_uc",
-        "span": "include\\stdbit.h:735:24:735:50",
+        "caller": "include/stdbit.h:stdc_first_trailing_one_uc",
+        "span": "include/stdbit.h:735:24:735:50",
         "source": "unsigned int count = stdc_trailing_zeros_uc (n);"
       }
     ],
@@ -4199,23 +4199,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_trailing_zeros_us",
-    "span": "include\\stdbit.h:494:1:498:2",
+    "func_defid": "include/stdbit.h:stdc_trailing_zeros_us",
+    "span": "include/stdbit.h:494:1:498:2",
     "pieces": [
-      "include\\stdbit.h:494:1:498:2"
+      "include/stdbit.h:494:1:498:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "TDC_TRAILING_ZEROS_INLINE unsigned int\nstdc_trailing_zeros_us (unsigned short int n)\n{\n  return stdc_trailing_zeros_ui (n | (1 + (unsigned short int) -1));\n}\n\n_GL",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_trailing_ones_us",
-        "span": "include\\stdbit.h:535:10:535:37",
+        "caller": "include/stdbit.h:stdc_trailing_ones_us",
+        "span": "include/stdbit.h:535:10:535:37",
         "source": "return stdc_trailing_zeros_us (~n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_first_trailing_one_us",
-        "span": "include\\stdbit.h:743:24:743:50",
+        "caller": "include/stdbit.h:stdc_first_trailing_one_us",
+        "span": "include/stdbit.h:743:24:743:50",
         "source": "unsigned int count = stdc_trailing_zeros_us (n);"
       }
     ],
@@ -4224,23 +4224,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_trailing_zeros_ul",
-    "span": "include\\stdbit.h:500:1:504:2",
+    "func_defid": "include/stdbit.h:stdc_trailing_zeros_ul",
+    "span": "include/stdbit.h:500:1:504:2",
     "pieces": [
-      "include\\stdbit.h:500:1:504:2"
+      "include/stdbit.h:500:1:504:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "TDC_TRAILING_ZEROS_INLINE unsigned int\nstdc_trailing_zeros_ul (unsigned long int n)\n{\n  return __gl_stdbit_ctzl (n);\n}\n\n_GL",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_trailing_ones_ul",
-        "span": "include\\stdbit.h:547:10:547:37",
+        "caller": "include/stdbit.h:stdc_trailing_ones_ul",
+        "span": "include/stdbit.h:547:10:547:37",
         "source": "return stdc_trailing_zeros_ul (~n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_first_trailing_one_ul",
-        "span": "include\\stdbit.h:759:24:759:50",
+        "caller": "include/stdbit.h:stdc_first_trailing_one_ul",
+        "span": "include/stdbit.h:759:24:759:50",
         "source": "unsigned int count = stdc_trailing_zeros_ul (n);"
       }
     ],
@@ -4249,23 +4249,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_trailing_zeros_ull",
-    "span": "include\\stdbit.h:506:1:510:2",
+    "func_defid": "include/stdbit.h:stdc_trailing_zeros_ull",
+    "span": "include/stdbit.h:506:1:510:2",
     "pieces": [
-      "include\\stdbit.h:506:1:510:2"
+      "include/stdbit.h:506:1:510:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "TDC_TRAILING_ZEROS_INLINE unsigned int\nstdc_trailing_zeros_ull (unsigned long long int n)\n{\n  return __gl_stdbit_ctzll (n);\n}\n\n# d",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_trailing_ones_ull",
-        "span": "include\\stdbit.h:553:10:553:38",
+        "caller": "include/stdbit.h:stdc_trailing_ones_ull",
+        "span": "include/stdbit.h:553:10:553:38",
         "source": "return stdc_trailing_zeros_ull (~n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_first_trailing_one_ull",
-        "span": "include\\stdbit.h:767:24:767:51",
+        "caller": "include/stdbit.h:stdc_first_trailing_one_ull",
+        "span": "include/stdbit.h:767:24:767:51",
         "source": "unsigned int count = stdc_trailing_zeros_ull (n);"
       }
     ],
@@ -4274,18 +4274,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_trailing_ones_uc",
-    "span": "include\\stdbit.h:526:1:530:2",
+    "func_defid": "include/stdbit.h:stdc_trailing_ones_uc",
+    "span": "include/stdbit.h:526:1:530:2",
     "pieces": [
-      "include\\stdbit.h:526:1:530:2"
+      "include/stdbit.h:526:1:530:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "DC_TRAILING_ONES_INLINE unsigned int\nstdc_trailing_ones_uc (unsigned char n)\n{\n  return stdc_trailing_zeros_uc (~n);\n}\n\n_GL_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_first_trailing_zero_uc",
-        "span": "include\\stdbit.h:681:24:681:49",
+        "caller": "include/stdbit.h:stdc_first_trailing_zero_uc",
+        "span": "include/stdbit.h:681:24:681:49",
         "source": "unsigned int count = stdc_trailing_ones_uc (n);"
       }
     ],
@@ -4294,18 +4294,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_trailing_ones_us",
-    "span": "include\\stdbit.h:532:1:536:2",
+    "func_defid": "include/stdbit.h:stdc_trailing_ones_us",
+    "span": "include/stdbit.h:532:1:536:2",
     "pieces": [
-      "include\\stdbit.h:532:1:536:2"
+      "include/stdbit.h:532:1:536:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "DC_TRAILING_ONES_INLINE unsigned int\nstdc_trailing_ones_us (unsigned short int n)\n{\n  return stdc_trailing_zeros_us (~n);\n}\n\n_GL_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_first_trailing_zero_us",
-        "span": "include\\stdbit.h:689:24:689:49",
+        "caller": "include/stdbit.h:stdc_first_trailing_zero_us",
+        "span": "include/stdbit.h:689:24:689:49",
         "source": "unsigned int count = stdc_trailing_ones_us (n);"
       }
     ],
@@ -4314,18 +4314,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_trailing_ones_ui",
-    "span": "include\\stdbit.h:538:1:542:2",
+    "func_defid": "include/stdbit.h:stdc_trailing_ones_ui",
+    "span": "include/stdbit.h:538:1:542:2",
     "pieces": [
-      "include\\stdbit.h:538:1:542:2"
+      "include/stdbit.h:538:1:542:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "DC_TRAILING_ONES_INLINE unsigned int\nstdc_trailing_ones_ui (unsigned int n)\n{\n  return stdc_trailing_zeros_ui (~n);\n}\n\n_GL_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_first_trailing_zero_ui",
-        "span": "include\\stdbit.h:697:24:697:49",
+        "caller": "include/stdbit.h:stdc_first_trailing_zero_ui",
+        "span": "include/stdbit.h:697:24:697:49",
         "source": "unsigned int count = stdc_trailing_ones_ui (n);"
       }
     ],
@@ -4334,18 +4334,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_trailing_ones_ul",
-    "span": "include\\stdbit.h:544:1:548:2",
+    "func_defid": "include/stdbit.h:stdc_trailing_ones_ul",
+    "span": "include/stdbit.h:544:1:548:2",
     "pieces": [
-      "include\\stdbit.h:544:1:548:2"
+      "include/stdbit.h:544:1:548:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "DC_TRAILING_ONES_INLINE unsigned int\nstdc_trailing_ones_ul (unsigned long int n)\n{\n  return stdc_trailing_zeros_ul (~n);\n}\n\n_GL_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_first_trailing_zero_ul",
-        "span": "include\\stdbit.h:705:24:705:49",
+        "caller": "include/stdbit.h:stdc_first_trailing_zero_ul",
+        "span": "include/stdbit.h:705:24:705:49",
         "source": "unsigned int count = stdc_trailing_ones_ul (n);"
       }
     ],
@@ -4354,18 +4354,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_trailing_ones_ull",
-    "span": "include\\stdbit.h:550:1:554:2",
+    "func_defid": "include/stdbit.h:stdc_trailing_ones_ull",
+    "span": "include/stdbit.h:550:1:554:2",
     "pieces": [
-      "include\\stdbit.h:550:1:554:2"
+      "include/stdbit.h:550:1:554:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "DC_TRAILING_ONES_INLINE unsigned int\nstdc_trailing_ones_ull (unsigned long long int n)\n{\n  return stdc_trailing_zeros_ull (~n);\n}\n\n# de",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_first_trailing_zero_ull",
-        "span": "include\\stdbit.h:713:24:713:50",
+        "caller": "include/stdbit.h:stdc_first_trailing_zero_ull",
+        "span": "include/stdbit.h:713:24:713:50",
         "source": "unsigned int count = stdc_trailing_ones_ull (n);"
       }
     ],
@@ -4374,10 +4374,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_leading_zero_uc",
-    "span": "include\\stdbit.h:570:1:576:2",
+    "func_defid": "include/stdbit.h:stdc_first_leading_zero_uc",
+    "span": "include/stdbit.h:570:1:576:2",
     "pieces": [
-      "include\\stdbit.h:570:1:576:2"
+      "include/stdbit.h:570:1:576:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4388,10 +4388,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_leading_zero_us",
-    "span": "include\\stdbit.h:578:1:584:2",
+    "func_defid": "include/stdbit.h:stdc_first_leading_zero_us",
+    "span": "include/stdbit.h:578:1:584:2",
     "pieces": [
-      "include\\stdbit.h:578:1:584:2"
+      "include/stdbit.h:578:1:584:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4402,10 +4402,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_leading_zero_ui",
-    "span": "include\\stdbit.h:586:1:592:2",
+    "func_defid": "include/stdbit.h:stdc_first_leading_zero_ui",
+    "span": "include/stdbit.h:586:1:592:2",
     "pieces": [
-      "include\\stdbit.h:586:1:592:2"
+      "include/stdbit.h:586:1:592:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4416,10 +4416,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_leading_zero_ul",
-    "span": "include\\stdbit.h:594:1:600:2",
+    "func_defid": "include/stdbit.h:stdc_first_leading_zero_ul",
+    "span": "include/stdbit.h:594:1:600:2",
     "pieces": [
-      "include\\stdbit.h:594:1:600:2"
+      "include/stdbit.h:594:1:600:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4430,10 +4430,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_leading_zero_ull",
-    "span": "include\\stdbit.h:602:1:608:2",
+    "func_defid": "include/stdbit.h:stdc_first_leading_zero_ull",
+    "span": "include/stdbit.h:602:1:608:2",
     "pieces": [
-      "include\\stdbit.h:602:1:608:2"
+      "include/stdbit.h:602:1:608:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4444,10 +4444,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_leading_one_uc",
-    "span": "include\\stdbit.h:624:1:630:2",
+    "func_defid": "include/stdbit.h:stdc_first_leading_one_uc",
+    "span": "include/stdbit.h:624:1:630:2",
     "pieces": [
-      "include\\stdbit.h:624:1:630:2"
+      "include/stdbit.h:624:1:630:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4458,10 +4458,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_leading_one_us",
-    "span": "include\\stdbit.h:632:1:638:2",
+    "func_defid": "include/stdbit.h:stdc_first_leading_one_us",
+    "span": "include/stdbit.h:632:1:638:2",
     "pieces": [
-      "include\\stdbit.h:632:1:638:2"
+      "include/stdbit.h:632:1:638:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4472,10 +4472,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_leading_one_ui",
-    "span": "include\\stdbit.h:640:1:646:2",
+    "func_defid": "include/stdbit.h:stdc_first_leading_one_ui",
+    "span": "include/stdbit.h:640:1:646:2",
     "pieces": [
-      "include\\stdbit.h:640:1:646:2"
+      "include/stdbit.h:640:1:646:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4486,10 +4486,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_leading_one_ul",
-    "span": "include\\stdbit.h:648:1:654:2",
+    "func_defid": "include/stdbit.h:stdc_first_leading_one_ul",
+    "span": "include/stdbit.h:648:1:654:2",
     "pieces": [
-      "include\\stdbit.h:648:1:654:2"
+      "include/stdbit.h:648:1:654:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4500,10 +4500,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_leading_one_ull",
-    "span": "include\\stdbit.h:656:1:662:2",
+    "func_defid": "include/stdbit.h:stdc_first_leading_one_ull",
+    "span": "include/stdbit.h:656:1:662:2",
     "pieces": [
-      "include\\stdbit.h:656:1:662:2"
+      "include/stdbit.h:656:1:662:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4514,10 +4514,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_trailing_zero_uc",
-    "span": "include\\stdbit.h:678:1:684:2",
+    "func_defid": "include/stdbit.h:stdc_first_trailing_zero_uc",
+    "span": "include/stdbit.h:678:1:684:2",
     "pieces": [
-      "include\\stdbit.h:678:1:684:2"
+      "include/stdbit.h:678:1:684:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4528,10 +4528,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_trailing_zero_us",
-    "span": "include\\stdbit.h:686:1:692:2",
+    "func_defid": "include/stdbit.h:stdc_first_trailing_zero_us",
+    "span": "include/stdbit.h:686:1:692:2",
     "pieces": [
-      "include\\stdbit.h:686:1:692:2"
+      "include/stdbit.h:686:1:692:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4542,10 +4542,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_trailing_zero_ui",
-    "span": "include\\stdbit.h:694:1:700:2",
+    "func_defid": "include/stdbit.h:stdc_first_trailing_zero_ui",
+    "span": "include/stdbit.h:694:1:700:2",
     "pieces": [
-      "include\\stdbit.h:694:1:700:2"
+      "include/stdbit.h:694:1:700:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4556,10 +4556,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_trailing_zero_ul",
-    "span": "include\\stdbit.h:702:1:708:2",
+    "func_defid": "include/stdbit.h:stdc_first_trailing_zero_ul",
+    "span": "include/stdbit.h:702:1:708:2",
     "pieces": [
-      "include\\stdbit.h:702:1:708:2"
+      "include/stdbit.h:702:1:708:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4570,10 +4570,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_trailing_zero_ull",
-    "span": "include\\stdbit.h:710:1:716:2",
+    "func_defid": "include/stdbit.h:stdc_first_trailing_zero_ull",
+    "span": "include/stdbit.h:710:1:716:2",
     "pieces": [
-      "include\\stdbit.h:710:1:716:2"
+      "include/stdbit.h:710:1:716:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4584,10 +4584,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_trailing_one_uc",
-    "span": "include\\stdbit.h:732:1:738:2",
+    "func_defid": "include/stdbit.h:stdc_first_trailing_one_uc",
+    "span": "include/stdbit.h:732:1:738:2",
     "pieces": [
-      "include\\stdbit.h:732:1:738:2"
+      "include/stdbit.h:732:1:738:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4598,10 +4598,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_trailing_one_us",
-    "span": "include\\stdbit.h:740:1:746:2",
+    "func_defid": "include/stdbit.h:stdc_first_trailing_one_us",
+    "span": "include/stdbit.h:740:1:746:2",
     "pieces": [
-      "include\\stdbit.h:740:1:746:2"
+      "include/stdbit.h:740:1:746:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4612,10 +4612,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_trailing_one_ui",
-    "span": "include\\stdbit.h:748:1:754:2",
+    "func_defid": "include/stdbit.h:stdc_first_trailing_one_ui",
+    "span": "include/stdbit.h:748:1:754:2",
     "pieces": [
-      "include\\stdbit.h:748:1:754:2"
+      "include/stdbit.h:748:1:754:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4626,10 +4626,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_trailing_one_ul",
-    "span": "include\\stdbit.h:756:1:762:2",
+    "func_defid": "include/stdbit.h:stdc_first_trailing_one_ul",
+    "span": "include/stdbit.h:756:1:762:2",
     "pieces": [
-      "include\\stdbit.h:756:1:762:2"
+      "include/stdbit.h:756:1:762:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4640,10 +4640,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_first_trailing_one_ull",
-    "span": "include\\stdbit.h:764:1:770:2",
+    "func_defid": "include/stdbit.h:stdc_first_trailing_one_ull",
+    "span": "include/stdbit.h:764:1:770:2",
     "pieces": [
-      "include\\stdbit.h:764:1:770:2"
+      "include/stdbit.h:764:1:770:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -4654,28 +4654,28 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_count_ones_ui",
-    "span": "include\\stdbit.h:786:1:790:2",
+    "func_defid": "include/stdbit.h:stdc_count_ones_ui",
+    "span": "include/stdbit.h:786:1:790:2",
     "pieces": [
-      "include\\stdbit.h:786:1:790:2"
+      "include/stdbit.h:786:1:790:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "UNT_ONES_INLINE unsigned int\nstdc_count_ones_ui (unsigned int n)\n{\n  return __gl_stdbit_popcount (n);\n}\n\n_GL_STDC_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_count_ones_uc",
-        "span": "include\\stdbit.h:795:10:795:32",
+        "caller": "include/stdbit.h:stdc_count_ones_uc",
+        "span": "include/stdbit.h:795:10:795:32",
         "source": "return stdc_count_ones_ui (n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_count_ones_us",
-        "span": "include\\stdbit.h:801:10:801:32",
+        "caller": "include/stdbit.h:stdc_count_ones_us",
+        "span": "include/stdbit.h:801:10:801:32",
         "source": "return stdc_count_ones_ui (n);"
       },
       {
-        "caller": "include\\stdbit.h:stdc_count_zeros_ui",
-        "span": "include\\stdbit.h:845:10:845:33",
+        "caller": "include/stdbit.h:stdc_count_zeros_ui",
+        "span": "include/stdbit.h:845:10:845:33",
         "source": "return stdc_count_ones_ui (~n);"
       }
     ],
@@ -4684,18 +4684,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_count_ones_uc",
-    "span": "include\\stdbit.h:792:1:796:2",
+    "func_defid": "include/stdbit.h:stdc_count_ones_uc",
+    "span": "include/stdbit.h:792:1:796:2",
     "pieces": [
-      "include\\stdbit.h:792:1:796:2"
+      "include/stdbit.h:792:1:796:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "UNT_ONES_INLINE unsigned int\nstdc_count_ones_uc (unsigned char n)\n{\n  return stdc_count_ones_ui (n);\n}\n\n_GL_STDC_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_count_zeros_uc",
-        "span": "include\\stdbit.h:833:10:833:33",
+        "caller": "include/stdbit.h:stdc_count_zeros_uc",
+        "span": "include/stdbit.h:833:10:833:33",
         "source": "return stdc_count_ones_uc (~n);"
       }
     ],
@@ -4704,18 +4704,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_count_ones_us",
-    "span": "include\\stdbit.h:798:1:802:2",
+    "func_defid": "include/stdbit.h:stdc_count_ones_us",
+    "span": "include/stdbit.h:798:1:802:2",
     "pieces": [
-      "include\\stdbit.h:798:1:802:2"
+      "include/stdbit.h:798:1:802:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "UNT_ONES_INLINE unsigned int\nstdc_count_ones_us (unsigned short int n)\n{\n  return stdc_count_ones_ui (n);\n}\n\n_GL_STDC_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_count_zeros_us",
-        "span": "include\\stdbit.h:839:10:839:33",
+        "caller": "include/stdbit.h:stdc_count_zeros_us",
+        "span": "include/stdbit.h:839:10:839:33",
         "source": "return stdc_count_ones_us (~n);"
       }
     ],
@@ -4724,18 +4724,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_count_ones_ul",
-    "span": "include\\stdbit.h:804:1:808:2",
+    "func_defid": "include/stdbit.h:stdc_count_ones_ul",
+    "span": "include/stdbit.h:804:1:808:2",
     "pieces": [
-      "include\\stdbit.h:804:1:808:2"
+      "include/stdbit.h:804:1:808:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "UNT_ONES_INLINE unsigned int\nstdc_count_ones_ul (unsigned long int n)\n{\n  return __gl_stdbit_popcountl (n);\n}\n\n_GL_STDC_",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_count_zeros_ul",
-        "span": "include\\stdbit.h:851:10:851:33",
+        "caller": "include/stdbit.h:stdc_count_zeros_ul",
+        "span": "include/stdbit.h:851:10:851:33",
         "source": "return stdc_count_ones_ul (~n);"
       }
     ],
@@ -4744,18 +4744,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_count_ones_ull",
-    "span": "include\\stdbit.h:810:1:814:2",
+    "func_defid": "include/stdbit.h:stdc_count_ones_ull",
+    "span": "include/stdbit.h:810:1:814:2",
     "pieces": [
-      "include\\stdbit.h:810:1:814:2"
+      "include/stdbit.h:810:1:814:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "UNT_ONES_INLINE unsigned int\nstdc_count_ones_ull (unsigned long long int n)\n{\n  return __gl_stdbit_popcountll (n);\n}\n\n# define ",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_count_zeros_ull",
-        "span": "include\\stdbit.h:857:10:857:34",
+        "caller": "include/stdbit.h:stdc_count_zeros_ull",
+        "span": "include/stdbit.h:857:10:857:34",
         "source": "return stdc_count_ones_ull (~n);"
       }
     ],
@@ -4764,10 +4764,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_count_zeros_uc",
-    "span": "include\\stdbit.h:830:1:834:2",
+    "func_defid": "include/stdbit.h:stdc_count_zeros_uc",
+    "span": "include/stdbit.h:830:1:834:2",
     "pieces": [
-      "include\\stdbit.h:830:1:834:2"
+      "include/stdbit.h:830:1:834:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -4778,10 +4778,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_count_zeros_us",
-    "span": "include\\stdbit.h:836:1:840:2",
+    "func_defid": "include/stdbit.h:stdc_count_zeros_us",
+    "span": "include/stdbit.h:836:1:840:2",
     "pieces": [
-      "include\\stdbit.h:836:1:840:2"
+      "include/stdbit.h:836:1:840:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -4792,10 +4792,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_count_zeros_ui",
-    "span": "include\\stdbit.h:842:1:846:2",
+    "func_defid": "include/stdbit.h:stdc_count_zeros_ui",
+    "span": "include/stdbit.h:842:1:846:2",
     "pieces": [
-      "include\\stdbit.h:842:1:846:2"
+      "include/stdbit.h:842:1:846:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -4806,10 +4806,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_count_zeros_ul",
-    "span": "include\\stdbit.h:848:1:852:2",
+    "func_defid": "include/stdbit.h:stdc_count_zeros_ul",
+    "span": "include/stdbit.h:848:1:852:2",
     "pieces": [
-      "include\\stdbit.h:848:1:852:2"
+      "include/stdbit.h:848:1:852:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -4820,10 +4820,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_count_zeros_ull",
-    "span": "include\\stdbit.h:854:1:858:2",
+    "func_defid": "include/stdbit.h:stdc_count_zeros_ull",
+    "span": "include/stdbit.h:854:1:858:2",
     "pieces": [
-      "include\\stdbit.h:854:1:858:2"
+      "include/stdbit.h:854:1:858:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -4834,10 +4834,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_has_single_bit_uc",
-    "span": "include\\stdbit.h:874:1:879:2",
+    "func_defid": "include/stdbit.h:stdc_has_single_bit_uc",
+    "span": "include/stdbit.h:874:1:879:2",
     "pieces": [
-      "include\\stdbit.h:874:1:879:2"
+      "include/stdbit.h:874:1:879:2"
     ],
     "sub_chunks": [],
     "num_lines": 6,
@@ -4848,10 +4848,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_has_single_bit_us",
-    "span": "include\\stdbit.h:881:1:886:2",
+    "func_defid": "include/stdbit.h:stdc_has_single_bit_us",
+    "span": "include/stdbit.h:881:1:886:2",
     "pieces": [
-      "include\\stdbit.h:881:1:886:2"
+      "include/stdbit.h:881:1:886:2"
     ],
     "sub_chunks": [],
     "num_lines": 6,
@@ -4862,10 +4862,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_has_single_bit_ui",
-    "span": "include\\stdbit.h:888:1:893:2",
+    "func_defid": "include/stdbit.h:stdc_has_single_bit_ui",
+    "span": "include/stdbit.h:888:1:893:2",
     "pieces": [
-      "include\\stdbit.h:888:1:893:2"
+      "include/stdbit.h:888:1:893:2"
     ],
     "sub_chunks": [],
     "num_lines": 6,
@@ -4876,10 +4876,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_has_single_bit_ul",
-    "span": "include\\stdbit.h:895:1:900:2",
+    "func_defid": "include/stdbit.h:stdc_has_single_bit_ul",
+    "span": "include/stdbit.h:895:1:900:2",
     "pieces": [
-      "include\\stdbit.h:895:1:900:2"
+      "include/stdbit.h:895:1:900:2"
     ],
     "sub_chunks": [],
     "num_lines": 6,
@@ -4890,10 +4890,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_has_single_bit_ull",
-    "span": "include\\stdbit.h:902:1:907:2",
+    "func_defid": "include/stdbit.h:stdc_has_single_bit_ull",
+    "span": "include/stdbit.h:902:1:907:2",
     "pieces": [
-      "include\\stdbit.h:902:1:907:2"
+      "include/stdbit.h:902:1:907:2"
     ],
     "sub_chunks": [],
     "num_lines": 6,
@@ -4904,23 +4904,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_width_uc",
-    "span": "include\\stdbit.h:924:1:928:2",
+    "func_defid": "include/stdbit.h:stdc_bit_width_uc",
+    "span": "include/stdbit.h:924:1:928:2",
     "pieces": [
-      "include\\stdbit.h:924:1:928:2"
+      "include/stdbit.h:924:1:928:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "IDTH_INLINE unsigned int\nstdc_bit_width_uc (unsigned char n)\n{\n  return 8 * sizeof n - stdc_leading_zeros_uc (n);\n}\n\n_GL_STDC_BIT",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_bit_floor_uc",
-        "span": "include\\stdbit.h:971:21:971:42",
+        "caller": "include/stdbit.h:stdc_bit_floor_uc",
+        "span": "include/stdbit.h:971:21:971:42",
         "source": "return n ? 1u << (stdc_bit_width_uc (n) - 1) : 0;"
       },
       {
-        "caller": "include\\stdbit.h:stdc_bit_ceil_uc",
-        "span": "include\\stdbit.h:1017:30:1017:55",
+        "caller": "include/stdbit.h:stdc_bit_ceil_uc",
+        "span": "include/stdbit.h:1017:30:1017:55",
         "source": "return n <= 1 ? 1 : 2u << (stdc_bit_width_uc (n - 1) - 1);"
       }
     ],
@@ -4929,23 +4929,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_width_us",
-    "span": "include\\stdbit.h:930:1:934:2",
+    "func_defid": "include/stdbit.h:stdc_bit_width_us",
+    "span": "include/stdbit.h:930:1:934:2",
     "pieces": [
-      "include\\stdbit.h:930:1:934:2"
+      "include/stdbit.h:930:1:934:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "IDTH_INLINE unsigned int\nstdc_bit_width_us (unsigned short int n)\n{\n  return 8 * sizeof n - stdc_leading_zeros_us (n);\n}\n\n_GL_STDC_BIT",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_bit_floor_us",
-        "span": "include\\stdbit.h:977:21:977:42",
+        "caller": "include/stdbit.h:stdc_bit_floor_us",
+        "span": "include/stdbit.h:977:21:977:42",
         "source": "return n ? 1u << (stdc_bit_width_us (n) - 1) : 0;"
       },
       {
-        "caller": "include\\stdbit.h:stdc_bit_ceil_us",
-        "span": "include\\stdbit.h:1023:30:1023:55",
+        "caller": "include/stdbit.h:stdc_bit_ceil_us",
+        "span": "include/stdbit.h:1023:30:1023:55",
         "source": "return n <= 1 ? 1 : 2u << (stdc_bit_width_us (n - 1) - 1);"
       }
     ],
@@ -4954,23 +4954,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_width_ui",
-    "span": "include\\stdbit.h:936:1:940:2",
+    "func_defid": "include/stdbit.h:stdc_bit_width_ui",
+    "span": "include/stdbit.h:936:1:940:2",
     "pieces": [
-      "include\\stdbit.h:936:1:940:2"
+      "include/stdbit.h:936:1:940:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "IDTH_INLINE unsigned int\nstdc_bit_width_ui (unsigned int n)\n{\n  return 8 * sizeof n - stdc_leading_zeros_ui (n);\n}\n\n_GL_STDC_BIT",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_bit_floor_ui",
-        "span": "include\\stdbit.h:983:21:983:42",
+        "caller": "include/stdbit.h:stdc_bit_floor_ui",
+        "span": "include/stdbit.h:983:21:983:42",
         "source": "return n ? 1u << (stdc_bit_width_ui (n) - 1) : 0;"
       },
       {
-        "caller": "include\\stdbit.h:stdc_bit_ceil_ui",
-        "span": "include\\stdbit.h:1029:30:1029:55",
+        "caller": "include/stdbit.h:stdc_bit_ceil_ui",
+        "span": "include/stdbit.h:1029:30:1029:55",
         "source": "return n <= 1 ? 1 : 2u << (stdc_bit_width_ui (n - 1) - 1);"
       }
     ],
@@ -4979,23 +4979,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_width_ul",
-    "span": "include\\stdbit.h:942:1:946:2",
+    "func_defid": "include/stdbit.h:stdc_bit_width_ul",
+    "span": "include/stdbit.h:942:1:946:2",
     "pieces": [
-      "include\\stdbit.h:942:1:946:2"
+      "include/stdbit.h:942:1:946:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "IDTH_INLINE unsigned int\nstdc_bit_width_ul (unsigned long int n)\n{\n  return 8 * sizeof n - stdc_leading_zeros_ul (n);\n}\n\n_GL_STDC_BIT",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_bit_floor_ul",
-        "span": "include\\stdbit.h:989:22:989:43",
+        "caller": "include/stdbit.h:stdc_bit_floor_ul",
+        "span": "include/stdbit.h:989:22:989:43",
         "source": "return n ? 1ul << (stdc_bit_width_ul (n) - 1) : 0;"
       },
       {
-        "caller": "include\\stdbit.h:stdc_bit_ceil_ul",
-        "span": "include\\stdbit.h:1035:31:1035:56",
+        "caller": "include/stdbit.h:stdc_bit_ceil_ul",
+        "span": "include/stdbit.h:1035:31:1035:56",
         "source": "return n <= 1 ? 1 : 2ul << (stdc_bit_width_ul (n - 1) - 1);"
       }
     ],
@@ -5004,23 +5004,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_width_ull",
-    "span": "include\\stdbit.h:948:1:952:2",
+    "func_defid": "include/stdbit.h:stdc_bit_width_ull",
+    "span": "include/stdbit.h:948:1:952:2",
     "pieces": [
-      "include\\stdbit.h:948:1:952:2"
+      "include/stdbit.h:948:1:952:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "IDTH_INLINE unsigned int\nstdc_bit_width_ull (unsigned long long int n)\n{\n  return 8 * sizeof n - stdc_leading_zeros_ull (n);\n}\n\n# define std",
     "calls": [
       {
-        "caller": "include\\stdbit.h:stdc_bit_floor_ull",
-        "span": "include\\stdbit.h:995:23:995:45",
+        "caller": "include/stdbit.h:stdc_bit_floor_ull",
+        "span": "include/stdbit.h:995:23:995:45",
         "source": "return n ? 1ull << (stdc_bit_width_ull (n) - 1) : 0;"
       },
       {
-        "caller": "include\\stdbit.h:stdc_bit_ceil_ull",
-        "span": "include\\stdbit.h:1041:32:1041:58",
+        "caller": "include/stdbit.h:stdc_bit_ceil_ull",
+        "span": "include/stdbit.h:1041:32:1041:58",
         "source": "return n <= 1 ? 1 : 2ull << (stdc_bit_width_ull (n - 1) - 1);"
       }
     ],
@@ -5029,10 +5029,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_floor_uc",
-    "span": "include\\stdbit.h:968:1:972:2",
+    "func_defid": "include/stdbit.h:stdc_bit_floor_uc",
+    "span": "include/stdbit.h:968:1:972:2",
     "pieces": [
-      "include\\stdbit.h:968:1:972:2"
+      "include/stdbit.h:968:1:972:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5043,10 +5043,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_floor_us",
-    "span": "include\\stdbit.h:974:1:978:2",
+    "func_defid": "include/stdbit.h:stdc_bit_floor_us",
+    "span": "include/stdbit.h:974:1:978:2",
     "pieces": [
-      "include\\stdbit.h:974:1:978:2"
+      "include/stdbit.h:974:1:978:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5057,10 +5057,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_floor_ui",
-    "span": "include\\stdbit.h:980:1:984:2",
+    "func_defid": "include/stdbit.h:stdc_bit_floor_ui",
+    "span": "include/stdbit.h:980:1:984:2",
     "pieces": [
-      "include\\stdbit.h:980:1:984:2"
+      "include/stdbit.h:980:1:984:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5071,10 +5071,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_floor_ul",
-    "span": "include\\stdbit.h:986:1:990:2",
+    "func_defid": "include/stdbit.h:stdc_bit_floor_ul",
+    "span": "include/stdbit.h:986:1:990:2",
     "pieces": [
-      "include\\stdbit.h:986:1:990:2"
+      "include/stdbit.h:986:1:990:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5085,10 +5085,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_floor_ull",
-    "span": "include\\stdbit.h:992:1:996:2",
+    "func_defid": "include/stdbit.h:stdc_bit_floor_ull",
+    "span": "include/stdbit.h:992:1:996:2",
     "pieces": [
-      "include\\stdbit.h:992:1:996:2"
+      "include/stdbit.h:992:1:996:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5099,10 +5099,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_ceil_uc",
-    "span": "include\\stdbit.h:1014:1:1018:2",
+    "func_defid": "include/stdbit.h:stdc_bit_ceil_uc",
+    "span": "include/stdbit.h:1014:1:1018:2",
     "pieces": [
-      "include\\stdbit.h:1014:1:1018:2"
+      "include/stdbit.h:1014:1:1018:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5113,10 +5113,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_ceil_us",
-    "span": "include\\stdbit.h:1020:1:1024:2",
+    "func_defid": "include/stdbit.h:stdc_bit_ceil_us",
+    "span": "include/stdbit.h:1020:1:1024:2",
     "pieces": [
-      "include\\stdbit.h:1020:1:1024:2"
+      "include/stdbit.h:1020:1:1024:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5127,10 +5127,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_ceil_ui",
-    "span": "include\\stdbit.h:1026:1:1030:2",
+    "func_defid": "include/stdbit.h:stdc_bit_ceil_ui",
+    "span": "include/stdbit.h:1026:1:1030:2",
     "pieces": [
-      "include\\stdbit.h:1026:1:1030:2"
+      "include/stdbit.h:1026:1:1030:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5141,10 +5141,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_ceil_ul",
-    "span": "include\\stdbit.h:1032:1:1036:2",
+    "func_defid": "include/stdbit.h:stdc_bit_ceil_ul",
+    "span": "include/stdbit.h:1032:1:1036:2",
     "pieces": [
-      "include\\stdbit.h:1032:1:1036:2"
+      "include/stdbit.h:1032:1:1036:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5155,10 +5155,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdbit.h:stdc_bit_ceil_ull",
-    "span": "include\\stdbit.h:1038:1:1042:2",
+    "func_defid": "include/stdbit.h:stdc_bit_ceil_ull",
+    "span": "include/stdbit.h:1038:1:1042:2",
     "pieces": [
-      "include\\stdbit.h:1038:1:1042:2"
+      "include/stdbit.h:1038:1:1042:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5169,10 +5169,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\stdlib.h:gl_MB_CUR_MAX",
-    "span": "include\\stdlib.h:1247:1:1252:2",
+    "func_defid": "include/stdlib.h:gl_MB_CUR_MAX",
+    "span": "include/stdlib.h:1247:1:1252:2",
     "pieces": [
-      "include\\stdlib.h:1247:1:1252:2"
+      "include/stdlib.h:1247:1:1252:2"
     ],
     "sub_chunks": [],
     "num_lines": 6,
@@ -5183,18 +5183,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\streq.h:streq9",
-    "span": "include\\streq.h:39:1:43:2",
+    "func_defid": "include/streq.h:streq9",
+    "span": "include/streq.h:39:1:43:2",
     "pieces": [
-      "include\\streq.h:39:1:43:2"
+      "include/streq.h:39:1:43:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "static inline int\nstreq9 (const char *s1, const char *s2)\n{\n  return strcmp (s1 + 9, s2 + 9) == 0;\n}",
     "calls": [
       {
-        "caller": "include\\streq.h:streq8",
-        "span": "include\\streq.h:53:16:53:31",
+        "caller": "include/streq.h:streq8",
+        "span": "include/streq.h:53:16:53:31",
         "source": "return streq9 (s1, s2);"
       }
     ],
@@ -5203,18 +5203,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\streq.h:streq8",
-    "span": "include\\streq.h:45:1:57:2",
+    "func_defid": "include/streq.h:streq8",
+    "span": "include/streq.h:45:1:57:2",
     "pieces": [
-      "include\\streq.h:45:1:57:2"
+      "include/streq.h:45:1:57:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstreq8 (const char *s1, const char *s2, char s28)\n{\n  if (s1[8] == s28)\n    {\n      if (s28 == 0)\n        return 1;\n      else\n        return streq9 (s1, s2);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\streq.h:streq7",
-        "span": "include\\streq.h:67:16:67:36",
+        "caller": "include/streq.h:streq7",
+        "span": "include/streq.h:67:16:67:36",
         "source": "return streq8 (s1, s2, s28);"
       }
     ],
@@ -5223,18 +5223,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\streq.h:streq7",
-    "span": "include\\streq.h:59:1:71:2",
+    "func_defid": "include/streq.h:streq7",
+    "span": "include/streq.h:59:1:71:2",
     "pieces": [
-      "include\\streq.h:59:1:71:2"
+      "include/streq.h:59:1:71:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstreq7 (const char *s1, const char *s2, char s27, char s28)\n{\n  if (s1[7] == s27)\n    {\n      if (s27 == 0)\n        return 1;\n      else\n        return streq8 (s1, s2, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\streq.h:streq6",
-        "span": "include\\streq.h:81:16:81:41",
+        "caller": "include/streq.h:streq6",
+        "span": "include/streq.h:81:16:81:41",
         "source": "return streq7 (s1, s2, s27, s28);"
       }
     ],
@@ -5243,18 +5243,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\streq.h:streq6",
-    "span": "include\\streq.h:73:1:85:2",
+    "func_defid": "include/streq.h:streq6",
+    "span": "include/streq.h:73:1:85:2",
     "pieces": [
-      "include\\streq.h:73:1:85:2"
+      "include/streq.h:73:1:85:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstreq6 (const char *s1, const char *s2, char s26, char s27, char s28)\n{\n  if (s1[6] == s26)\n    {\n      if (s26 == 0)\n        return 1;\n      else\n        return streq7 (s1, s2, s27, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\streq.h:streq5",
-        "span": "include\\streq.h:95:16:95:46",
+        "caller": "include/streq.h:streq5",
+        "span": "include/streq.h:95:16:95:46",
         "source": "return streq6 (s1, s2, s26, s27, s28);"
       }
     ],
@@ -5263,18 +5263,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\streq.h:streq5",
-    "span": "include\\streq.h:87:1:99:2",
+    "func_defid": "include/streq.h:streq5",
+    "span": "include/streq.h:87:1:99:2",
     "pieces": [
-      "include\\streq.h:87:1:99:2"
+      "include/streq.h:87:1:99:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstreq5 (const char *s1, const char *s2, char s25, char s26, char s27, char s28)\n{\n  if (s1[5] == s25)\n    {\n      if (s25 == 0)\n        return 1;\n      else\n        return streq6 (s1, s2, s26, s27, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\streq.h:streq4",
-        "span": "include\\streq.h:109:16:109:51",
+        "caller": "include/streq.h:streq4",
+        "span": "include/streq.h:109:16:109:51",
         "source": "return streq5 (s1, s2, s25, s26, s27, s28);"
       }
     ],
@@ -5283,18 +5283,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\streq.h:streq4",
-    "span": "include\\streq.h:101:1:113:2",
+    "func_defid": "include/streq.h:streq4",
+    "span": "include/streq.h:101:1:113:2",
     "pieces": [
-      "include\\streq.h:101:1:113:2"
+      "include/streq.h:101:1:113:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstreq4 (const char *s1, const char *s2, char s24, char s25, char s26, char s27, char s28)\n{\n  if (s1[4] == s24)\n    {\n      if (s24 == 0)\n        return 1;\n      else\n        return streq5 (s1, s2, s25, s26, s27, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\streq.h:streq3",
-        "span": "include\\streq.h:123:16:123:56",
+        "caller": "include/streq.h:streq3",
+        "span": "include/streq.h:123:16:123:56",
         "source": "return streq4 (s1, s2, s24, s25, s26, s27, s28);"
       }
     ],
@@ -5303,18 +5303,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\streq.h:streq3",
-    "span": "include\\streq.h:115:1:127:2",
+    "func_defid": "include/streq.h:streq3",
+    "span": "include/streq.h:115:1:127:2",
     "pieces": [
-      "include\\streq.h:115:1:127:2"
+      "include/streq.h:115:1:127:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstreq3 (const char *s1, const char *s2, char s23, char s24, char s25, char s26, char s27, char s28)\n{\n  if (s1[3] == s23)\n    {\n      if (s23 == 0)\n        return 1;\n      else\n        return streq4 (s1, s2, s24, s25, s26, s27, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\streq.h:streq2",
-        "span": "include\\streq.h:137:16:137:61",
+        "caller": "include/streq.h:streq2",
+        "span": "include/streq.h:137:16:137:61",
         "source": "return streq3 (s1, s2, s23, s24, s25, s26, s27, s28);"
       }
     ],
@@ -5323,18 +5323,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\streq.h:streq2",
-    "span": "include\\streq.h:129:1:141:2",
+    "func_defid": "include/streq.h:streq2",
+    "span": "include/streq.h:129:1:141:2",
     "pieces": [
-      "include\\streq.h:129:1:141:2"
+      "include/streq.h:129:1:141:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstreq2 (const char *s1, const char *s2, char s22, char s23, char s24, char s25, char s26, char s27, char s28)\n{\n  if (s1[2] == s22)\n    {\n      if (s22 == 0)\n        return 1;\n      else\n        return streq3 (s1, s2, s23, s24, s25, s26, s27, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\streq.h:streq1",
-        "span": "include\\streq.h:151:16:151:66",
+        "caller": "include/streq.h:streq1",
+        "span": "include/streq.h:151:16:151:66",
         "source": "return streq2 (s1, s2, s22, s23, s24, s25, s26, s27, s28);"
       }
     ],
@@ -5343,18 +5343,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\streq.h:streq1",
-    "span": "include\\streq.h:143:1:155:2",
+    "func_defid": "include/streq.h:streq1",
+    "span": "include/streq.h:143:1:155:2",
     "pieces": [
-      "include\\streq.h:143:1:155:2"
+      "include/streq.h:143:1:155:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
     "source": "static inline int\nstreq1 (const char *s1, const char *s2, char s21, char s22, char s23, char s24, char s25, char s26, char s27, char s28)\n{\n  if (s1[1] == s21)\n    {\n      if (s21 == 0)\n        return 1;\n      else\n        return streq2 (s1, s2, s22, s23, s24, s25, s26, s27, s28);\n    }\n  else\n    return 0;\n}",
     "calls": [
       {
-        "caller": "include\\streq.h:streq0",
-        "span": "include\\streq.h:165:16:165:71",
+        "caller": "include/streq.h:streq0",
+        "span": "include/streq.h:165:16:165:71",
         "source": "return streq1 (s1, s2, s21, s22, s23, s24, s25, s26, s27, s28);"
       }
     ],
@@ -5363,10 +5363,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\streq.h:streq0",
-    "span": "include\\streq.h:157:1:169:2",
+    "func_defid": "include/streq.h:streq0",
+    "span": "include/streq.h:157:1:169:2",
     "pieces": [
-      "include\\streq.h:157:1:169:2"
+      "include/streq.h:157:1:169:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
@@ -5377,10 +5377,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:initialize_exit_failure",
-    "span": "include\\system.h:97:1:102:2",
+    "func_defid": "include/system.h:initialize_exit_failure",
+    "span": "include/system.h:97:1:102:2",
     "pieces": [
-      "include\\system.h:97:1:102:2"
+      "include/system.h:97:1:102:2"
     ],
     "sub_chunks": [],
     "num_lines": 6,
@@ -5391,10 +5391,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:to_uchar",
-    "span": "include\\system.h:158:1:158:62",
+    "func_defid": "include/system.h:to_uchar",
+    "span": "include/system.h:158:1:158:62",
     "pieces": [
-      "include\\system.h:158:1:158:62"
+      "include/system.h:158:1:158:62"
     ],
     "sub_chunks": [],
     "num_lines": 1,
@@ -5405,10 +5405,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:select_plural",
-    "span": "include\\system.h:177:1:184:2",
+    "func_defid": "include/system.h:select_plural",
+    "span": "include/system.h:177:1:184:2",
     "pieces": [
-      "include\\system.h:177:1:184:2"
+      "include/system.h:177:1:184:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
@@ -5419,18 +5419,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:dot_or_dotdot",
-    "span": "include\\system.h:260:1:270:2",
+    "func_defid": "include/system.h:dot_or_dotdot",
+    "span": "include/system.h:260:1:270:2",
     "pieces": [
-      "include\\system.h:260:1:270:2"
+      "include/system.h:260:1:270:2"
     ],
     "sub_chunks": [],
     "num_lines": 11,
     "source": "static inline bool\ndot_or_dotdot (char const *file_name)\n{\n  if (file_name[0] == '.')\n    {\n      char sep = file_name[(file_name[1] == '.') + 1];\n      return (! sep || ISSLASH (sep));\n    }\n  else\n    return false;\n}",
     "calls": [
       {
-        "caller": "include\\system.h:readdir_ignoring_dot_and_dotdot",
-        "span": "include\\system.h:279:30:279:56",
+        "caller": "include/system.h:readdir_ignoring_dot_and_dotdot",
+        "span": "include/system.h:279:30:279:56",
         "source": "if (dp == nullptr || ! dot_or_dotdot (dp->d_name))"
       }
     ],
@@ -5439,18 +5439,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:readdir_ignoring_dot_and_dotdot",
-    "span": "include\\system.h:273:1:282:2",
+    "func_defid": "include/system.h:readdir_ignoring_dot_and_dotdot",
+    "span": "include/system.h:273:1:282:2",
     "pieces": [
-      "include\\system.h:273:1:282:2"
+      "include/system.h:273:1:282:2"
     ],
     "sub_chunks": [],
     "num_lines": 10,
     "source": "static inline struct dirent const *\nreaddir_ignoring_dot_and_dotdot (DIR *dirp)\n{\n  while (true)\n    {\n      struct dirent const *dp = readdir (dirp);\n      if (dp == nullptr || ! dot_or_dotdot (dp->d_name))\n        return dp;\n    }\n}",
     "calls": [
       {
-        "caller": "include\\system.h:directory_status",
-        "span": "include\\system.h:315:20:315:58",
+        "caller": "include/system.h:directory_status",
+        "span": "include/system.h:315:20:315:58",
         "source": "no_direntries = !readdir_ignoring_dot_and_dotdot (dirp);"
       }
     ],
@@ -5459,10 +5459,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:directory_status",
-    "span": "include\\system.h:293:1:319:2",
+    "func_defid": "include/system.h:directory_status",
+    "span": "include/system.h:293:1:319:2",
     "pieces": [
-      "include\\system.h:293:1:319:2"
+      "include/system.h:293:1:319:2"
     ],
     "sub_chunks": [],
     "num_lines": 27,
@@ -5473,10 +5473,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:size_t",
-    "span": "include\\system.h:457:1:470:2",
+    "func_defid": "include/system.h:size_t",
+    "span": "include/system.h:457:1:470:2",
     "pieces": [
-      "include\\system.h:457:1:470:2"
+      "include/system.h:457:1:470:2"
     ],
     "sub_chunks": [],
     "num_lines": 14,
@@ -5487,10 +5487,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:size_t",
-    "span": "include\\system.h:476:1:481:2",
+    "func_defid": "include/system.h:size_t",
+    "span": "include/system.h:476:1:481:2",
     "pieces": [
-      "include\\system.h:476:1:481:2"
+      "include/system.h:476:1:481:2"
     ],
     "sub_chunks": [],
     "num_lines": 6,
@@ -5501,10 +5501,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:ptr_align",
-    "span": "include\\system.h:488:1:494:2",
+    "func_defid": "include/system.h:ptr_align",
+    "span": "include/system.h:488:1:494:2",
     "pieces": [
-      "include\\system.h:488:1:494:2"
+      "include/system.h:488:1:494:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -5515,10 +5515,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:is_nul",
-    "span": "include\\system.h:499:1:546:2",
+    "func_defid": "include/system.h:is_nul",
+    "span": "include/system.h:499:1:546:2",
     "pieces": [
-      "include\\system.h:499:1:546:2"
+      "include/system.h:499:1:546:2"
     ],
     "sub_chunks": [],
     "num_lines": 48,
@@ -5529,10 +5529,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:emit_stdin_note",
-    "span": "include\\system.h:556:1:562:2",
+    "func_defid": "include/system.h:emit_stdin_note",
+    "span": "include/system.h:556:1:562:2",
     "pieces": [
-      "include\\system.h:556:1:562:2"
+      "include/system.h:556:1:562:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -5549,10 +5549,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:emit_mandatory_arg_note",
-    "span": "include\\system.h:563:1:569:2",
+    "func_defid": "include/system.h:emit_mandatory_arg_note",
+    "span": "include/system.h:563:1:569:2",
     "pieces": [
-      "include\\system.h:563:1:569:2"
+      "include/system.h:563:1:569:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -5563,10 +5563,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:emit_size_note",
-    "span": "include\\system.h:571:1:579:2",
+    "func_defid": "include/system.h:emit_size_note",
+    "span": "include/system.h:571:1:579:2",
     "pieces": [
-      "include\\system.h:571:1:579:2"
+      "include/system.h:571:1:579:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5577,10 +5577,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:emit_blocksize_note",
-    "span": "include\\system.h:581:1:589:2",
+    "func_defid": "include/system.h:emit_blocksize_note",
+    "span": "include/system.h:581:1:589:2",
     "pieces": [
-      "include\\system.h:581:1:589:2"
+      "include/system.h:581:1:589:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5591,10 +5591,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:emit_update_parameters_note",
-    "span": "include\\system.h:591:1:606:2",
+    "func_defid": "include/system.h:emit_update_parameters_note",
+    "span": "include/system.h:591:1:606:2",
     "pieces": [
-      "include\\system.h:591:1:606:2"
+      "include/system.h:591:1:606:2"
     ],
     "sub_chunks": [],
     "num_lines": 16,
@@ -5605,10 +5605,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:emit_backup_suffix_note",
-    "span": "include\\system.h:608:1:624:2",
+    "func_defid": "include/system.h:emit_backup_suffix_note",
+    "span": "include/system.h:608:1:624:2",
     "pieces": [
-      "include\\system.h:608:1:624:2"
+      "include/system.h:608:1:624:2"
     ],
     "sub_chunks": [],
     "num_lines": 17,
@@ -5619,10 +5619,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:emit_symlink_recurse_options",
-    "span": "include\\system.h:626:1:642:2",
+    "func_defid": "include/system.h:emit_symlink_recurse_options",
+    "span": "include/system.h:626:1:642:2",
     "pieces": [
-      "include\\system.h:626:1:642:2"
+      "include/system.h:626:1:642:2"
     ],
     "sub_chunks": [],
     "num_lines": 17,
@@ -5633,10 +5633,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:emit_exec_status",
-    "span": "include\\system.h:644:1:654:2",
+    "func_defid": "include/system.h:emit_exec_status",
+    "span": "include/system.h:644:1:654:2",
     "pieces": [
-      "include\\system.h:644:1:654:2"
+      "include/system.h:644:1:654:2"
     ],
     "sub_chunks": [],
     "num_lines": 11,
@@ -5647,10 +5647,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:emit_ancillary_info",
-    "span": "include\\system.h:656:1:700:2",
+    "func_defid": "include/system.h:emit_ancillary_info",
+    "span": "include/system.h:656:1:700:2",
     "pieces": [
-      "include\\system.h:656:1:700:2"
+      "include/system.h:656:1:700:2"
     ],
     "sub_chunks": [],
     "num_lines": 45,
@@ -5667,10 +5667,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:timetostr",
-    "span": "include\\system.h:716:1:722:2",
+    "func_defid": "include/system.h:timetostr",
+    "span": "include/system.h:716:1:722:2",
     "pieces": [
-      "include\\system.h:716:1:722:2"
+      "include/system.h:716:1:722:2"
     ],
     "sub_chunks": [],
     "num_lines": 7,
@@ -5681,10 +5681,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:bad_cast",
-    "span": "include\\system.h:724:1:728:2",
+    "func_defid": "include/system.h:bad_cast",
+    "span": "include/system.h:724:1:728:2",
     "pieces": [
-      "include\\system.h:724:1:728:2"
+      "include/system.h:724:1:728:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5695,10 +5695,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:usable_st_size",
-    "span": "include\\system.h:731:1:736:2",
+    "func_defid": "include/system.h:usable_st_size",
+    "span": "include/system.h:731:1:736:2",
     "pieces": [
-      "include\\system.h:731:1:736:2"
+      "include/system.h:731:1:736:2"
     ],
     "sub_chunks": [],
     "num_lines": 6,
@@ -5709,10 +5709,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:write_error",
-    "span": "include\\system.h:766:1:774:2",
+    "func_defid": "include/system.h:write_error",
+    "span": "include/system.h:766:1:774:2",
     "pieces": [
-      "include\\system.h:766:1:774:2"
+      "include/system.h:766:1:774:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5744,10 +5744,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:stzncpy",
-    "span": "include\\system.h:781:1:789:2",
+    "func_defid": "include/system.h:stzncpy",
+    "span": "include/system.h:781:1:789:2",
     "pieces": [
-      "include\\system.h:781:1:789:2"
+      "include/system.h:781:1:789:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5758,10 +5758,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\system.h:is_ENOTSUP",
-    "span": "include\\system.h:799:1:803:2",
+    "func_defid": "include/system.h:is_ENOTSUP",
+    "span": "include/system.h:799:1:803:2",
     "pieces": [
-      "include\\system.h:799:1:803:2"
+      "include/system.h:799:1:803:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5778,10 +5778,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\timespec.h:make_timespec",
-    "span": "include\\timespec.h:55:28:59:2",
+    "func_defid": "include/timespec.h:make_timespec",
+    "span": "include/timespec.h:55:28:59:2",
     "pieces": [
-      "include\\timespec.h:55:28:59:2"
+      "include/timespec.h:55:28:59:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5792,10 +5792,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\timespec.h:timespec_cmp",
-    "span": "include\\timespec.h:63:25:67:2",
+    "func_defid": "include/timespec.h:timespec_cmp",
+    "span": "include/timespec.h:63:25:67:2",
     "pieces": [
-      "include\\timespec.h:63:25:67:2"
+      "include/timespec.h:63:25:67:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5806,10 +5806,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\timespec.h:timespec_sign",
-    "span": "include\\timespec.h:71:25:75:2",
+    "func_defid": "include/timespec.h:timespec_sign",
+    "span": "include/timespec.h:71:25:75:2",
     "pieces": [
-      "include\\timespec.h:71:25:75:2"
+      "include/timespec.h:71:25:75:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5820,10 +5820,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\timespec.h:timespectod",
-    "span": "include\\timespec.h:85:1:89:2",
+    "func_defid": "include/timespec.h:timespectod",
+    "span": "include/timespec.h:85:1:89:2",
     "pieces": [
-      "include\\timespec.h:85:1:89:2"
+      "include/timespec.h:85:1:89:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -5834,10 +5834,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:btoc32",
-    "span": "include\\uchar.h:679:12:687:2",
+    "func_defid": "include/uchar.h:btoc32",
+    "span": "include/uchar.h:679:12:687:2",
     "pieces": [
-      "include\\uchar.h:679:12:687:2"
+      "include/uchar.h:679:12:687:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5848,10 +5848,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32isalnum",
-    "span": "include\\uchar.h:701:12:709:2",
+    "func_defid": "include/uchar.h:c32isalnum",
+    "span": "include/uchar.h:701:12:709:2",
     "pieces": [
-      "include\\uchar.h:701:12:709:2"
+      "include/uchar.h:701:12:709:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5862,10 +5862,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32isalpha",
-    "span": "include\\uchar.h:720:12:728:2",
+    "func_defid": "include/uchar.h:c32isalpha",
+    "span": "include/uchar.h:720:12:728:2",
     "pieces": [
-      "include\\uchar.h:720:12:728:2"
+      "include/uchar.h:720:12:728:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5876,10 +5876,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32isblank",
-    "span": "include\\uchar.h:739:12:747:2",
+    "func_defid": "include/uchar.h:c32isblank",
+    "span": "include/uchar.h:739:12:747:2",
     "pieces": [
-      "include\\uchar.h:739:12:747:2"
+      "include/uchar.h:739:12:747:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5890,10 +5890,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32iscntrl",
-    "span": "include\\uchar.h:758:12:766:2",
+    "func_defid": "include/uchar.h:c32iscntrl",
+    "span": "include/uchar.h:758:12:766:2",
     "pieces": [
-      "include\\uchar.h:758:12:766:2"
+      "include/uchar.h:758:12:766:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5904,10 +5904,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32isdigit",
-    "span": "include\\uchar.h:777:12:785:2",
+    "func_defid": "include/uchar.h:c32isdigit",
+    "span": "include/uchar.h:777:12:785:2",
     "pieces": [
-      "include\\uchar.h:777:12:785:2"
+      "include/uchar.h:777:12:785:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5918,10 +5918,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32isgraph",
-    "span": "include\\uchar.h:796:12:804:2",
+    "func_defid": "include/uchar.h:c32isgraph",
+    "span": "include/uchar.h:796:12:804:2",
     "pieces": [
-      "include\\uchar.h:796:12:804:2"
+      "include/uchar.h:796:12:804:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5932,10 +5932,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32islower",
-    "span": "include\\uchar.h:815:12:823:2",
+    "func_defid": "include/uchar.h:c32islower",
+    "span": "include/uchar.h:815:12:823:2",
     "pieces": [
-      "include\\uchar.h:815:12:823:2"
+      "include/uchar.h:815:12:823:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5946,10 +5946,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32isprint",
-    "span": "include\\uchar.h:834:12:842:2",
+    "func_defid": "include/uchar.h:c32isprint",
+    "span": "include/uchar.h:834:12:842:2",
     "pieces": [
-      "include\\uchar.h:834:12:842:2"
+      "include/uchar.h:834:12:842:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5966,10 +5966,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32ispunct",
-    "span": "include\\uchar.h:853:12:861:2",
+    "func_defid": "include/uchar.h:c32ispunct",
+    "span": "include/uchar.h:853:12:861:2",
     "pieces": [
-      "include\\uchar.h:853:12:861:2"
+      "include/uchar.h:853:12:861:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5980,10 +5980,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32isspace",
-    "span": "include\\uchar.h:872:12:880:2",
+    "func_defid": "include/uchar.h:c32isspace",
+    "span": "include/uchar.h:872:12:880:2",
     "pieces": [
-      "include\\uchar.h:872:12:880:2"
+      "include/uchar.h:872:12:880:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -5994,10 +5994,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32isupper",
-    "span": "include\\uchar.h:891:12:899:2",
+    "func_defid": "include/uchar.h:c32isupper",
+    "span": "include/uchar.h:891:12:899:2",
     "pieces": [
-      "include\\uchar.h:891:12:899:2"
+      "include/uchar.h:891:12:899:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -6008,10 +6008,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32isxdigit",
-    "span": "include\\uchar.h:910:12:918:2",
+    "func_defid": "include/uchar.h:c32isxdigit",
+    "span": "include/uchar.h:910:12:918:2",
     "pieces": [
-      "include\\uchar.h:910:12:918:2"
+      "include/uchar.h:910:12:918:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -6022,10 +6022,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32tolower",
-    "span": "include\\uchar.h:932:12:940:2",
+    "func_defid": "include/uchar.h:c32tolower",
+    "span": "include/uchar.h:932:12:940:2",
     "pieces": [
-      "include\\uchar.h:932:12:940:2"
+      "include/uchar.h:932:12:940:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -6036,10 +6036,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32toupper",
-    "span": "include\\uchar.h:951:12:959:2",
+    "func_defid": "include/uchar.h:c32toupper",
+    "span": "include/uchar.h:951:12:959:2",
     "pieces": [
-      "include\\uchar.h:951:12:959:2"
+      "include/uchar.h:951:12:959:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -6050,10 +6050,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32width",
-    "span": "include\\uchar.h:973:12:981:2",
+    "func_defid": "include/uchar.h:c32width",
+    "span": "include/uchar.h:973:12:981:2",
     "pieces": [
-      "include\\uchar.h:973:12:981:2"
+      "include/uchar.h:973:12:981:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -6064,10 +6064,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32stombs",
-    "span": "include\\uchar.h:1076:34:1083:2",
+    "func_defid": "include/uchar.h:c32stombs",
+    "span": "include/uchar.h:1076:34:1083:2",
     "pieces": [
-      "include\\uchar.h:1076:34:1083:2"
+      "include/uchar.h:1076:34:1083:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
@@ -6078,10 +6078,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32tob",
-    "span": "include\\uchar.h:1125:12:1133:2",
+    "func_defid": "include/uchar.h:c32tob",
+    "span": "include/uchar.h:1125:12:1133:2",
     "pieces": [
-      "include\\uchar.h:1125:12:1133:2"
+      "include/uchar.h:1125:12:1133:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -6092,10 +6092,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:mbstoc32s",
-    "span": "include\\uchar.h:1264:34:1271:2",
+    "func_defid": "include/uchar.h:mbstoc32s",
+    "span": "include/uchar.h:1264:34:1271:2",
     "pieces": [
-      "include\\uchar.h:1264:34:1271:2"
+      "include/uchar.h:1264:34:1271:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
@@ -6106,10 +6106,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32_get_type_test",
-    "span": "include\\uchar.h:1305:34:1313:2",
+    "func_defid": "include/uchar.h:c32_get_type_test",
+    "span": "include/uchar.h:1305:34:1313:2",
     "pieces": [
-      "include\\uchar.h:1305:34:1313:2"
+      "include/uchar.h:1305:34:1313:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -6120,10 +6120,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32_apply_type_test",
-    "span": "include\\uchar.h:1332:12:1340:2",
+    "func_defid": "include/uchar.h:c32_apply_type_test",
+    "span": "include/uchar.h:1332:12:1340:2",
     "pieces": [
-      "include\\uchar.h:1332:12:1340:2"
+      "include/uchar.h:1332:12:1340:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -6134,10 +6134,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32_get_mapping",
-    "span": "include\\uchar.h:1377:34:1385:2",
+    "func_defid": "include/uchar.h:c32_get_mapping",
+    "span": "include/uchar.h:1377:34:1385:2",
     "pieces": [
-      "include\\uchar.h:1377:34:1385:2"
+      "include/uchar.h:1377:34:1385:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -6148,10 +6148,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\uchar.h:c32_apply_mapping",
-    "span": "include\\uchar.h:1403:34:1411:2",
+    "func_defid": "include/uchar.h:c32_apply_mapping",
+    "span": "include/uchar.h:1403:34:1411:2",
     "pieces": [
-      "include\\uchar.h:1403:34:1411:2"
+      "include/uchar.h:1403:34:1411:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -6162,10 +6162,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\unistd.h:getpagesize",
-    "span": "include\\unistd.h:1977:1:1981:2",
+    "func_defid": "include/unistd.h:getpagesize",
+    "span": "include/unistd.h:1977:1:1981:2",
     "pieces": [
-      "include\\unistd.h:1977:1:1981:2"
+      "include/unistd.h:1977:1:1981:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6182,10 +6182,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wchar.h:mbszero",
-    "span": "include\\wchar.h:1056:23:1060:2",
+    "func_defid": "include/wchar.h:mbszero",
+    "span": "include/wchar.h:1056:23:1060:2",
     "pieces": [
-      "include\\wchar.h:1056:23:1060:2"
+      "include/wchar.h:1056:23:1060:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6207,13 +6207,13 @@
         "source": "mbszero (&mbstate);"
       },
       {
-        "caller": "include\\uchar.h:c32stombs",
-        "span": "include\\uchar.h:1081:3:1081:19",
+        "caller": "include/uchar.h:c32stombs",
+        "span": "include/uchar.h:1081:3:1081:19",
         "source": "mbszero (&state);"
       },
       {
-        "caller": "include\\uchar.h:mbstoc32s",
-        "span": "include\\uchar.h:1269:3:1269:19",
+        "caller": "include/uchar.h:mbstoc32s",
+        "span": "include/uchar.h:1269:3:1269:19",
         "source": "mbszero (&state);"
       }
     ],
@@ -6222,10 +6222,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_iswalnum",
-    "span": "include\\wctype.h:660:1:664:2",
+    "func_defid": "include/wctype.h:rpl_iswalnum",
+    "span": "include/wctype.h:660:1:664:2",
     "pieces": [
-      "include\\wctype.h:660:1:664:2"
+      "include/wctype.h:660:1:664:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6236,10 +6236,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_iswalpha",
-    "span": "include\\wctype.h:666:1:670:2",
+    "func_defid": "include/wctype.h:rpl_iswalpha",
+    "span": "include/wctype.h:666:1:670:2",
     "pieces": [
-      "include\\wctype.h:666:1:670:2"
+      "include/wctype.h:666:1:670:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6250,10 +6250,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_iswblank",
-    "span": "include\\wctype.h:672:1:676:2",
+    "func_defid": "include/wctype.h:rpl_iswblank",
+    "span": "include/wctype.h:672:1:676:2",
     "pieces": [
-      "include\\wctype.h:672:1:676:2"
+      "include/wctype.h:672:1:676:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6264,10 +6264,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_iswcntrl",
-    "span": "include\\wctype.h:678:1:682:2",
+    "func_defid": "include/wctype.h:rpl_iswcntrl",
+    "span": "include/wctype.h:678:1:682:2",
     "pieces": [
-      "include\\wctype.h:678:1:682:2"
+      "include/wctype.h:678:1:682:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6278,10 +6278,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_iswdigit",
-    "span": "include\\wctype.h:684:1:688:2",
+    "func_defid": "include/wctype.h:rpl_iswdigit",
+    "span": "include/wctype.h:684:1:688:2",
     "pieces": [
-      "include\\wctype.h:684:1:688:2"
+      "include/wctype.h:684:1:688:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6292,10 +6292,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_iswgraph",
-    "span": "include\\wctype.h:690:1:694:2",
+    "func_defid": "include/wctype.h:rpl_iswgraph",
+    "span": "include/wctype.h:690:1:694:2",
     "pieces": [
-      "include\\wctype.h:690:1:694:2"
+      "include/wctype.h:690:1:694:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6306,10 +6306,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_iswlower",
-    "span": "include\\wctype.h:696:1:700:2",
+    "func_defid": "include/wctype.h:rpl_iswlower",
+    "span": "include/wctype.h:696:1:700:2",
     "pieces": [
-      "include\\wctype.h:696:1:700:2"
+      "include/wctype.h:696:1:700:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6320,10 +6320,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_iswprint",
-    "span": "include\\wctype.h:702:1:710:2",
+    "func_defid": "include/wctype.h:rpl_iswprint",
+    "span": "include/wctype.h:702:1:710:2",
     "pieces": [
-      "include\\wctype.h:702:1:710:2"
+      "include/wctype.h:702:1:710:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
@@ -6334,10 +6334,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_iswpunct",
-    "span": "include\\wctype.h:712:1:716:2",
+    "func_defid": "include/wctype.h:rpl_iswpunct",
+    "span": "include/wctype.h:712:1:716:2",
     "pieces": [
-      "include\\wctype.h:712:1:716:2"
+      "include/wctype.h:712:1:716:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6348,10 +6348,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_iswspace",
-    "span": "include\\wctype.h:718:1:722:2",
+    "func_defid": "include/wctype.h:rpl_iswspace",
+    "span": "include/wctype.h:718:1:722:2",
     "pieces": [
-      "include\\wctype.h:718:1:722:2"
+      "include/wctype.h:718:1:722:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6362,10 +6362,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_iswupper",
-    "span": "include\\wctype.h:724:1:728:2",
+    "func_defid": "include/wctype.h:rpl_iswupper",
+    "span": "include/wctype.h:724:1:728:2",
     "pieces": [
-      "include\\wctype.h:724:1:728:2"
+      "include/wctype.h:724:1:728:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6376,10 +6376,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_iswxdigit",
-    "span": "include\\wctype.h:730:1:737:2",
+    "func_defid": "include/wctype.h:rpl_iswxdigit",
+    "span": "include/wctype.h:730:1:737:2",
     "pieces": [
-      "include\\wctype.h:730:1:737:2"
+      "include/wctype.h:730:1:737:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
@@ -6390,10 +6390,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_towlower",
-    "span": "include\\wctype.h:739:1:743:2",
+    "func_defid": "include/wctype.h:rpl_towlower",
+    "span": "include/wctype.h:739:1:743:2",
     "pieces": [
-      "include\\wctype.h:739:1:743:2"
+      "include/wctype.h:739:1:743:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6404,10 +6404,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_towupper",
-    "span": "include\\wctype.h:745:1:749:2",
+    "func_defid": "include/wctype.h:rpl_towupper",
+    "span": "include/wctype.h:745:1:749:2",
     "pieces": [
-      "include\\wctype.h:745:1:749:2"
+      "include/wctype.h:745:1:749:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6418,23 +6418,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:iswalnum",
-    "span": "include\\wctype.h:830:1:838:2",
+    "func_defid": "include/wctype.h:iswalnum",
+    "span": "include/wctype.h:830:1:838:2",
     "pieces": [
-      "include\\wctype.h:830:1:838:2"
+      "include/wctype.h:830:1:838:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
     "source": "rpl_iswalnum\n#   else\niswalnum\n#   endif\n         (wint_t wc)\n{\n  return ((wc >= '0' && wc <= '9')\n          || ((wc & ~0x20) >= 'A' && (wc & ~0x20) <= 'Z'));\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32isalnum",
-        "span": "include\\uchar.h:708:10:708:23",
+        "caller": "include/uchar.h:c32isalnum",
+        "span": "include/uchar.h:708:10:708:23",
         "source": "iswalnum (wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_iswalnum",
-        "span": "include\\wctype.h:663:32:663:55",
+        "caller": "include/wctype.h:rpl_iswalnum",
+        "span": "include/wctype.h:663:32:663:55",
         "source": "return ((wchar_t) wc == wc ? iswalnum ((wchar_t) wc) : 0);"
       }
     ],
@@ -6443,23 +6443,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:iswalpha",
-    "span": "include\\wctype.h:842:1:849:2",
+    "func_defid": "include/wctype.h:iswalpha",
+    "span": "include/wctype.h:842:1:849:2",
     "pieces": [
-      "include\\wctype.h:842:1:849:2"
+      "include/wctype.h:842:1:849:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
     "source": "rpl_iswalpha\n#   else\niswalpha\n#   endif\n         (wint_t wc)\n{\n  return (wc & ~0x20) >= 'A' && (wc & ~0x20) <= 'Z';\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32isalpha",
-        "span": "include\\uchar.h:727:10:727:23",
+        "caller": "include/uchar.h:c32isalpha",
+        "span": "include/uchar.h:727:10:727:23",
         "source": "iswalpha (wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_iswalpha",
-        "span": "include\\wctype.h:669:32:669:55",
+        "caller": "include/wctype.h:rpl_iswalpha",
+        "span": "include/wctype.h:669:32:669:55",
         "source": "return ((wchar_t) wc == wc ? iswalpha ((wchar_t) wc) : 0);"
       }
     ],
@@ -6468,23 +6468,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:iswblank",
-    "span": "include\\wctype.h:853:1:860:2",
+    "func_defid": "include/wctype.h:iswblank",
+    "span": "include/wctype.h:853:1:860:2",
     "pieces": [
-      "include\\wctype.h:853:1:860:2"
+      "include/wctype.h:853:1:860:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
     "source": "rpl_iswblank\n#   else\niswblank\n#   endif\n         (wint_t wc)\n{\n  return wc == ' ' || wc == '\\t';\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32isblank",
-        "span": "include\\uchar.h:746:10:746:23",
+        "caller": "include/uchar.h:c32isblank",
+        "span": "include/uchar.h:746:10:746:23",
         "source": "iswblank (wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_iswblank",
-        "span": "include\\wctype.h:675:32:675:55",
+        "caller": "include/wctype.h:rpl_iswblank",
+        "span": "include/wctype.h:675:32:675:55",
         "source": "return ((wchar_t) wc == wc ? iswblank ((wchar_t) wc) : 0);"
       }
     ],
@@ -6493,23 +6493,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:iswcntrl",
-    "span": "include\\wctype.h:864:1:871:2",
+    "func_defid": "include/wctype.h:iswcntrl",
+    "span": "include/wctype.h:864:1:871:2",
     "pieces": [
-      "include\\wctype.h:864:1:871:2"
+      "include/wctype.h:864:1:871:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
     "source": "rpl_iswcntrl\n#   else\niswcntrl\n#   endif\n        (wint_t wc)\n{\n  return (wc & ~0x1f) == 0 || wc == 0x7f;\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32iscntrl",
-        "span": "include\\uchar.h:765:10:765:23",
+        "caller": "include/uchar.h:c32iscntrl",
+        "span": "include/uchar.h:765:10:765:23",
         "source": "iswcntrl (wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_iswcntrl",
-        "span": "include\\wctype.h:681:32:681:55",
+        "caller": "include/wctype.h:rpl_iswcntrl",
+        "span": "include/wctype.h:681:32:681:55",
         "source": "return ((wchar_t) wc == wc ? iswcntrl ((wchar_t) wc) : 0);"
       }
     ],
@@ -6518,18 +6518,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:iswdigit",
-    "span": "include\\wctype.h:875:1:882:2",
+    "func_defid": "include/wctype.h:iswdigit",
+    "span": "include/wctype.h:875:1:882:2",
     "pieces": [
-      "include\\wctype.h:875:1:882:2"
+      "include/wctype.h:875:1:882:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
     "source": "rpl_iswdigit\n#   else\niswdigit\n#   endif\n         (wint_t wc)\n{\n  return wc >= '0' && wc <= '9';\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32isdigit",
-        "span": "include\\uchar.h:784:10:784:23",
+        "caller": "include/uchar.h:c32isdigit",
+        "span": "include/uchar.h:784:10:784:23",
         "source": "iswdigit (wc);"
       }
     ],
@@ -6538,28 +6538,28 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:iswgraph",
-    "span": "include\\wctype.h:886:1:893:2",
+    "func_defid": "include/wctype.h:iswgraph",
+    "span": "include/wctype.h:886:1:893:2",
     "pieces": [
-      "include\\wctype.h:886:1:893:2"
+      "include/wctype.h:886:1:893:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
     "source": "rpl_iswgraph\n#   else\niswgraph\n#   endif\n         (wint_t wc)\n{\n  return wc >= '!' && wc <= '~';\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32isgraph",
-        "span": "include\\uchar.h:803:10:803:23",
+        "caller": "include/uchar.h:c32isgraph",
+        "span": "include/uchar.h:803:10:803:23",
         "source": "iswgraph (wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_iswgraph",
-        "span": "include\\wctype.h:693:32:693:55",
+        "caller": "include/wctype.h:rpl_iswgraph",
+        "span": "include/wctype.h:693:32:693:55",
         "source": "return ((wchar_t) wc == wc ? iswgraph ((wchar_t) wc) : 0);"
       },
       {
-        "caller": "include\\wctype.h:rpl_iswprint",
-        "span": "include\\wctype.h:706:45:706:68",
+        "caller": "include/wctype.h:rpl_iswprint",
+        "span": "include/wctype.h:706:45:706:68",
         "source": "return ((wchar_t) wc == wc ? wc == ' ' || iswgraph ((wchar_t) wc) : 0);"
       }
     ],
@@ -6568,23 +6568,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:iswlower",
-    "span": "include\\wctype.h:897:1:904:2",
+    "func_defid": "include/wctype.h:iswlower",
+    "span": "include/wctype.h:897:1:904:2",
     "pieces": [
-      "include\\wctype.h:897:1:904:2"
+      "include/wctype.h:897:1:904:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
     "source": "rpl_iswlower\n#   else\niswlower\n#   endif\n         (wint_t wc)\n{\n  return wc >= 'a' && wc <= 'z';\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32islower",
-        "span": "include\\uchar.h:822:10:822:23",
+        "caller": "include/uchar.h:c32islower",
+        "span": "include/uchar.h:822:10:822:23",
         "source": "iswlower (wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_iswlower",
-        "span": "include\\wctype.h:699:32:699:55",
+        "caller": "include/wctype.h:rpl_iswlower",
+        "span": "include/wctype.h:699:32:699:55",
         "source": "return ((wchar_t) wc == wc ? iswlower ((wchar_t) wc) : 0);"
       }
     ],
@@ -6593,23 +6593,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:iswprint",
-    "span": "include\\wctype.h:908:1:915:2",
+    "func_defid": "include/wctype.h:iswprint",
+    "span": "include/wctype.h:908:1:915:2",
     "pieces": [
-      "include\\wctype.h:908:1:915:2"
+      "include/wctype.h:908:1:915:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
     "source": "rpl_iswprint\n#   else\niswprint\n#   endif\n         (wint_t wc)\n{\n  return wc >= ' ' && wc <= '~';\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32isprint",
-        "span": "include\\uchar.h:841:10:841:23",
+        "caller": "include/uchar.h:c32isprint",
+        "span": "include/uchar.h:841:10:841:23",
         "source": "iswprint (wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_iswprint",
-        "span": "include\\wctype.h:708:32:708:55",
+        "caller": "include/wctype.h:rpl_iswprint",
+        "span": "include/wctype.h:708:32:708:55",
         "source": "return ((wchar_t) wc == wc ? iswprint ((wchar_t) wc) : 0);"
       }
     ],
@@ -6618,23 +6618,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:iswpunct",
-    "span": "include\\wctype.h:919:1:928:2",
+    "func_defid": "include/wctype.h:iswpunct",
+    "span": "include/wctype.h:919:1:928:2",
     "pieces": [
-      "include\\wctype.h:919:1:928:2"
+      "include/wctype.h:919:1:928:2"
     ],
     "sub_chunks": [],
     "num_lines": 10,
     "source": "rpl_iswpunct\n#   else\niswpunct\n#   endif\n         (wint_t wc)\n{\n  return (wc >= '!' && wc <= '~'\n          && !((wc >= '0' && wc <= '9')\n               || ((wc & ~0x20) >= 'A' && (wc & ~0x20) <= 'Z')));\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32ispunct",
-        "span": "include\\uchar.h:860:10:860:23",
+        "caller": "include/uchar.h:c32ispunct",
+        "span": "include/uchar.h:860:10:860:23",
         "source": "iswpunct (wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_iswpunct",
-        "span": "include\\wctype.h:715:32:715:55",
+        "caller": "include/wctype.h:rpl_iswpunct",
+        "span": "include/wctype.h:715:32:715:55",
         "source": "return ((wchar_t) wc == wc ? iswpunct ((wchar_t) wc) : 0);"
       }
     ],
@@ -6643,23 +6643,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:iswspace",
-    "span": "include\\wctype.h:932:1:940:2",
+    "func_defid": "include/wctype.h:iswspace",
+    "span": "include/wctype.h:932:1:940:2",
     "pieces": [
-      "include\\wctype.h:932:1:940:2"
+      "include/wctype.h:932:1:940:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
     "source": "rpl_iswspace\n#   else\niswspace\n#   endif\n         (wint_t wc)\n{\n  return (wc == ' ' || wc == '\\t'\n          || wc == '\\n' || wc == '\\v' || wc == '\\f' || wc == '\\r');\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32isspace",
-        "span": "include\\uchar.h:879:10:879:23",
+        "caller": "include/uchar.h:c32isspace",
+        "span": "include/uchar.h:879:10:879:23",
         "source": "iswspace (wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_iswspace",
-        "span": "include\\wctype.h:721:32:721:55",
+        "caller": "include/wctype.h:rpl_iswspace",
+        "span": "include/wctype.h:721:32:721:55",
         "source": "return ((wchar_t) wc == wc ? iswspace ((wchar_t) wc) : 0);"
       }
     ],
@@ -6668,23 +6668,23 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:iswupper",
-    "span": "include\\wctype.h:944:1:951:2",
+    "func_defid": "include/wctype.h:iswupper",
+    "span": "include/wctype.h:944:1:951:2",
     "pieces": [
-      "include\\wctype.h:944:1:951:2"
+      "include/wctype.h:944:1:951:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
     "source": "rpl_iswupper\n#   else\niswupper\n#   endif\n         (wint_t wc)\n{\n  return wc >= 'A' && wc <= 'Z';\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32isupper",
-        "span": "include\\uchar.h:898:10:898:23",
+        "caller": "include/uchar.h:c32isupper",
+        "span": "include/uchar.h:898:10:898:23",
         "source": "iswupper (wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_iswupper",
-        "span": "include\\wctype.h:727:32:727:55",
+        "caller": "include/wctype.h:rpl_iswupper",
+        "span": "include/wctype.h:727:32:727:55",
         "source": "return ((wchar_t) wc == wc ? iswupper ((wchar_t) wc) : 0);"
       }
     ],
@@ -6693,18 +6693,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:iswxdigit",
-    "span": "include\\wctype.h:955:1:963:2",
+    "func_defid": "include/wctype.h:iswxdigit",
+    "span": "include/wctype.h:955:1:963:2",
     "pieces": [
-      "include\\wctype.h:955:1:963:2"
+      "include/wctype.h:955:1:963:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,
     "source": "rpl_iswxdigit\n#   else\niswxdigit\n#   endif\n          (wint_t wc)\n{\n  return ((wc >= '0' && wc <= '9')\n          || ((wc & ~0x20) >= 'A' && (wc & ~0x20) <= 'F'));\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32isxdigit",
-        "span": "include\\uchar.h:917:10:917:24",
+        "caller": "include/uchar.h:c32isxdigit",
+        "span": "include/uchar.h:917:10:917:24",
         "source": "iswxdigit (wc);"
       }
     ],
@@ -6713,28 +6713,28 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:towlower",
-    "span": "include\\wctype.h:967:1:974:2",
+    "func_defid": "include/wctype.h:towlower",
+    "span": "include/wctype.h:967:1:974:2",
     "pieces": [
-      "include\\wctype.h:967:1:974:2"
+      "include/wctype.h:967:1:974:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
     "source": "rpl_towlower\n#   else\ntowlower\n#   endif\n         (wint_t wc)\n{\n  return (wc >= 'A' && wc <= 'Z' ? wc - 'A' + 'a' : wc);\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32tolower",
-        "span": "include\\uchar.h:939:10:939:23",
+        "caller": "include/uchar.h:c32tolower",
+        "span": "include/uchar.h:939:10:939:23",
         "source": "towlower (wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_towlower",
-        "span": "include\\wctype.h:742:42:742:65",
+        "caller": "include/wctype.h:rpl_towlower",
+        "span": "include/wctype.h:742:42:742:65",
         "source": "return ((wchar_t) wc == wc ? (wchar_t) towlower ((wchar_t) wc) : wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_towlower",
-        "span": "include\\wctype.h:1054:29:1054:42",
+        "caller": "include/wctype.h:rpl_towlower",
+        "span": "include/wctype.h:1054:29:1054:42",
         "source": "return (wint_t) (wchar_t) towlower (wc);"
       }
     ],
@@ -6743,28 +6743,28 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:towupper",
-    "span": "include\\wctype.h:978:1:985:2",
+    "func_defid": "include/wctype.h:towupper",
+    "span": "include/wctype.h:978:1:985:2",
     "pieces": [
-      "include\\wctype.h:978:1:985:2"
+      "include/wctype.h:978:1:985:2"
     ],
     "sub_chunks": [],
     "num_lines": 8,
     "source": "rpl_towupper\n#   else\ntowupper\n#   endif\n         (wint_t wc)\n{\n  return (wc >= 'a' && wc <= 'z' ? wc - 'a' + 'A' : wc);\n}",
     "calls": [
       {
-        "caller": "include\\uchar.h:c32toupper",
-        "span": "include\\uchar.h:958:10:958:23",
+        "caller": "include/uchar.h:c32toupper",
+        "span": "include/uchar.h:958:10:958:23",
         "source": "towupper (wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_towupper",
-        "span": "include\\wctype.h:748:42:748:65",
+        "caller": "include/wctype.h:rpl_towupper",
+        "span": "include/wctype.h:748:42:748:65",
         "source": "return ((wchar_t) wc == wc ? (wchar_t) towupper ((wchar_t) wc) : wc);"
       },
       {
-        "caller": "include\\wctype.h:rpl_towupper",
-        "span": "include\\wctype.h:1063:29:1063:42",
+        "caller": "include/wctype.h:rpl_towupper",
+        "span": "include/wctype.h:1063:29:1063:42",
         "source": "return (wint_t) (wchar_t) towupper (wc);"
       }
     ],
@@ -6773,10 +6773,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_towlower",
-    "span": "include\\wctype.h:1051:1:1055:2",
+    "func_defid": "include/wctype.h:rpl_towlower",
+    "span": "include/wctype.h:1051:1:1055:2",
     "pieces": [
-      "include\\wctype.h:1051:1:1055:2"
+      "include/wctype.h:1051:1:1055:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6787,10 +6787,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\wctype.h:rpl_towupper",
-    "span": "include\\wctype.h:1060:1:1064:2",
+    "func_defid": "include/wctype.h:rpl_towupper",
+    "span": "include/wctype.h:1060:1:1064:2",
     "pieces": [
-      "include\\wctype.h:1060:1:1064:2"
+      "include/wctype.h:1060:1:1064:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6801,10 +6801,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\xalloc.h:xnrealloc",
-    "span": "include\\xalloc.h:146:1:150:2",
+    "func_defid": "include/xalloc.h:xnrealloc",
+    "span": "include/xalloc.h:146:1:150:2",
     "pieces": [
-      "include\\xalloc.h:146:1:150:2"
+      "include/xalloc.h:146:1:150:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6815,10 +6815,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\xalloc.h:xrealloc",
-    "span": "include\\xalloc.h:173:30:177:2",
+    "func_defid": "include/xalloc.h:xrealloc",
+    "span": "include/xalloc.h:173:30:177:2",
     "pieces": [
-      "include\\xalloc.h:173:30:177:2"
+      "include/xalloc.h:173:30:177:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6830,8 +6830,8 @@
         "source": "pa = xrealloc (pa, nbytes);"
       },
       {
-        "caller": "include\\xalloc.h:xrealloc",
-        "span": "include\\xalloc.h:176:16:176:40",
+        "caller": "include/xalloc.h:xrealloc",
+        "span": "include/xalloc.h:176:16:176:40",
         "source": "return (T *) xrealloc ((void *) p, s);"
       }
     ],
@@ -6840,10 +6840,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\xalloc.h:xreallocarray",
-    "span": "include\\xalloc.h:179:30:183:2",
+    "func_defid": "include/xalloc.h:xreallocarray",
+    "span": "include/xalloc.h:179:30:183:2",
     "pieces": [
-      "include\\xalloc.h:179:30:183:2"
+      "include/xalloc.h:179:30:183:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6860,18 +6860,18 @@
         "source": "p = xreallocarray (p, n, s);"
       },
       {
-        "caller": "include\\xalloc.h:xnrealloc",
-        "span": "include\\xalloc.h:149:10:149:33",
+        "caller": "include/xalloc.h:xnrealloc",
+        "span": "include/xalloc.h:149:10:149:33",
         "source": "return xreallocarray (p, n, s);"
       },
       {
-        "caller": "include\\xalloc.h:xreallocarray",
-        "span": "include\\xalloc.h:182:16:182:48",
+        "caller": "include/xalloc.h:xreallocarray",
+        "span": "include/xalloc.h:182:16:182:48",
         "source": "return (T *) xreallocarray ((void *) p, n, s);"
       },
       {
-        "caller": "include\\xalloc.h:xnrealloc",
-        "span": "include\\xalloc.h:189:10:189:33",
+        "caller": "include/xalloc.h:xnrealloc",
+        "span": "include/xalloc.h:189:10:189:33",
         "source": "return xreallocarray (p, n, s);"
       }
     ],
@@ -6880,10 +6880,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\xalloc.h:xnrealloc",
-    "span": "include\\xalloc.h:186:30:190:2",
+    "func_defid": "include/xalloc.h:xnrealloc",
+    "span": "include/xalloc.h:186:30:190:2",
     "pieces": [
-      "include\\xalloc.h:186:30:190:2"
+      "include/xalloc.h:186:30:190:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6894,18 +6894,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\xalloc.h:x2realloc",
-    "span": "include\\xalloc.h:192:30:196:2",
+    "func_defid": "include/xalloc.h:x2realloc",
+    "span": "include/xalloc.h:192:30:196:2",
     "pieces": [
-      "include\\xalloc.h:192:30:196:2"
+      "include/xalloc.h:192:30:196:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
     "source": "T *\nx2realloc (T *p, size_t *pn)\n{\n  return (T *) x2realloc ((void *) p, pn);\n}",
     "calls": [
       {
-        "caller": "include\\xalloc.h:x2realloc",
-        "span": "include\\xalloc.h:195:16:195:42",
+        "caller": "include/xalloc.h:x2realloc",
+        "span": "include/xalloc.h:195:16:195:42",
         "source": "return (T *) x2realloc ((void *) p, pn);"
       }
     ],
@@ -6914,10 +6914,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\xalloc.h:x2nrealloc",
-    "span": "include\\xalloc.h:198:30:202:2",
+    "func_defid": "include/xalloc.h:x2nrealloc",
+    "span": "include/xalloc.h:198:30:202:2",
     "pieces": [
-      "include\\xalloc.h:198:30:202:2"
+      "include/xalloc.h:198:30:202:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6929,8 +6929,8 @@
         "source": "return x2nrealloc (p, ps, 1);"
       },
       {
-        "caller": "include\\xalloc.h:x2nrealloc",
-        "span": "include\\xalloc.h:201:16:201:46",
+        "caller": "include/xalloc.h:x2nrealloc",
+        "span": "include/xalloc.h:201:16:201:46",
         "source": "return (T *) x2nrealloc ((void *) p, pn, s);"
       }
     ],
@@ -6939,10 +6939,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\xalloc.h:xmemdup",
-    "span": "include\\xalloc.h:204:30:208:2",
+    "func_defid": "include/xalloc.h:xmemdup",
+    "span": "include/xalloc.h:204:30:208:2",
     "pieces": [
-      "include\\xalloc.h:204:30:208:2"
+      "include/xalloc.h:204:30:208:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -6959,8 +6959,8 @@
         "source": "return xmemdup (string, strlen (string) + 1);"
       },
       {
-        "caller": "include\\xalloc.h:xmemdup",
-        "span": "include\\xalloc.h:207:16:207:45",
+        "caller": "include/xalloc.h:xmemdup",
+        "span": "include/xalloc.h:207:16:207:45",
         "source": "return (T *) xmemdup ((void const *) p, s);"
       }
     ],
@@ -6969,18 +6969,18 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\xbinary-io.h:xset_binary_mode_error",
-    "span": "include\\xbinary-io.h:40:1:40:56",
+    "func_defid": "include/xbinary-io.h:xset_binary_mode_error",
+    "span": "include/xbinary-io.h:40:1:40:56",
     "pieces": [
-      "include\\xbinary-io.h:40:1:40:56"
+      "include/xbinary-io.h:40:1:40:56"
     ],
     "sub_chunks": [],
     "num_lines": 1,
     "source": "XBINARY_IO_INLINE void xset_binary_mode_error (void) {}",
     "calls": [
       {
-        "caller": "include\\xbinary-io.h:xset_binary_mode",
-        "span": "include\\xbinary-io.h:50:5:50:30",
+        "caller": "include/xbinary-io.h:xset_binary_mode",
+        "span": "include/xbinary-io.h:50:5:50:30",
         "source": "xset_binary_mode_error ();"
       }
     ],
@@ -6989,10 +6989,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\xbinary-io.h:xset_binary_mode",
-    "span": "include\\xbinary-io.h:46:1:51:2",
+    "func_defid": "include/xbinary-io.h:xset_binary_mode",
+    "span": "include/xbinary-io.h:46:1:51:2",
     "pieces": [
-      "include\\xbinary-io.h:46:1:51:2"
+      "include/xbinary-io.h:46:1:51:2"
     ],
     "sub_chunks": [],
     "num_lines": 6,
@@ -7014,10 +7014,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\sys\\select.h:rpl_fd_isset",
-    "span": "include\\sys\\select.h:663:1:675:2",
+    "func_defid": "include/sys/select.h:rpl_fd_isset",
+    "span": "include/sys/select.h:663:1:675:2",
     "pieces": [
-      "include\\sys\\select.h:663:1:675:2"
+      "include/sys/select.h:663:1:675:2"
     ],
     "sub_chunks": [],
     "num_lines": 13,
@@ -7028,10 +7028,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\sys\\stat.h:rpl_mkdir",
-    "span": "include\\sys\\stat.h:1171:1:1175:2",
+    "func_defid": "include/sys/stat.h:rpl_mkdir",
+    "span": "include/sys/stat.h:1171:1:1175:2",
     "pieces": [
-      "include\\sys\\stat.h:1171:1:1175:2"
+      "include/sys/stat.h:1171:1:1175:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -7042,10 +7042,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\sys\\stat.h:rpl_mkdir",
-    "span": "include\\sys\\stat.h:1199:1:1203:2",
+    "func_defid": "include/sys/stat.h:rpl_mkdir",
+    "span": "include/sys/stat.h:1199:1:1203:2",
     "pieces": [
-      "include\\sys\\stat.h:1199:1:1203:2"
+      "include/sys/stat.h:1199:1:1203:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,
@@ -7056,10 +7056,10 @@
     "chunks": []
   },
   {
-    "func_defid": "include\\sys\\time.h:GNULIB_NAMESPACE",
-    "span": "include\\sys\\time.h:642:1:650:2",
+    "func_defid": "include/sys/time.h:GNULIB_NAMESPACE",
+    "span": "include/sys/time.h:642:1:650:2",
     "pieces": [
-      "include\\sys\\time.h:642:1:650:2"
+      "include/sys/time.h:642:1:650:2"
     ],
     "sub_chunks": [],
     "num_lines": 9,

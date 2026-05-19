@@ -936,10 +936,13 @@ class RustTestAgent:
                 runner, baseline_pass_names, failing_case.name
             )
             if regressed:
+                regression_detail = _format_regression_details(regressed)
                 print(
                     f"    [rtest] ⚠ 修复 {failing_case.name} 引入回归："
                     f"{', '.join(sorted(regressed))}，回滚本次编辑"
                 )
+                for line in regression_detail.splitlines():
+                    print(f"      {line}")
                 try:
                     snapshot.restore()
                 except SnapshotError as exc:
@@ -954,7 +957,9 @@ class RustTestAgent:
                     "本次 edits 让 "
                     f"{failing_case.name} 通过，但同时让以下用例回归失败："
                     + ", ".join(sorted(regressed))
-                    + "。请只修与本用例特征相关的代码路径。"
+                    + "。已回滚本次 edits。回归失败证据如下：\n"
+                    + regression_detail
+                    + "\n下一轮必须同时保持当前用例通过，并解释为什么不会再次破坏这些回归用例。"
                 )
                 failing_case.passed = False
                 # 回归回滚后重置 stall 计数（#29）
@@ -993,16 +998,16 @@ class RustTestAgent:
         runner: TestRunner,
         baseline_pass_names: Set[str],
         skip_case_name: str,
-    ) -> Set[str]:
+    ) -> Dict[str, TestCaseResult]:
         if not baseline_pass_names:
-            return set()
-        regressed: Set[str] = set()
+            return {}
+        regressed: Dict[str, TestCaseResult] = {}
         for script in sorted(runner.test_dir.glob("*.sh")):
             if script.name == skip_case_name or script.name not in baseline_pass_names:
                 continue
-            r = runner.run_single(script, capture_trace=False)
+            r = runner.run_single(script, capture_trace=True)
             if not r.passed:
-                regressed.add(script.name)
+                regressed[script.name] = r
         return regressed
 
 
@@ -1036,6 +1041,25 @@ def _edits_fingerprint(edits: List[Dict]) -> str:
     except (TypeError, ValueError):
         payload = repr(edits)
     return hashlib.sha256(payload.encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+
+def _format_regression_details(regressed: Dict[str, TestCaseResult]) -> str:
+    """把回归用例失败证据压缩成可打印、可注入 prompt 的文本。"""
+    lines: List[str] = []
+    for name in sorted(regressed):
+        result = regressed[name]
+        lines.append(
+            f"- {name}: exit={result.exit_code}, duration={result.duration_seconds}s"
+        )
+        excerpt = result.short_failure_excerpt(1200).strip()
+        if excerpt:
+            lines.append("  failure excerpt:")
+            lines.extend(f"    {line}" for line in excerpt.splitlines()[-18:])
+        trace = (result.trace or "").strip()
+        if trace:
+            lines.append("  trace tail:")
+            lines.extend(f"    {line}" for line in trace.splitlines()[-18:])
+    return "\n".join(lines)
 
 
 def _looks_like_argv0_path_diff(text: str) -> bool:
@@ -1074,6 +1098,37 @@ skip_()
   exit 77
 }
 
+mkfifo_or_skip_()
+{
+  name=$1
+  if command -v mkfifo >/dev/null 2>&1; then
+    mkfifo "$name" 2>/dev/null && return 0
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import os,sys; os.mkfifo(sys.argv[1])' "$name" 2>/dev/null && return 0
+  fi
+  if command -v python >/dev/null 2>&1; then
+    python -c 'import os,sys; os.mkfifo(sys.argv[1])' "$name" 2>/dev/null && return 0
+  fi
+  skip_ "cannot create fifo $name"
+}
+
+retry_delay_()
+{
+  func=$1
+  delay=$2
+  retries=$3
+  shift 3
+
+  i=0
+  while :; do
+    "$func" "$delay" "$@" && return 0
+    i=$((i + 1))
+    test "$i" -ge "$retries" && return 1
+    sleep "$delay"
+  done
+}
+
 compare()
 {
   diff -u "$@"
@@ -1105,6 +1160,16 @@ get_min_ulimit_v_()
   # guard checks that add a small margin.
   echo 65536
 }
+
+_cgr_cleanup_on_exit_()
+{
+  status=$?
+  if command -v cleanup_ >/dev/null 2>&1; then
+    cleanup_
+  fi
+  exit "$status"
+}
+trap _cgr_cleanup_on_exit_ 0
 '''
 
 
