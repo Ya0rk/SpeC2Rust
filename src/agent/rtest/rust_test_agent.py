@@ -102,18 +102,21 @@ class RustTestAgent:
     ) -> TestRunSummary:
         rust_project_path = str(Path(rust_project_path).resolve())
         c_project_path = str(Path(c_project_path).resolve())
-        bin_name = binary_name or Path(c_project_path).name
+        bin_name = binary_name or self._infer_bin_name(c_project_path, rust_project_path)
+        if not binary_name:
+            print(f"[rtest] 自动推断 bin_name = {bin_name}（C 项目目录 / Cargo.toml）")
 
         # C 参考可执行文件现在是**可选**的：测试可以纯粹基于 Rust 输出
         # 与期望输出（grep / diff fixture）做比对，不强依赖 C 对照实现。
-        c_binary = self._locate_c_binary(c_project_path) or ""
+        c_binary = self._locate_c_binary(c_project_path, bin_name) or ""
         if c_binary:
             print(f"[rtest] 使用 C 参考可执行文件：{c_binary}")
         else:
             project_name = Path(c_project_path).name
             print(
                 f"[rtest] 未在 {c_project_path} 找到 C 参考可执行文件 "
-                f"（期望 {project_name} 或 {project_name}.exe），将仅基于 Rust 输出做测试"
+                f"（期望 {bin_name} / {project_name} 或带 .exe 后缀），"
+                f"将仅基于 Rust 输出做测试"
             )
 
         test_src = self._find_c_test_dir(c_project_path)
@@ -121,8 +124,8 @@ class RustTestAgent:
             print(f"[rtest] 未在 C 项目中找到 test/ 目录：{c_project_path}")
             return TestRunSummary(0, 0, 0, [])
         test_dst = os.path.join(rust_project_path, "test")
-        fixtures_copied = self._copy_test_fixtures(test_src, test_dst)
-        print(f"[rtest] 已拷贝 {fixtures_copied} 个 fixture 到 {test_dst}")
+        copied_files = self._copy_test_tree(test_src, test_dst)
+        print(f"[rtest] 已整体复制测试目录：{test_src} -> {test_dst} ({copied_files} 个文件)")
         self._ensure_test_framework_shim(test_dst)
 
         if self.translate_tests:
@@ -140,7 +143,7 @@ class RustTestAgent:
             # 默认不改写测试脚本：先原样复制 C 项目的 sh，由 TestRunner 提供
             # Rust/C wrapper、srcdir/abs_srcdir 等兼容环境。LLM 修复阶段只在确认为
             # 测试迁移问题时，才允许局部编辑当前失败脚本。
-            scripts = self._copy_original_test_scripts(test_src, test_dst)
+            scripts = self._collect_original_test_scripts(test_dst)
         if not scripts:
             print(f"[rtest] {test_src} 内未找到任何 .sh 测试脚本")
             return TestRunSummary(0, 0, 0, [])
@@ -201,7 +204,7 @@ class RustTestAgent:
             )
             if final_binary != binary_path:
                 runner.restage_rust_binary(final_binary)
-            final_summary = runner.run_all(sorted(Path(test_dst).glob("*.sh")))
+            final_summary = runner.run_all(self._discover_shell_scripts(Path(test_dst)))
             self._print_summary(final_summary, label="最终测试结果")
             return final_summary
         finally:
@@ -216,6 +219,36 @@ class RustTestAgent:
             if os.path.isdir(path):
                 return path
         return ""
+
+    @staticmethod
+    def _copy_test_tree(src_dir: str, dst_dir: str) -> int:
+        """Recursively copy the C project's test directory before staging wrappers."""
+        src_path = Path(src_dir)
+        dst_path = Path(dst_dir)
+        if dst_path.exists():
+            shutil.rmtree(dst_path, ignore_errors=True)
+
+        def ignore_generated(_dir: str, names: List[str]) -> Set[str]:
+            ignored: Set[str] = set()
+            for name in names:
+                if (
+                    name == ".bin"
+                    or name.startswith(".run_")
+                    or name == "__pycache__"
+                    or name.endswith(".pyc")
+                    or name.endswith(".orig")
+                    or name.endswith(".llm_raw.txt")
+                    or name.endswith(".invalid")
+                ):
+                    ignored.add(name)
+            return ignored
+
+        shutil.copytree(src_path, dst_path, ignore=ignore_generated)
+        copied = 0
+        for path in dst_path.rglob("*"):
+            if path.is_file():
+                copied += 1
+        return copied
 
     @staticmethod
     def _copy_tests(src_dir: str, dst_dir: str) -> List[str]:
@@ -249,6 +282,39 @@ class RustTestAgent:
                     pass
 
         print(f"[rtest] 已拷贝 {len(copied)} 个测试脚本到 {dst_dir}")
+        return copied
+
+    @staticmethod
+    def _discover_shell_scripts(test_dir: Path) -> List[Path]:
+        scripts: List[Path] = []
+        for path in sorted(test_dir.rglob("*.sh")):
+            parts = set(path.relative_to(test_dir).parts)
+            if ".bin" in parts or any(part.startswith(".run_") for part in parts):
+                continue
+            if path.name.endswith(".sh.orig"):
+                continue
+            scripts.append(path)
+        return scripts
+
+    @staticmethod
+    def _collect_original_test_scripts(dst_dir: str) -> List[Path]:
+        """Normalize copied shell tests and keep .orig backups for repair diffs."""
+        dst_path = Path(dst_dir)
+        copied: List[Path] = []
+        for script in RustTestAgent._discover_shell_scripts(dst_path):
+            try:
+                body = script.read_text(encoding="utf-8", errors="ignore")
+                script.write_text(body, encoding="utf-8", newline="\n")
+                if os.name != "nt":
+                    os.chmod(script, 0o755)
+                orig = script.with_name(f"{script.name}.orig")
+                orig.write_text(body, encoding="utf-8", newline="\n")
+            except OSError as exc:
+                print(f"[rtest] 处理原始测试脚本失败：{script}: {exc}")
+                continue
+            copied.append(script)
+
+        print(f"[rtest] 已原样准备 {len(copied)} 个 sh 测试脚本")
         return copied
 
     @staticmethod
@@ -348,11 +414,62 @@ class RustTestAgent:
         return ok
 
     @staticmethod
-    def _locate_c_binary(c_project_path: str) -> str:
+    def _infer_bin_name(c_project_path: str, rust_project_path: str) -> str:
+        """Pick the test program name shared by C scripts and Cargo manifest.
+
+        Resolution order:
+
+        1. If the Rust crate's ``Cargo.toml`` declares a single ``[[bin]]
+           name`` (or only one ``[[bin]]`` entry), use it stripped of any
+           ``-rust`` suffix. This is the strongest signal because the test
+           scripts call ``./<bin>`` and we want the staged wrapper to match.
+        2. Otherwise fall back to the C project directory name (legacy
+           behaviour).
+
+        The chosen name doubles as ``<bin>``, ``<bin>-rust`` (wrapper) and
+        ``<bin>-c`` (C reference) inside the run dir, so picking it
+        consistently is what makes ``./sds-test`` resolve when the cargo
+        target is named ``sds-test`` rather than ``sds``.
+        """
+        cargo = os.path.join(rust_project_path, "Cargo.toml")
+        if os.path.isfile(cargo):
+            try:
+                text = Path(cargo).read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                text = ""
+            names = re.findall(
+                r'^\s*\[\[bin\]\][^\[]*?^\s*name\s*=\s*"([^"]+)"',
+                text,
+                flags=re.MULTILINE | re.DOTALL,
+            )
+            # 去重保序
+            seen: Set[str] = set()
+            unique = [n for n in names if not (n in seen or seen.add(n))]
+            if len(unique) == 1:
+                only = unique[0]
+                # 与命名约定保持一致：剥离 ``-rust`` 后缀让它跟 C 端测试脚本里
+                # ``./<bin>`` 的 token 对齐。
+                if only.endswith("-rust"):
+                    only = only[: -len("-rust")]
+                if only:
+                    return only
+        return Path(c_project_path).name
+
+    @staticmethod
+    def _locate_c_binary(c_project_path: str, bin_name: Optional[str] = None) -> str:
         if not os.path.isdir(c_project_path):
             return ""
-        name = Path(c_project_path).name
-        for cand in (name, f"{name}.exe"):
+        # 优先使用调用方传入的 bin_name（来自 --rust-test-agent-binary-name），
+        # 否则回退到 C 项目目录名。两个候选都试一遍，加上 .exe 后缀。
+        candidates: List[str] = []
+        for raw in (bin_name, Path(c_project_path).name):
+            if raw and raw not in candidates:
+                candidates.append(raw)
+        for raw in list(candidates):
+            exe = f"{raw}.exe"
+            if exe not in candidates:
+                candidates.append(exe)
+        for cand in candidates:
             full = os.path.join(c_project_path, cand)
             if os.path.isfile(full):
                 return full
@@ -360,13 +477,39 @@ class RustTestAgent:
 
     @staticmethod
     def _locate_release_binary(project_dir: str, bin_name: str) -> str:
+        """Locate a usable release binary.
+
+        Cargo names the executable after the ``[[bin]] name`` entry, which is
+        not always ``<bin_name>-rust``. Older projects in this repo used
+        ``-rust`` as a discriminator from the C reference; newer ones (or
+        crates auto-generated from upstream Cargo manifests) often keep the
+        original C tool name. ``bin_name`` here is whatever the call site
+        guessed (typically ``<bin>-rust``). We additionally try the variant
+        without the ``-rust`` suffix so the agent works even when the cargo
+        manifest sticks with the C tool's name.
+        """
         release_dir = os.path.join(project_dir, "target", "release")
         if not os.path.isdir(release_dir):
             return ""
-        for cand in (bin_name, f"{bin_name}.exe"):
-            full = os.path.join(release_dir, cand)
-            if os.path.isfile(full):
-                return full
+        suffix_candidates = [".exe", ""] if os.name == "nt" else ["", ".exe"]
+        name_candidates: List[str] = [bin_name]
+        if bin_name.endswith("-rust"):
+            stripped = bin_name[: -len("-rust")]
+            if stripped and stripped not in name_candidates:
+                name_candidates.append(stripped)
+        # 优先返回原生可执行：先一遍只挑通过 ELF/PE/Mach-O magic 校验的文件，
+        # 避免命中目录里残留的 bash 包装脚本或同名占位文件。
+        for name in name_candidates:
+            for suffix in suffix_candidates:
+                full = os.path.join(release_dir, f"{name}{suffix}")
+                if os.path.isfile(full) and _looks_like_native_executable(full):
+                    return full
+        # 兜底：允许命中非原生 wrapper（保持旧行为）。
+        for name in name_candidates:
+            for suffix in suffix_candidates:
+                full = os.path.join(release_dir, f"{name}{suffix}")
+                if os.path.isfile(full):
+                    return full
         return ""
 
     # --------------------------------------------------------------- summary
@@ -1070,6 +1213,46 @@ def _looks_like_argv0_path_diff(text: str) -> bool:
         and "target/release" in lowered
         and ("which-rust" in lowered or "-rust" in lowered)
     )
+
+
+def _looks_like_native_executable(path: str) -> bool:
+    """Best-effort check whether a file is a native binary, not a text wrapper.
+
+    Cargo's ``target/release/`` may end up holding tiny bash/sh stubs left
+    behind by earlier repair attempts. Treat anything starting with ``#!`` as
+    a script and reject it; otherwise accept files whose first bytes match a
+    common executable magic (ELF / PE-MZ / Mach-O / shebang-less binaries).
+    """
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(4)
+    except OSError:
+        return False
+    if not head:
+        return False
+    if head.startswith(b"#!"):
+        return False
+    # ELF
+    if head.startswith(b"\x7fELF"):
+        return True
+    # PE / MZ
+    if head[:2] == b"MZ":
+        return True
+    # Mach-O (32 / 64 / fat, both endians)
+    macho_magics = {
+        b"\xfe\xed\xfa\xce",
+        b"\xfe\xed\xfa\xcf",
+        b"\xce\xfa\xed\xfe",
+        b"\xcf\xfa\xed\xfe",
+        b"\xca\xfe\xba\xbe",
+        b"\xbe\xba\xfe\xca",
+    }
+    if head in macho_magics:
+        return True
+    # Wasm
+    if head == b"\x00asm":
+        return True
+    return False
 
 
 _MINIMAL_TEST_INIT_SH = r'''# Minimal test-framework shim for extracted shell tests.

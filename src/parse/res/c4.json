@@ -8,6 +8,76 @@
     "sub_chunks": [],
     "num_lines": 85,
     "source": "void next()\n{\n  char *pp;\n\n  while (tk = *p) {\n    ++p;\n    if (tk == '\\n') {\n      if (src) {\n        printf(\"%d: %.*s\", line, p - lp, lp);\n        lp = p;\n        while (le < e) {\n          printf(\"%8.4s\", &\"LEA ,IMM ,JMP ,JSR ,BZ  ,BNZ ,ENT ,ADJ ,LEV ,LI  ,LC  ,SI  ,SC  ,PSH ,\"\n                           \"OR  ,XOR ,AND ,EQ  ,NE  ,LT  ,GT  ,LE  ,GE  ,SHL ,SHR ,ADD ,SUB ,MUL ,DIV ,MOD ,\"\n                           \"OPEN,READ,CLOS,PRTF,MALC,FREE,MSET,MCMP,EXIT,\"[*++le * 5]);\n          if (*le <= ADJ) printf(\" %d\\n\", *++le); else printf(\"\\n\");\n        }\n      }\n      ++line;\n    }\n    else if (tk == '#') {\n      while (*p != 0 && *p != '\\n') ++p;\n    }\n    else if ((tk >= 'a' && tk <= 'z') || (tk >= 'A' && tk <= 'Z') || tk == '_') {\n      pp = p - 1;\n      while ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == '_')\n        tk = tk * 147 + *p++;\n      tk = (tk << 6) + (p - pp);\n      id = sym;\n      while (id[Tk]) {\n        if (tk == id[Hash] && !memcmp((char *)id[Name], pp, p - pp)) { tk = id[Tk]; return; }\n        id = id + Idsz;\n      }\n      id[Name] = (int)pp;\n      id[Hash] = tk;\n      tk = id[Tk] = Id;\n      return;\n    }\n    else if (tk >= '0' && tk <= '9') {\n      if (ival = tk - '0') { while (*p >= '0' && *p <= '9') ival = ival * 10 + *p++ - '0'; }\n      else if (*p == 'x' || *p == 'X') {\n        while ((tk = *++p) && ((tk >= '0' && tk <= '9') || (tk >= 'a' && tk <= 'f') || (tk >= 'A' && tk <= 'F')))\n          ival = ival * 16 + (tk & 15) + (tk >= 'A' ? 9 : 0);\n      }\n      else { while (*p >= '0' && *p <= '7') ival = ival * 8 + *p++ - '0'; }\n      tk = Num;\n      return;\n    }\n    else if (tk == '/') {\n      if (*p == '/') {\n        ++p;\n        while (*p != 0 && *p != '\\n') ++p;\n      }\n      else {\n        tk = Div;\n        return;\n      }\n    }\n    else if (tk == '\\'' || tk == '\"') {\n      pp = data;\n      while (*p != 0 && *p != tk) {\n        if ((ival = *p++) == '\\\\') {\n          if ((ival = *p++) == 'n') ival = '\\n';\n        }\n        if (tk == '\"') *data++ = ival;\n      }\n      ++p;\n      if (tk == '\"') ival = (int)pp; else tk = Num;\n      return;\n    }\n    else if (tk == '=') { if (*p == '=') { ++p; tk = Eq; } else tk = Assign; return; }\n    else if (tk == '+') { if (*p == '+') { ++p; tk = Inc; } else tk = Add; return; }\n    else if (tk == '-') { if (*p == '-') { ++p; tk = Dec; } else tk = Sub; return; }\n    else if (tk == '!') { if (*p == '=') { ++p; tk = Ne; } return; }\n    else if (tk == '<') { if (*p == '=') { ++p; tk = Le; } else if (*p == '<') { ++p; tk = Shl; } else tk = Lt; return; }\n    else if (tk == '>') { if (*p == '=') { ++p; tk = Ge; } else if (*p == '>') { ++p; tk = Shr; } else tk = Gt; return; }\n    else if (tk == '|') { if (*p == '|') { ++p; tk = Lor; } else tk = Or; return; }\n    else if (tk == '&') { if (*p == '&') { ++p; tk = Lan; } else tk = And; return; }\n    else if (tk == '^') { tk = Xor; return; }\n    else if (tk == '%') { tk = Mod; return; }\n    else if (tk == '*') { tk = Mul; return; }\n    else if (tk == '[') { tk = Brak; return; }\n    else if (tk == '?') { tk = Cond; return; }\n    else if (tk == '~' || tk == ';' || tk == '{' || tk == '}' || tk == '(' || tk == ')' || tk == ']' || tk == ',' || tk == ':') return;\n  }\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "c4.c:expr",
+    "span": "c4.c:134:1:282:2",
+    "pieces": [
+      "c4.c:134:1:282:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 149,
+    "source": "void expr(int lev)\n{\n  int t, *d;\n\n  if (!tk) { printf(\"%d: unexpected eof in expression\\n\", line); exit(-1); }\n  else if (tk == Num) { *++e = IMM; *++e = ival; next(); ty = INT; }\n  else if (tk == '\"') {\n    *++e = IMM; *++e = ival; next();\n    while (tk == '\"') next();\n    data = (char *)((int)data + sizeof(int) & -sizeof(int)); ty = PTR;\n  }\n  else if (tk == Sizeof) {\n    next(); if (tk == '(') next(); else { printf(\"%d: open paren expected in sizeof\\n\", line); exit(-1); }\n    ty = INT; if (tk == Int) next(); else if (tk == Char) { next(); ty = CHAR; }\n    while (tk == Mul) { next(); ty = ty + PTR; }\n    if (tk == ')') next(); else { printf(\"%d: close paren expected in sizeof\\n\", line); exit(-1); }\n    *++e = IMM; *++e = (ty == CHAR) ? sizeof(char) : sizeof(int);\n    ty = INT;\n  }\n  else if (tk == Id) {\n    d = id; next();\n    if (tk == '(') {\n      next();\n      t = 0;\n      while (tk != ')') { expr(Assign); *++e = PSH; ++t; if (tk == ',') next(); }\n      next();\n      if (d[Class] == Sys) *++e = d[Val];\n      else if (d[Class] == Fun) { *++e = JSR; *++e = d[Val]; }\n      else { printf(\"%d: bad function call\\n\", line); exit(-1); }\n      if (t) { *++e = ADJ; *++e = t; }\n      ty = d[Type];\n    }\n    else if (d[Class] == Num) { *++e = IMM; *++e = d[Val]; ty = INT; }\n    else {\n      if (d[Class] == Loc) { *++e = LEA; *++e = loc - d[Val]; }\n      else if (d[Class] == Glo) { *++e = IMM; *++e = d[Val]; }\n      else { printf(\"%d: undefined variable\\n\", line); exit(-1); }\n      *++e = ((ty = d[Type]) == CHAR) ? LC : LI;\n    }\n  }\n  else if (tk == '(') {\n    next();\n    if (tk == Int || tk == Char) {\n      t = (tk == Int) ? INT : CHAR; next();\n      while (tk == Mul) { next(); t = t + PTR; }\n      if (tk == ')') next(); else { printf(\"%d: bad cast\\n\", line); exit(-1); }\n      expr(Inc);\n      ty = t;\n    }\n    else {\n      expr(Assign);\n      if (tk == ')') next(); else { printf(\"%d: close paren expected\\n\", line); exit(-1); }\n    }\n  }\n  else if (tk == Mul) {\n    next(); expr(Inc);\n    if (ty > INT) ty = ty - PTR; else { printf(\"%d: bad dereference\\n\", line); exit(-1); }\n    *++e = (ty == CHAR) ? LC : LI;\n  }\n  else if (tk == And) {\n    next(); expr(Inc);\n    if (*e == LC || *e == LI) --e; else { printf(\"%d: bad address-of\\n\", line); exit(-1); }\n    ty = ty + PTR;\n  }\n  else if (tk == '!') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = 0; *++e = EQ; ty = INT; }\n  else if (tk == '~') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = -1; *++e = XOR; ty = INT; }\n  else if (tk == Add) { next(); expr(Inc); ty = INT; }\n  else if (tk == Sub) {\n    next(); *++e = IMM;\n    if (tk == Num) { *++e = -ival; next(); } else { *++e = -1; *++e = PSH; expr(Inc); *++e = MUL; }\n    ty = INT;\n  }\n  else if (tk == Inc || tk == Dec) {\n    t = tk; next(); expr(Inc);\n    if (*e == LC) { *e = PSH; *++e = LC; }\n    else if (*e == LI) { *e = PSH; *++e = LI; }\n    else { printf(\"%d: bad lvalue in pre-increment\\n\", line); exit(-1); }\n    *++e = PSH;\n    *++e = IMM; *++e = (ty > PTR) ? sizeof(int) : sizeof(char);\n    *++e = (t == Inc) ? ADD : SUB;\n    *++e = (ty == CHAR) ? SC : SI;\n  }\n  else { printf(\"%d: bad expression\\n\", line); exit(-1); }\n\n  while (tk >= lev) { // \"precedence climbing\" or \"Top Down Operator Precedence\" method\n    t = ty;\n    if (tk == Assign) {\n      next();\n      if (*e == LC || *e == LI) *e = PSH; else { printf(\"%d: bad lvalue in assignment\\n\", line); exit(-1); }\n      expr(Assign); *++e = ((ty = t) == CHAR) ? SC : SI;\n    }\n    else if (tk == Cond) {\n      next();\n      *++e = BZ; d = ++e;\n      expr(Assign);\n      if (tk == ':') next(); else { printf(\"%d: conditional missing colon\\n\", line); exit(-1); }\n      *d = (int)(e + 3); *++e = JMP; d = ++e;\n      expr(Cond);\n      *d = (int)(e + 1);\n    }\n    else if (tk == Lor) { next(); *++e = BNZ; d = ++e; expr(Lan); *d = (int)(e + 1); ty = INT; }\n    else if (tk == Lan) { next(); *++e = BZ;  d = ++e; expr(Or);  *d = (int)(e + 1); ty = INT; }\n    else if (tk == Or)  { next(); *++e = PSH; expr(Xor); *++e = OR;  ty = INT; }\n    else if (tk == Xor) { next(); *++e = PSH; expr(And); *++e = XOR; ty = INT; }\n    else if (tk == And) { next(); *++e = PSH; expr(Eq);  *++e = AND; ty = INT; }\n    else if (tk == Eq)  { next(); *++e = PSH; expr(Lt);  *++e = EQ;  ty = INT; }\n    else if (tk == Ne)  { next(); *++e = PSH; expr(Lt);  *++e = NE;  ty = INT; }\n    else if (tk == Lt)  { next(); *++e = PSH; expr(Shl); *++e = LT;  ty = INT; }\n    else if (tk == Gt)  { next(); *++e = PSH; expr(Shl); *++e = GT;  ty = INT; }\n    else if (tk == Le)  { next(); *++e = PSH; expr(Shl); *++e = LE;  ty = INT; }\n    else if (tk == Ge)  { next(); *++e = PSH; expr(Shl); *++e = GE;  ty = INT; }\n    else if (tk == Shl) { next(); *++e = PSH; expr(Add); *++e = SHL; ty = INT; }\n    else if (tk == Shr) { next(); *++e = PSH; expr(Add); *++e = SHR; ty = INT; }\n    else if (tk == Add) {\n      next(); *++e = PSH; expr(Mul);\n      if ((ty = t) > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL;  }\n      *++e = ADD;\n    }\n    else if (tk == Sub) {\n      next(); *++e = PSH; expr(Mul);\n      if (t > PTR && t == ty) { *++e = SUB; *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = DIV; ty = INT; }\n      else if ((ty = t) > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL; *++e = SUB; }\n      else *++e = SUB;\n    }\n    else if (tk == Mul) { next(); *++e = PSH; expr(Inc); *++e = MUL; ty = INT; }\n    else if (tk == Div) { next(); *++e = PSH; expr(Inc); *++e = DIV; ty = INT; }\n    else if (tk == Mod) { next(); *++e = PSH; expr(Inc); *++e = MOD; ty = INT; }\n    else if (tk == Inc || tk == Dec) {\n      if (*e == LC) { *e = PSH; *++e = LC; }\n      else if (*e == LI) { *e = PSH; *++e = LI; }\n      else { printf(\"%d: bad lvalue in post-increment\\n\", line); exit(-1); }\n      *++e = PSH; *++e = IMM; *++e = (ty > PTR) ? sizeof(int) : sizeof(char);\n      *++e = (tk == Inc) ? ADD : SUB;\n      *++e = (ty == CHAR) ? SC : SI;\n      *++e = PSH; *++e = IMM; *++e = (ty > PTR) ? sizeof(int) : sizeof(char);\n      *++e = (tk == Inc) ? SUB : ADD;\n      next();\n    }\n    else if (tk == Brak) {\n      next(); *++e = PSH; expr(Assign);\n      if (tk == ']') next(); else { printf(\"%d: close bracket expected\\n\", line); exit(-1); }\n      if (t > PTR) { *++e = PSH; *++e = IMM; *++e = sizeof(int); *++e = MUL;  }\n      else if (t < PTR) { printf(\"%d: pointer type expected\\n\", line); exit(-1); }\n      *++e = ADD;\n      *++e = ((ty = t - PTR) == CHAR) ? LC : LI;\n    }\n    else { printf(\"%d: compiler error tk=%d\\n\", line, tk); exit(-1); }\n  }\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "c4.c:stmt",
+    "span": "c4.c:284:1:331:2",
+    "pieces": [
+      "c4.c:284:1:331:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 48,
+    "source": "void stmt()\n{\n  int *a, *b;\n\n  if (tk == If) {\n    next();\n    if (tk == '(') next(); else { printf(\"%d: open paren expected\\n\", line); exit(-1); }\n    expr(Assign);\n    if (tk == ')') next(); else { printf(\"%d: close paren expected\\n\", line); exit(-1); }\n    *++e = BZ; b = ++e;\n    stmt();\n    if (tk == Else) {\n      *b = (int)(e + 3); *++e = JMP; b = ++e;\n      next();\n      stmt();\n    }\n    *b = (int)(e + 1);\n  }\n  else if (tk == While) {\n    next();\n    a = e + 1;\n    if (tk == '(') next(); else { printf(\"%d: open paren expected\\n\", line); exit(-1); }\n    expr(Assign);\n    if (tk == ')') next(); else { printf(\"%d: close paren expected\\n\", line); exit(-1); }\n    *++e = BZ; b = ++e;\n    stmt();\n    *++e = JMP; *++e = (int)a;\n    *b = (int)(e + 1);\n  }\n  else if (tk == Return) {\n    next();\n    if (tk != ';') expr(Assign);\n    *++e = LEV;\n    if (tk == ';') next(); else { printf(\"%d: semicolon expected\\n\", line); exit(-1); }\n  }\n  else if (tk == '{') {\n    next();\n    while (tk != '}') stmt();\n    next();\n  }\n  else if (tk == ';') {\n    next();\n  }\n  else {\n    expr(Assign);\n    if (tk == ';') next(); else { printf(\"%d: semicolon expected\\n\", line); exit(-1); }\n  }\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "c4.c:main",
+    "span": "c4.c:333:1:528:2",
+    "pieces": [
+      "c4.c:333:1:528:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 196,
+    "source": "int main(int argc, char **argv)\n{\n  int fd, bt, ty, poolsz, *idmain;\n  int *pc, *sp, *bp, a, cycle; // vm registers\n  int i, *t; // temps\n\n  --argc; ++argv;\n  if (argc > 0 && **argv == '-' && (*argv)[1] == 's') { src = 1; --argc; ++argv; }\n  if (argc > 0 && **argv == '-' && (*argv)[1] == 'd') { debug = 1; --argc; ++argv; }\n  if (argc < 1) { printf(\"usage: c4 [-s] [-d] file ...\\n\"); return -1; }\n\n  if ((fd = open(*argv, 0)) < 0) { printf(\"could not open(%s)\\n\", *argv); return -1; }\n\n  poolsz = 256*1024; // arbitrary size\n  if (!(sym = malloc(poolsz))) { printf(\"could not malloc(%d) symbol area\\n\", poolsz); return -1; }\n  if (!(le = e = malloc(poolsz))) { printf(\"could not malloc(%d) text area\\n\", poolsz); return -1; }\n  if (!(data = malloc(poolsz))) { printf(\"could not malloc(%d) data area\\n\", poolsz); return -1; }\n  if (!(sp = malloc(poolsz))) { printf(\"could not malloc(%d) stack area\\n\", poolsz); return -1; }\n\n  memset(sym,  0, poolsz);\n  memset(e,    0, poolsz);\n  memset(data, 0, poolsz);\n\n  p = \"char else enum if int return sizeof while \"\n      \"open read close printf malloc free memset memcmp exit void main\";\n  i = Char; while (i <= While) { next(); id[Tk] = i++; } // add keywords to symbol table\n  i = OPEN; while (i <= EXIT) { next(); id[Class] = Sys; id[Type] = INT; id[Val] = i++; } // add library to symbol table\n  next(); id[Tk] = Char; // handle void type\n  next(); idmain = id; // keep track of main\n\n  if (!(lp = p = malloc(poolsz))) { printf(\"could not malloc(%d) source area\\n\", poolsz); return -1; }\n  if ((i = read(fd, p, poolsz-1)) <= 0) { printf(\"read() returned %d\\n\", i); return -1; }\n  p[i] = 0;\n  close(fd);\n\n  // parse declarations\n  line = 1;\n  next();\n  while (tk) {\n    bt = INT; // basetype\n    if (tk == Int) next();\n    else if (tk == Char) { next(); bt = CHAR; }\n    else if (tk == Enum) {\n      next();\n      if (tk != '{') next();\n      if (tk == '{') {\n        next();\n        i = 0;\n        while (tk != '}') {\n          if (tk != Id) { printf(\"%d: bad enum identifier %d\\n\", line, tk); return -1; }\n          next();\n          if (tk == Assign) {\n            next();\n            if (tk != Num) { printf(\"%d: bad enum initializer\\n\", line); return -1; }\n            i = ival;\n            next();\n          }\n          id[Class] = Num; id[Type] = INT; id[Val] = i++;\n          if (tk == ',') next();\n        }\n        next();\n      }\n    }\n    while (tk != ';' && tk != '}') {\n      ty = bt;\n      while (tk == Mul) { next(); ty = ty + PTR; }\n      if (tk != Id) { printf(\"%d: bad global declaration\\n\", line); return -1; }\n      if (id[Class]) { printf(\"%d: duplicate global definition\\n\", line); return -1; }\n      next();\n      id[Type] = ty;\n      if (tk == '(') { // function\n        id[Class] = Fun;\n        id[Val] = (int)(e + 1);\n        next(); i = 0;\n        while (tk != ')') {\n          ty = INT;\n          if (tk == Int) next();\n          else if (tk == Char) { next(); ty = CHAR; }\n          while (tk == Mul) { next(); ty = ty + PTR; }\n          if (tk != Id) { printf(\"%d: bad parameter declaration\\n\", line); return -1; }\n          if (id[Class] == Loc) { printf(\"%d: duplicate parameter definition\\n\", line); return -1; }\n          id[HClass] = id[Class]; id[Class] = Loc;\n          id[HType]  = id[Type];  id[Type] = ty;\n          id[HVal]   = id[Val];   id[Val] = i++;\n          next();\n          if (tk == ',') next();\n        }\n        next();\n        if (tk != '{') { printf(\"%d: bad function definition\\n\", line); return -1; }\n        loc = ++i;\n        next();\n        while (tk == Int || tk == Char) {\n          bt = (tk == Int) ? INT : CHAR;\n          next();\n          while (tk != ';') {\n            ty = bt;\n            while (tk == Mul) { next(); ty = ty + PTR; }\n            if (tk != Id) { printf(\"%d: bad local declaration\\n\", line); return -1; }\n            if (id[Class] == Loc) { printf(\"%d: duplicate local definition\\n\", line); return -1; }\n            id[HClass] = id[Class]; id[Class] = Loc;\n            id[HType]  = id[Type];  id[Type] = ty;\n            id[HVal]   = id[Val];   id[Val] = ++i;\n            next();\n            if (tk == ',') next();\n          }\n          next();\n        }\n        *++e = ENT; *++e = i - loc;\n        while (tk != '}') stmt();\n        *++e = LEV;\n        id = sym; // unwind symbol table locals\n        while (id[Tk]) {\n          if (id[Class] == Loc) {\n            id[Class] = id[HClass];\n            id[Type] = id[HType];\n            id[Val] = id[HVal];\n          }\n          id = id + Idsz;\n        }\n      }\n      else {\n        id[Class] = Glo;\n        id[Val] = (int)data;\n        data = data + sizeof(int);\n      }\n      if (tk == ',') next();\n    }\n    next();\n  }\n\n  if (!(pc = (int *)idmain[Val])) { printf(\"main() not defined\\n\"); return -1; }\n  if (src) return 0;\n\n  // setup stack\n  bp = sp = (int *)((int)sp + poolsz);\n  *--sp = EXIT; // call exit if main returns\n  *--sp = PSH; t = sp;\n  *--sp = argc;\n  *--sp = (int)argv;\n  *--sp = (int)t;\n\n  // run...\n  cycle = 0;\n  while (1) {\n    i = *pc++; ++cycle;\n    if (debug) {\n      printf(\"%d> %.4s\", cycle,\n        &\"LEA ,IMM ,JMP ,JSR ,BZ  ,BNZ ,ENT ,ADJ ,LEV ,LI  ,LC  ,SI  ,SC  ,PSH ,\"\n         \"OR  ,XOR ,AND ,EQ  ,NE  ,LT  ,GT  ,LE  ,GE  ,SHL ,SHR ,ADD ,SUB ,MUL ,DIV ,MOD ,\"\n         \"OPEN,READ,CLOS,PRTF,MALC,FREE,MSET,MCMP,EXIT,\"[i * 5]);\n      if (i <= ADJ) printf(\" %d\\n\", *pc); else printf(\"\\n\");\n    }\n    if      (i == LEA) a = (int)(bp + *pc++);                             // load local address\n    else if (i == IMM) a = *pc++;                                         // load global address or immediate\n    else if (i == JMP) pc = (int *)*pc;                                   // jump\n    else if (i == JSR) { *--sp = (int)(pc + 1); pc = (int *)*pc; }        // jump to subroutine\n    else if (i == BZ)  pc = a ? pc + 1 : (int *)*pc;                      // branch if zero\n    else if (i == BNZ) pc = a ? (int *)*pc : pc + 1;                      // branch if not zero\n    else if (i == ENT) { *--sp = (int)bp; bp = sp; sp = sp - *pc++; }     // enter subroutine\n    else if (i == ADJ) sp = sp + *pc++;                                   // stack adjust\n    else if (i == LEV) { sp = bp; bp = (int *)*sp++; pc = (int *)*sp++; } // leave subroutine\n    else if (i == LI)  a = *(int *)a;                                     // load int\n    else if (i == LC)  a = *(char *)a;                                    // load char\n    else if (i == SI)  *(int *)*sp++ = a;                                 // store int\n    else if (i == SC)  a = *(char *)*sp++ = a;                            // store char\n    else if (i == PSH) *--sp = a;                                         // push\n\n    else if (i == OR)  a = *sp++ |  a;\n    else if (i == XOR) a = *sp++ ^  a;\n    else if (i == AND) a = *sp++ &  a;\n    else if (i == EQ)  a = *sp++ == a;\n    else if (i == NE)  a = *sp++ != a;\n    else if (i == LT)  a = *sp++ <  a;\n    else if (i == GT)  a = *sp++ >  a;\n    else if (i == LE)  a = *sp++ <= a;\n    else if (i == GE)  a = *sp++ >= a;\n    else if (i == SHL) a = *sp++ << a;\n    else if (i == SHR) a = *sp++ >> a;\n    else if (i == ADD) a = *sp++ +  a;\n    else if (i == SUB) a = *sp++ -  a;\n    else if (i == MUL) a = *sp++ *  a;\n    else if (i == DIV) a = *sp++ /  a;\n    else if (i == MOD) a = *sp++ %  a;\n\n    else if (i == OPEN) a = open((char *)sp[1], *sp);\n    else if (i == READ) a = read(sp[2], (char *)sp[1], *sp);\n    else if (i == CLOS) a = close(*sp);\n    else if (i == PRTF) { t = sp + pc[1]; a = printf((char *)t[-1], t[-2], t[-3], t[-4], t[-5], t[-6]); }\n    else if (i == MALC) a = (int)malloc(*sp);\n    else if (i == FREE) free((void *)*sp);\n    else if (i == MSET) a = (int)memset((char *)sp[2], sp[1], *sp);\n    else if (i == MCMP) a = memcmp((char *)sp[2], (char *)sp[1], *sp);\n    else if (i == EXIT) { printf(\"exit(%d) cycle = %d\\n\", *sp, cycle); return *sp; }\n    else { printf(\"unknown instruction = %d! cycle = %d\\n\", i, cycle); return -1; }\n  }\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "hello.c:main",
+    "span": "hello.c:3:1:7:2",
+    "pieces": [
+      "hello.c:3:1:7:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 5,
+    "source": "int main()\n{\n  printf(\"hello, world\\n\");\n  return 0;\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
+    "func_defid": "test/c4.c:next",
+    "span": "test/c4.c:48:1:132:2",
+    "pieces": [
+      "test/c4.c:48:1:132:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 85,
+    "source": "void next()\n{\n  char *pp;\n\n  while (tk = *p) {\n    ++p;\n    if (tk == '\\n') {\n      if (src) {\n        printf(\"%d: %.*s\", line, p - lp, lp);\n        lp = p;\n        while (le < e) {\n          printf(\"%8.4s\", &\"LEA ,IMM ,JMP ,JSR ,BZ  ,BNZ ,ENT ,ADJ ,LEV ,LI  ,LC  ,SI  ,SC  ,PSH ,\"\n                           \"OR  ,XOR ,AND ,EQ  ,NE  ,LT  ,GT  ,LE  ,GE  ,SHL ,SHR ,ADD ,SUB ,MUL ,DIV ,MOD ,\"\n                           \"OPEN,READ,CLOS,PRTF,MALC,FREE,MSET,MCMP,EXIT,\"[*++le * 5]);\n          if (*le <= ADJ) printf(\" %d\\n\", *++le); else printf(\"\\n\");\n        }\n      }\n      ++line;\n    }\n    else if (tk == '#') {\n      while (*p != 0 && *p != '\\n') ++p;\n    }\n    else if ((tk >= 'a' && tk <= 'z') || (tk >= 'A' && tk <= 'Z') || tk == '_') {\n      pp = p - 1;\n      while ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == '_')\n        tk = tk * 147 + *p++;\n      tk = (tk << 6) + (p - pp);\n      id = sym;\n      while (id[Tk]) {\n        if (tk == id[Hash] && !memcmp((char *)id[Name], pp, p - pp)) { tk = id[Tk]; return; }\n        id = id + Idsz;\n      }\n      id[Name] = (int)pp;\n      id[Hash] = tk;\n      tk = id[Tk] = Id;\n      return;\n    }\n    else if (tk >= '0' && tk <= '9') {\n      if (ival = tk - '0') { while (*p >= '0' && *p <= '9') ival = ival * 10 + *p++ - '0'; }\n      else if (*p == 'x' || *p == 'X') {\n        while ((tk = *++p) && ((tk >= '0' && tk <= '9') || (tk >= 'a' && tk <= 'f') || (tk >= 'A' && tk <= 'F')))\n          ival = ival * 16 + (tk & 15) + (tk >= 'A' ? 9 : 0);\n      }\n      else { while (*p >= '0' && *p <= '7') ival = ival * 8 + *p++ - '0'; }\n      tk = Num;\n      return;\n    }\n    else if (tk == '/') {\n      if (*p == '/') {\n        ++p;\n        while (*p != 0 && *p != '\\n') ++p;\n      }\n      else {\n        tk = Div;\n        return;\n      }\n    }\n    else if (tk == '\\'' || tk == '\"') {\n      pp = data;\n      while (*p != 0 && *p != tk) {\n        if ((ival = *p++) == '\\\\') {\n          if ((ival = *p++) == 'n') ival = '\\n';\n        }\n        if (tk == '\"') *data++ = ival;\n      }\n      ++p;\n      if (tk == '\"') ival = (int)pp; else tk = Num;\n      return;\n    }\n    else if (tk == '=') { if (*p == '=') { ++p; tk = Eq; } else tk = Assign; return; }\n    else if (tk == '+') { if (*p == '+') { ++p; tk = Inc; } else tk = Add; return; }\n    else if (tk == '-') { if (*p == '-') { ++p; tk = Dec; } else tk = Sub; return; }\n    else if (tk == '!') { if (*p == '=') { ++p; tk = Ne; } return; }\n    else if (tk == '<') { if (*p == '=') { ++p; tk = Le; } else if (*p == '<') { ++p; tk = Shl; } else tk = Lt; return; }\n    else if (tk == '>') { if (*p == '=') { ++p; tk = Ge; } else if (*p == '>') { ++p; tk = Shr; } else tk = Gt; return; }\n    else if (tk == '|') { if (*p == '|') { ++p; tk = Lor; } else tk = Or; return; }\n    else if (tk == '&') { if (*p == '&') { ++p; tk = Lan; } else tk = And; return; }\n    else if (tk == '^') { tk = Xor; return; }\n    else if (tk == '%') { tk = Mod; return; }\n    else if (tk == '*') { tk = Mul; return; }\n    else if (tk == '[') { tk = Brak; return; }\n    else if (tk == '?') { tk = Cond; return; }\n    else if (tk == '~' || tk == ';' || tk == '{' || tk == '}' || tk == '(' || tk == ')' || tk == ']' || tk == ',' || tk == ':') return;\n  }\n}",
     "calls": [
       {
         "caller": "c4.c:expr",
@@ -483,6 +553,481 @@
         "caller": "c4.c:main",
         "span": "c4.c:460:5:460:11",
         "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:139:50:139:56",
+        "source": "else if (tk == Num) { *++e = IMM; *++e = ival; next(); ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:141:30:141:36",
+        "source": "*++e = IMM; *++e = ival; next();"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:142:23:142:29",
+        "source": "while (tk == '\"') next();"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:146:5:146:11",
+        "source": "next(); if (tk == '(') next(); else { printf(\"%d: open paren expected in sizeof\\n\", line); exit(-1); }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:146:28:146:34",
+        "source": "next(); if (tk == '(') next(); else { printf(\"%d: open paren expected in sizeof\\n\", line); exit(-1); }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:147:30:147:36",
+        "source": "ty = INT; if (tk == Int) next(); else if (tk == Char) { next(); ty = CHAR; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:147:61:147:67",
+        "source": "ty = INT; if (tk == Int) next(); else if (tk == Char) { next(); ty = CHAR; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:148:25:148:31",
+        "source": "while (tk == Mul) { next(); ty = ty + PTR; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:149:20:149:26",
+        "source": "if (tk == ')') next(); else { printf(\"%d: close paren expected in sizeof\\n\", line); exit(-1); }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:154:13:154:19",
+        "source": "d = id; next();"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:156:7:156:13",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:158:73:158:79",
+        "source": "while (tk != ')') { expr(Assign); *++e = PSH; ++t; if (tk == ',') next(); }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:159:7:159:13",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:175:5:175:11",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:177:37:177:43",
+        "source": "t = (tk == Int) ? INT : CHAR; next();"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:178:27:178:33",
+        "source": "while (tk == Mul) { next(); t = t + PTR; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:179:22:179:28",
+        "source": "if (tk == ')') next(); else { printf(\"%d: bad cast\\n\", line); exit(-1); }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:185:22:185:28",
+        "source": "if (tk == ')') next(); else { printf(\"%d: close paren expected\\n\", line); exit(-1); }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:189:5:189:11",
+        "source": "next(); expr(Inc);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:194:5:194:11",
+        "source": "next(); expr(Inc);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:198:25:198:31",
+        "source": "else if (tk == '!') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = 0; *++e = EQ; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:199:25:199:31",
+        "source": "else if (tk == '~') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = -1; *++e = XOR; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:200:25:200:31",
+        "source": "else if (tk == Add) { next(); expr(Inc); ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:202:5:202:11",
+        "source": "next(); *++e = IMM;"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:203:36:203:42",
+        "source": "if (tk == Num) { *++e = -ival; next(); } else { *++e = -1; *++e = PSH; expr(Inc); *++e = MUL; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:207:13:207:19",
+        "source": "t = tk; next(); expr(Inc);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:221:7:221:13",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:226:7:226:13",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:229:22:229:28",
+        "source": "if (tk == ':') next(); else { printf(\"%d: conditional missing colon\\n\", line); exit(-1); }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:234:27:234:33",
+        "source": "else if (tk == Lor) { next(); *++e = BNZ; d = ++e; expr(Lan); *d = (int)(e + 1); ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:235:27:235:33",
+        "source": "else if (tk == Lan) { next(); *++e = BZ;  d = ++e; expr(Or);  *d = (int)(e + 1); ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:236:27:236:33",
+        "source": "else if (tk == Or)  { next(); *++e = PSH; expr(Xor); *++e = OR;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:237:27:237:33",
+        "source": "else if (tk == Xor) { next(); *++e = PSH; expr(And); *++e = XOR; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:238:27:238:33",
+        "source": "else if (tk == And) { next(); *++e = PSH; expr(Eq);  *++e = AND; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:239:27:239:33",
+        "source": "else if (tk == Eq)  { next(); *++e = PSH; expr(Lt);  *++e = EQ;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:240:27:240:33",
+        "source": "else if (tk == Ne)  { next(); *++e = PSH; expr(Lt);  *++e = NE;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:241:27:241:33",
+        "source": "else if (tk == Lt)  { next(); *++e = PSH; expr(Shl); *++e = LT;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:242:27:242:33",
+        "source": "else if (tk == Gt)  { next(); *++e = PSH; expr(Shl); *++e = GT;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:243:27:243:33",
+        "source": "else if (tk == Le)  { next(); *++e = PSH; expr(Shl); *++e = LE;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:244:27:244:33",
+        "source": "else if (tk == Ge)  { next(); *++e = PSH; expr(Shl); *++e = GE;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:245:27:245:33",
+        "source": "else if (tk == Shl) { next(); *++e = PSH; expr(Add); *++e = SHL; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:246:27:246:33",
+        "source": "else if (tk == Shr) { next(); *++e = PSH; expr(Add); *++e = SHR; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:248:7:248:13",
+        "source": "next(); *++e = PSH; expr(Mul);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:253:7:253:13",
+        "source": "next(); *++e = PSH; expr(Mul);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:258:27:258:33",
+        "source": "else if (tk == Mul) { next(); *++e = PSH; expr(Inc); *++e = MUL; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:259:27:259:33",
+        "source": "else if (tk == Div) { next(); *++e = PSH; expr(Inc); *++e = DIV; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:260:27:260:33",
+        "source": "else if (tk == Mod) { next(); *++e = PSH; expr(Inc); *++e = MOD; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:270:7:270:13",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:273:7:273:13",
+        "source": "next(); *++e = PSH; expr(Assign);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:274:22:274:28",
+        "source": "if (tk == ']') next(); else { printf(\"%d: close bracket expected\\n\", line); exit(-1); }"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:289:5:289:11",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:290:20:290:26",
+        "source": "if (tk == '(') next(); else { printf(\"%d: open paren expected\\n\", line); exit(-1); }"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:292:20:292:26",
+        "source": "if (tk == ')') next(); else { printf(\"%d: close paren expected\\n\", line); exit(-1); }"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:297:7:297:13",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:303:5:303:11",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:305:20:305:26",
+        "source": "if (tk == '(') next(); else { printf(\"%d: open paren expected\\n\", line); exit(-1); }"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:307:20:307:26",
+        "source": "if (tk == ')') next(); else { printf(\"%d: close paren expected\\n\", line); exit(-1); }"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:314:5:314:11",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:317:20:317:26",
+        "source": "if (tk == ';') next(); else { printf(\"%d: semicolon expected\\n\", line); exit(-1); }"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:320:5:320:11",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:322:5:322:11",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:325:5:325:11",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:329:20:329:26",
+        "source": "if (tk == ';') next(); else { printf(\"%d: semicolon expected\\n\", line); exit(-1); }"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:358:34:358:40",
+        "source": "i = Char; while (i <= While) { next(); id[Tk] = i++; } // add keywords to symbol table"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:359:33:359:39",
+        "source": "i = OPEN; while (i <= EXIT) { next(); id[Class] = Sys; id[Type] = INT; id[Val] = i++; } // add library to symbol table"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:360:3:360:9",
+        "source": "next(); id[Tk] = Char; // handle void type"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:361:3:361:9",
+        "source": "next(); idmain = id; // keep track of main"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:370:3:370:9",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:373:20:373:26",
+        "source": "if (tk == Int) next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:374:28:374:34",
+        "source": "else if (tk == Char) { next(); bt = CHAR; }"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:376:7:376:13",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:377:22:377:28",
+        "source": "if (tk != '{') next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:379:9:379:15",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:383:11:383:17",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:385:13:385:19",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:388:13:388:19",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:391:26:391:32",
+        "source": "if (tk == ',') next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:393:9:393:15",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:398:27:398:33",
+        "source": "while (tk == Mul) { next(); ty = ty + PTR; }"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:401:7:401:13",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:406:9:406:15",
+        "source": "next(); i = 0;"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:409:26:409:32",
+        "source": "if (tk == Int) next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:410:34:410:40",
+        "source": "else if (tk == Char) { next(); ty = CHAR; }"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:411:31:411:37",
+        "source": "while (tk == Mul) { next(); ty = ty + PTR; }"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:417:11:417:17",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:418:26:418:32",
+        "source": "if (tk == ',') next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:420:9:420:15",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:423:9:423:15",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:426:11:426:17",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:429:33:429:39",
+        "source": "while (tk == Mul) { next(); ty = ty + PTR; }"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:435:13:435:19",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:436:28:436:34",
+        "source": "if (tk == ',') next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:438:11:438:17",
+        "source": "next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:458:22:458:28",
+        "source": "if (tk == ',') next();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:460:5:460:11",
+        "source": "next();"
       }
     ],
     "globals": [],
@@ -490,10 +1035,10 @@
     "chunks": []
   },
   {
-    "func_defid": "c4.c:expr",
-    "span": "c4.c:134:1:282:2",
+    "func_defid": "test/c4.c:expr",
+    "span": "test/c4.c:134:1:282:2",
     "pieces": [
-      "c4.c:134:1:282:2"
+      "test/c4.c:134:1:282:2"
     ],
     "sub_chunks": [],
     "num_lines": 149,
@@ -678,6 +1223,186 @@
         "caller": "c4.c:stmt",
         "span": "c4.c:328:5:328:17",
         "source": "expr(Assign);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:158:27:158:39",
+        "source": "while (tk != ')') { expr(Assign); *++e = PSH; ++t; if (tk == ',') next(); }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:180:7:180:16",
+        "source": "expr(Inc);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:184:7:184:19",
+        "source": "expr(Assign);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:189:13:189:22",
+        "source": "next(); expr(Inc);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:194:13:194:22",
+        "source": "next(); expr(Inc);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:198:33:198:42",
+        "source": "else if (tk == '!') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = 0; *++e = EQ; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:199:33:199:42",
+        "source": "else if (tk == '~') { next(); expr(Inc); *++e = PSH; *++e = IMM; *++e = -1; *++e = XOR; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:200:33:200:42",
+        "source": "else if (tk == Add) { next(); expr(Inc); ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:203:76:203:85",
+        "source": "if (tk == Num) { *++e = -ival; next(); } else { *++e = -1; *++e = PSH; expr(Inc); *++e = MUL; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:207:21:207:30",
+        "source": "t = tk; next(); expr(Inc);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:223:7:223:19",
+        "source": "expr(Assign); *++e = ((ty = t) == CHAR) ? SC : SI;"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:228:7:228:19",
+        "source": "expr(Assign);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:231:7:231:17",
+        "source": "expr(Cond);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:234:56:234:65",
+        "source": "else if (tk == Lor) { next(); *++e = BNZ; d = ++e; expr(Lan); *d = (int)(e + 1); ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:235:56:235:64",
+        "source": "else if (tk == Lan) { next(); *++e = BZ;  d = ++e; expr(Or);  *d = (int)(e + 1); ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:236:47:236:56",
+        "source": "else if (tk == Or)  { next(); *++e = PSH; expr(Xor); *++e = OR;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:237:47:237:56",
+        "source": "else if (tk == Xor) { next(); *++e = PSH; expr(And); *++e = XOR; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:238:47:238:55",
+        "source": "else if (tk == And) { next(); *++e = PSH; expr(Eq);  *++e = AND; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:239:47:239:55",
+        "source": "else if (tk == Eq)  { next(); *++e = PSH; expr(Lt);  *++e = EQ;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:240:47:240:55",
+        "source": "else if (tk == Ne)  { next(); *++e = PSH; expr(Lt);  *++e = NE;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:241:47:241:56",
+        "source": "else if (tk == Lt)  { next(); *++e = PSH; expr(Shl); *++e = LT;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:242:47:242:56",
+        "source": "else if (tk == Gt)  { next(); *++e = PSH; expr(Shl); *++e = GT;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:243:47:243:56",
+        "source": "else if (tk == Le)  { next(); *++e = PSH; expr(Shl); *++e = LE;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:244:47:244:56",
+        "source": "else if (tk == Ge)  { next(); *++e = PSH; expr(Shl); *++e = GE;  ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:245:47:245:56",
+        "source": "else if (tk == Shl) { next(); *++e = PSH; expr(Add); *++e = SHL; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:246:47:246:56",
+        "source": "else if (tk == Shr) { next(); *++e = PSH; expr(Add); *++e = SHR; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:248:27:248:36",
+        "source": "next(); *++e = PSH; expr(Mul);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:253:27:253:36",
+        "source": "next(); *++e = PSH; expr(Mul);"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:258:47:258:56",
+        "source": "else if (tk == Mul) { next(); *++e = PSH; expr(Inc); *++e = MUL; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:259:47:259:56",
+        "source": "else if (tk == Div) { next(); *++e = PSH; expr(Inc); *++e = DIV; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:260:47:260:56",
+        "source": "else if (tk == Mod) { next(); *++e = PSH; expr(Inc); *++e = MOD; ty = INT; }"
+      },
+      {
+        "caller": "test/c4.c:expr",
+        "span": "test/c4.c:273:27:273:39",
+        "source": "next(); *++e = PSH; expr(Assign);"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:291:5:291:17",
+        "source": "expr(Assign);"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:306:5:306:17",
+        "source": "expr(Assign);"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:315:20:315:32",
+        "source": "if (tk != ';') expr(Assign);"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:328:5:328:17",
+        "source": "expr(Assign);"
       }
     ],
     "globals": [],
@@ -685,10 +1410,10 @@
     "chunks": []
   },
   {
-    "func_defid": "c4.c:stmt",
-    "span": "c4.c:284:1:331:2",
+    "func_defid": "test/c4.c:stmt",
+    "span": "test/c4.c:284:1:331:2",
     "pieces": [
-      "c4.c:284:1:331:2"
+      "test/c4.c:284:1:331:2"
     ],
     "sub_chunks": [],
     "num_lines": 48,
@@ -718,6 +1443,31 @@
         "caller": "c4.c:main",
         "span": "c4.c:441:27:441:33",
         "source": "while (tk != '}') stmt();"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:294:5:294:11",
+        "source": "stmt();"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:298:7:298:13",
+        "source": "stmt();"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:309:5:309:11",
+        "source": "stmt();"
+      },
+      {
+        "caller": "test/c4.c:stmt",
+        "span": "test/c4.c:321:23:321:29",
+        "source": "while (tk != '}') stmt();"
+      },
+      {
+        "caller": "test/c4.c:main",
+        "span": "test/c4.c:441:27:441:33",
+        "source": "while (tk != '}') stmt();"
       }
     ],
     "globals": [],
@@ -725,10 +1475,10 @@
     "chunks": []
   },
   {
-    "func_defid": "c4.c:main",
-    "span": "c4.c:333:1:528:2",
+    "func_defid": "test/c4.c:main",
+    "span": "test/c4.c:333:1:528:2",
     "pieces": [
-      "c4.c:333:1:528:2"
+      "test/c4.c:333:1:528:2"
     ],
     "sub_chunks": [],
     "num_lines": 196,
@@ -739,10 +1489,10 @@
     "chunks": []
   },
   {
-    "func_defid": "hello.c:main",
-    "span": "hello.c:3:1:7:2",
+    "func_defid": "test/hello.c:main",
+    "span": "test/hello.c:3:1:7:2",
     "pieces": [
-      "hello.c:3:1:7:2"
+      "test/hello.c:3:1:7:2"
     ],
     "sub_chunks": [],
     "num_lines": 5,

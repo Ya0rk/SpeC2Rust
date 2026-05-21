@@ -45,6 +45,10 @@ class TestEnvironment:
     base_env: Dict[str, str]
     rust_binary_path: str
     c_binary_path: Optional[str]
+    # 由测试脚本中扫到的、需要映射到 RUST_BIN 的派生名字，例如
+    # ``yank_t1`` / ``c4_t2``。在 stage 阶段会额外拷贝一份 wrapper，
+    # 并在 BASH_ENV 前奏里定义同名 bash function。
+    extra_rust_aliases: List[str] = None  # type: ignore[assignment]
 
 
 class TestRunner:
@@ -91,6 +95,15 @@ class TestRunner:
             _chmod_executable(c_wrapper)
             c_named_wrapper = c_wrapper
 
+        # 扫一下 test 目录下所有 sh 脚本，挑出像 ``./<bin>_t<num>`` 或
+        # ``./<bin>-<suffix>`` 这种派生名字，全部映射到 Rust binary。这样
+        # 即便测试脚本沿用了 C instrumented 阶段的多二进制命名，也不需要重写。
+        extra_aliases = self._discover_rust_alias_names()
+        for alias in extra_aliases:
+            alias_target = self.wrapper_dir / f"{alias}{rust_suffix}"
+            _copy_replace(rust_bin, alias_target)
+            _chmod_executable(alias_target)
+
         env = os.environ.copy()
         env["CGR_WRAPPER_DIR"] = _to_bash_path(self.wrapper_dir.resolve())
         env["RUST_BIN"] = _to_bash_path(Path(rust_binary_path).resolve())
@@ -113,6 +126,7 @@ class TestRunner:
             base_env=env,
             rust_binary_path=rust_binary_path,
             c_binary_path=c_binary_path,
+            extra_rust_aliases=extra_aliases,
         )
 
     def restage_rust_binary(self, rust_binary_path: str) -> None:
@@ -125,6 +139,11 @@ class TestRunner:
         _chmod_executable(self._env.rust_wrapper)
         _copy_replace(Path(rust_binary_path), self._env.rust_named_wrapper)
         _chmod_executable(self._env.rust_named_wrapper)
+        rust_suffix = self._env.rust_named_wrapper.suffix
+        for alias in self._env.extra_rust_aliases or []:
+            alias_target = self.wrapper_dir / f"{alias}{rust_suffix}"
+            _copy_replace(Path(rust_binary_path), alias_target)
+            _chmod_executable(alias_target)
         self._env.rust_binary_path = rust_binary_path
         self._env.base_env["RUST_BIN"] = _to_bash_path(Path(rust_binary_path).resolve())
 
@@ -297,12 +316,60 @@ class TestRunner:
         if self._env.base_env.get("C_BIN") and _safe_bash_function_name(c_name):
             defs.append(_bash_function_definition(c_name, "C_BIN"))
 
+        for alias in self._env.extra_rust_aliases or []:
+            if _safe_bash_function_name(alias):
+                defs.append(_bash_function_definition(alias, "RUST_BIN"))
+
         path = run_dir / ".cgr_bash_env"
         try:
             path.write_text("\n".join(defs) + "\n", encoding="utf-8", newline="\n")
         except OSError:
             return None
         return path
+
+    # --------------------------------------------------- alias discovery
+
+    _ALIAS_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*")
+
+    def _discover_rust_alias_names(self) -> List[str]:
+        """Scan ``test/*.sh`` for derived names that should map to the Rust binary.
+
+        Datasets sometimes ship test scripts that invoke per-case binaries
+        (e.g. ``./yank_t1`` ... ``./yank_t24`` or ``./c4_t2``). Those names are
+        artefacts of the C-side instrumented build and the Rust project only
+        produces a single binary. To avoid forcing every test script to be
+        rewritten, we collect those derived names and stage extra wrapper
+        copies plus matching bash functions, all pointing at ``RUST_BIN``.
+        """
+        if not self.test_dir.exists():
+            return []
+        bin_name = self.bin_name
+        # 候选模式：./<bin>_t<num>、<bin>_t<num>、./<bin>-<suffix>、<bin>-<suffix>
+        # 其中 <suffix> 是字母数字下划线，长度 1-32。我们只接受看起来像派生
+        # 二进制名的 token，避免误捕 <bin> 出现在描述/注释里的情况。
+        patterns = [
+            re.compile(rf"\./({re.escape(bin_name)}_t\d+)\b"),
+            re.compile(rf"\b({re.escape(bin_name)}_t\d+)\b"),
+        ]
+        seen: List[str] = []
+        seen_set: set = set()
+        # 已经显式 stage 的标准名字：<bin> / <bin>-rust / <bin>-c。
+        reserved = {bin_name, f"{bin_name}-rust", f"{bin_name}-c"}
+        for script in sorted(self.test_dir.rglob("*.sh")):
+            try:
+                text = script.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            for pat in patterns:
+                for m in pat.finditer(text):
+                    name = m.group(1)
+                    if name in reserved or name in seen_set:
+                        continue
+                    if not _safe_bash_function_name(name):
+                        continue
+                    seen_set.add(name)
+                    seen.append(name)
+        return seen
 
     def _stage_wrappers_into_run_dir(self, run_dir: Path) -> None:
         if self._env is None:
@@ -320,6 +387,12 @@ class TestRunner:
             target = run_dir / self._env.c_named_wrapper.name
             _copy_replace(self._env.c_named_wrapper, target)
             _chmod_executable(target)
+        rust_suffix = self._env.rust_named_wrapper.suffix
+        for alias in self._env.extra_rust_aliases or []:
+            for name in (alias, f"{alias}{rust_suffix}" if rust_suffix else alias):
+                target = run_dir / name
+                _copy_replace(self._env.rust_named_wrapper, target)
+                _chmod_executable(target)
 
     # ------------------------------------------------------------- cleanup
 
