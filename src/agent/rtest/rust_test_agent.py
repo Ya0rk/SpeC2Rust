@@ -648,10 +648,23 @@ class RustTestAgent:
         if not run_dir.is_dir():
             return ""
         rows: List[str] = []
-        for path in sorted(run_dir.rglob("*")):
-            if not path.is_file():
+        try:
+            entries = sorted(run_dir.rglob("*"))
+        except OSError:
+            # 某些测试（如 pwd-long）会创建超过 PATH_MAX 的深层目录树，
+            # pathlib.rglob 在遍历时会抛 OSError(ENAMETOOLONG)。
+            # 此时退化为只列出 run_dir 直接子文件。
+            try:
+                entries = sorted(run_dir.iterdir())
+            except OSError:
+                return ""
+        for path in entries:
+            try:
+                if not path.is_file():
+                    continue
+                rel = path.relative_to(run_dir).as_posix()
+            except (OSError, ValueError):
                 continue
-            rel = path.relative_to(run_dir).as_posix()
             if rel.startswith(".") or "/." in rel:
                 continue
             try:
@@ -878,8 +891,30 @@ class RustTestAgent:
 
         payload = self.adapter.extract_json_payload(text)
         if not isinstance(payload, dict):
-            print("    [rtest] LLM 返回不可解析为 JSON，终止本用例修复")
-            return "abort"
+            state.json_parse_failures += 1
+            max_json_retries = 3
+            if state.json_parse_failures >= max_json_retries:
+                print(
+                    f"    [rtest] LLM 连续 {state.json_parse_failures} 轮返回不可解析 JSON，"
+                    "终止本用例修复"
+                )
+                return "abort"
+            # 把 LLM 原始回复尾部带入下一轮，让模型看到自己的格式错误并自我纠正。
+            raw_tail = (text or "")[-1500:].strip()
+            state.history_summary += (
+                f"\n[系统] 上一轮（第 {attempt} 轮）LLM 返回无法解析为 JSON，"
+                f"已跳过（连续 {state.json_parse_failures}/{max_json_retries} 次）。"
+                f"\n上一轮原始回复尾部：\n```\n{raw_tail}\n```\n"
+                "下一轮必须严格只返回 JSON 对象，不要包含任何 markdown 围栏之外的文字。"
+            )
+            print(
+                f"    [rtest] LLM 返回不可解析为 JSON（第 {state.json_parse_failures} 次），"
+                "继续下一轮重试"
+            )
+            return "continue"
+
+        # JSON 解析成功，重置连续失败计数
+        state.json_parse_failures = 0
 
         state.history_summary = (
             payload.get("updated_summary") or payload.get("summary") or state.history_summary
@@ -1168,6 +1203,7 @@ class _RepairLoopState:
     last_edits_fingerprint: str
     stall_count: int
     dup_edits_count: int
+    json_parse_failures: int = 0
 
 
 def _script_size(case: TestCaseResult) -> int:
@@ -1342,6 +1378,32 @@ get_min_ulimit_v_()
   # Conservative default: enough for small tests, low enough for allocation
   # guard checks that add a small margin.
   echo 65536
+}
+
+# Perl support: many coreutils tests embed Perl scripts.
+# Locate perl and export $PERL; skip the test if unavailable.
+if command -v perl >/dev/null 2>&1; then
+  PERL=$(command -v perl)
+else
+  PERL=
+fi
+export PERL
+
+require_perl_()
+{
+  if test -z "$PERL"; then
+    skip_ "this test requires perl"
+  fi
+}
+
+require_readable_root_()
+{
+  test -r / || skip_ "/ is not readable"
+}
+
+require_root_()
+{
+  test "$(id -u)" -eq 0 || skip_ "this test requires root"
 }
 
 _cgr_cleanup_on_exit_()
