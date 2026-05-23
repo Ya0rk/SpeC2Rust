@@ -811,9 +811,17 @@ class RustRepairAgent:
 
     def _read_file(self, path: str) -> str:
 
-        with open(path, "r", encoding="utf-8") as f:
+        try:
 
-            return f.read()
+            with open(path, "r", encoding="utf-8") as f:
+
+                return f.read()
+
+        except UnicodeDecodeError:
+
+            # Binary file (compiled artifact, .o, ELF, etc.) — skip gracefully.
+
+            return ""
 
 
 
@@ -2847,9 +2855,11 @@ class RustRepairAgent:
 
                     continue
 
-                if mode == "delete_range" and span > 60:
+                if mode == "delete_range" and span > max_replace_span:
 
-                    print(f"  跳过过大的 delete_range ({span} 行)：{rel_path}:{start}-{end}")
+                    print(f"  跳过过大的 delete_range ({span} 行, 上限 {max_replace_span})：{rel_path}:{start}-{end}")
+
+                    audit_records.append({"path": rel_path, "skipped": True, "reason": f"delete_range too large: {span} > {max_replace_span}", "start": start, "end": end})
 
                     continue
 

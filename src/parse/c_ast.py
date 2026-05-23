@@ -29,7 +29,10 @@ class CCodeAnalyzer:
 
         # 初始化 Parser
         self.parser = Parser()
-        self.parser.set_language(c_language)
+        if hasattr(self.parser, "set_language"):
+            self.parser.set_language(c_language)
+        else:
+            self.parser.language = c_language
 
         # c_language = Language(str(pre_path / "utils/tree-sitter/build/c-language.so"), "c")
         # self.parser.set_language(c_language)
