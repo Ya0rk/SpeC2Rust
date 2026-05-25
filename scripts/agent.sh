@@ -161,7 +161,7 @@ if [[ "${CGR_NO_DEFAULT_FLAGS:-0}" != "1" ]]; then
     --use-contextual-rust-agent
     --use-rust-test-agent
     --use-spec-agent
-    # --freeze-c-docs
+    --freeze-c-docs
     --rust-entry-kind main
     --rust-repair-max-iterations "${CGR_RUST_REPAIR_MAX_ITERATIONS:-64}"
     --rust-test-agent-max-iterations "${CGR_RUST_TEST_MAX_ITERATIONS:-64}"
