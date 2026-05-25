@@ -643,11 +643,11 @@ class RustRepairAgent:
 
         if current_best is None:
 
-            return True, "首次结果"
+            return True, "first result"
 
         if candidate.check_passed and not current_best.check_passed:
 
-            return True, "编译已通过"
+            return True, "compile check passed"
 
         if (
 
@@ -659,7 +659,7 @@ class RustRepairAgent:
 
         ):
 
-            return True, "release 编译已通过"
+            return True, "release build passed"
 
 
 
@@ -671,11 +671,11 @@ class RustRepairAgent:
 
         if candidate_metrics["syntax_blockers"] < current_metrics["syntax_blockers"]:
 
-            return True, "语法阻塞错误减少"
+            return True, "syntax blocker count decreased"
 
         if current_metrics["syntax_blockers"] > 0 and candidate_metrics["syntax_blockers"] == 0:
 
-            return True, "语法阻塞错误被清空"
+            return True, "syntax blockers were cleared"
 
         if (
 
@@ -685,7 +685,7 @@ class RustRepairAgent:
 
         ):
 
-            return True, "接口阻塞错误减少"
+            return True, "interface blocker count decreased"
 
         if (
 
@@ -695,7 +695,7 @@ class RustRepairAgent:
 
         ):
 
-            return True, "暴露出更深层错误，接受为新前沿"
+            return True, "deeper errors were exposed; accept as the new frontier"
 
         if (
 
@@ -707,13 +707,13 @@ class RustRepairAgent:
 
         ):
 
-            return True, "错误签名发生变化，接受为新前沿"
+            return True, "error signature changed; accept as the new frontier"
 
         if candidate.error_count < current_best.error_count:
 
-            return True, "总错误数减少"
+            return True, "total error count decreased"
 
-        return False, "未推进编译前沿"
+        return False, "did not advance the compile frontier"
 
 
 
@@ -1209,7 +1209,7 @@ class RustRepairAgent:
 
         src_dir = os.path.join(project_dir, "src")
 
-        entries = ["Rust 项目文件："]
+        entries = ["Rust project files:"]
 
         if os.path.isdir(src_dir):
 
@@ -1249,7 +1249,7 @@ class RustRepairAgent:
 
             entries.append("")
 
-            entries.append("可读取的 C 源码上下文（kind=c）：")
+            entries.append("Readable C source context (kind=c):")
 
             for rel_path in self._list_context_files(project_dir, "c", limit=40):
 
@@ -1259,7 +1259,7 @@ class RustRepairAgent:
 
             entries.append("")
 
-            entries.append("可读取的 spec/c_docs 上下文（kind=spec）：")
+            entries.append("Readable spec/c_docs context (kind=spec):")
 
             for rel_path in self._list_context_files(project_dir, "spec", limit=60):
 
@@ -1371,7 +1371,7 @@ class RustRepairAgent:
 
         if omitted_count > 0:
 
-            omission_note = f"\n\n注意：当前只展示了 {len(shown_items)} 个错误块，另外还有 {omitted_count} 个错误块未展开。请先聚焦当前展示的核心错误。"
+            omission_note = f"\n\nNote: only {len(shown_items)} error blocks are shown right now, and {omitted_count} more blocks are collapsed. Please focus first on the core errors shown here."
 
         joined_errors = "\n\n".join(error_sections) + omission_note
 
@@ -1381,7 +1381,7 @@ class RustRepairAgent:
 
             handoff_block = f"""
 
-上一轮经验摘要：
+Previous round experience summary:
 
 ```text
 
@@ -1391,49 +1391,49 @@ class RustRepairAgent:
 
 """
 
-        return f"""你在做 Rust 编译修复诊断。先不要直接输出代码。
+        return f"""You are performing Rust compile-repair diagnosis. Do not output code yet.
 
 
 
-你只能先产出一个 JSON 诊断计划，告诉程序：
+You may only produce a JSON diagnosis plan first, telling the program:
 
-1. 本轮优先修哪些文件
+1. Which files to prioritize in this round
 
-2. 还需要读取哪些文件或文件片段
+2. Which files or file snippets still need to be read
 
-3. 还需要用哪些关键词做本地搜索
+3. Which keywords still need to be used for local search
 
-4. 为什么这么读/搜
+4. Why to read/search in that way
 
-5. 本轮预期采用哪些局部编辑动作；如果错误来自缺失模块/文件，必须先计划读取 C/spec/Rust 证据，再决定是否创建真实文件
-
-
-
-可用读取接口：
-
-- whole_file: 读取整个文件。字段：kind=rust/c/spec，path，mode=whole_file
-
-- line_range: 读取文件的 start_line 到 end_line。字段：kind=rust/c/spec，path，mode=line_range，start_line，end_line
+5. Which local edit actions are expected in this round; if the error comes from a missing module/file, you must first plan to read C/spec/Rust evidence before deciding whether to create a real file
 
 
 
-可用搜索接口：
+Available read interfaces:
 
-- search_requests: 提供 kind=rust/c/spec/all、query 和可选 path_glob，程序会返回命中片段和文件位置，方便你再决定是否读取更大上下文
+- whole_file: read the whole file. Fields: kind=rust/c/spec, path, mode=whole_file
 
-
-
-关键约束：
-
-- 禁止规划 fallback、最小 stub、空行为实现、默认返回值实现。
-
-- 缺失核心业务模块时，read_requests/search_requests 必须覆盖相关 C 源码或 spec 文档；不能只读 main.rs/Cargo.toml 就创建业务模块。
-
-- 如果不知道对应 C/spec 文件路径，先用 search_requests 在 kind=all 中搜索模块名、函数名、类型名。
+- line_range: read from start_line to end_line in the file. Fields: kind=rust/c/spec, path, mode=line_range, start_line, end_line
 
 
 
-项目概览：
+Available search interfaces:
+
+- search_requests: provide kind=rust/c/spec/all, query, and optional path_glob; the program returns matching snippets and file locations so you can decide whether to read a larger context
+
+
+
+Key constraints:
+
+- Do not plan fallbacks, minimal stubs, empty-behavior implementations, or default-return implementations.
+
+- When a core business module is missing, read_requests/search_requests must cover the relevant C source or spec documents; do not create business modules after reading only main.rs/Cargo.toml.
+
+- If you do not know the corresponding C/spec file path, first use search_requests in kind=all to search for module names, function names, and type names.
+
+
+
+Project overview:
 
 ```text
 
@@ -1445,17 +1445,17 @@ class RustRepairAgent:
 
 
 
-当前错误：
+Current error:
 
 {joined_errors}
 
 
 
-只返回 JSON，对象格式：
+Return JSON only, in the following object format:
 
 {{
 
-  "summary": "一句话诊断",
+  "summary": "One-sentence diagnosis",
 
   "target_files": ["src/a.rs"],
 
@@ -1475,9 +1475,9 @@ class RustRepairAgent:
 
   ],
 
-  "edit_strategy": "replace_range / delete_range / insert_before / insert_after / create_file / create_dir 的总体策略",
+  "edit_strategy": "Overall strategy for replace_range / delete_range / insert_before / insert_after / create_file / create_dir",
 
-  "reasoning": ["简短要点1", "简短要点2"]
+  "reasoning": ["brief point 1", "brief point 2"]
 
 }}
 
@@ -1493,7 +1493,7 @@ class RustRepairAgent:
 
         response = self.llm.generate([
 
-            {"role": "system", "content": "你是经验丰富的 Rust 编译修复规划助手。"},
+            {"role": "system", "content": "You are an experienced Rust compile-repair planning assistant."},
 
             {"role": "user", "content": prompt},
 
@@ -1509,7 +1509,7 @@ class RustRepairAgent:
 
         return {
 
-            "summary": "诊断计划解析失败；不执行 fallback 修补，仅读取错误文件并要求下一轮重新诊断",
+            "summary": "Diagnosis-plan parsing failed; do not perform fallback patching. Only read the error files and require the next round to diagnose again.",
 
             "target_files": self._choose_target_files(grouped_errors, limit=2),
 
@@ -1519,7 +1519,7 @@ class RustRepairAgent:
 
             "edit_strategy": "no fallback edits; collect context only",
 
-            "reasoning": ["LLM 诊断计划解析失败，不生成修补代码，先收集错误文件上下文"],
+            "reasoning": ["The LLM diagnosis plan could not be parsed. Do not generate patch code; collect error-file context first."],
 
         }
 
@@ -1879,25 +1879,25 @@ class RustRepairAgent:
 
         lines = [
 
-            "可用上下文与工具协议：",
+            "Available context and tool protocol:",
 
-            "- more_read_requests：读取文件全文或行范围。字段：kind=rust/c/spec，path，mode=whole_file/line_range，start_line，end_line。",
+            "- more_read_requests: read a full file or line range. Fields: kind=rust/c/spec, path, mode=whole_file/line_range, start_line, end_line.",
 
-            "- search_requests：在文件中搜索关键词。字段：kind=rust/c/spec/all，query，path_glob，context_lines，max_results。",
+            "- search_requests: search keywords in files. Fields: kind=rust/c/spec/all, query, path_glob, context_lines, max_results.",
 
-            "- edits：只在证据足够时修改 Rust 项目。mode 可为 replace_range/delete_range/insert_before/insert_after/create_file/create_dir。",
+            "- edits: modify the Rust project only when evidence is sufficient. mode may be replace_range/delete_range/insert_before/insert_after/create_file/create_dir.",
 
-            "- kind=rust 表示当前 Rust 项目，可读写；kind=c 表示原始 C 项目，只读；kind=spec 表示 c_docs/spec 文档，只读。",
+            "- kind=rust means the current Rust project, readable and writable; kind=c means the original C project, read-only; kind=spec means c_docs/spec documents, read-only.",
 
-            "- 允许读取的上下文源：" + ", ".join(f"{kind}={path}" for kind, path in roots.items()),
+            "- Allowed context sources: " + ", ".join(f"{kind}={path}" for kind, path in roots.items()),
 
-            "- 如果错误涉及缺失业务模块、空文件、行为未知、接口未知，必须先读取 c/spec/rust 证据；不要直接生成最小可编译实现。",
+            "- If the error involves a missing business module, empty file, unknown behavior, or unknown interface, you must read c/spec/rust evidence first; do not jump straight to a minimal compilable implementation.",
 
-            "- 如果当前已读材料不足以完成真实修复，返回空 edits，并通过 more_read_requests/search_requests 继续取证。",
+            "- If the currently read material is not enough for a real fix, return empty edits and continue gathering evidence through more_read_requests/search_requests.",
 
             "",
 
-            "读取请求示例：",
+            "Read request examples:",
 
             '{"kind":"rust","path":"src/main.rs","mode":"whole_file"}',
 
@@ -1907,7 +1907,7 @@ class RustRepairAgent:
 
             "",
 
-            "搜索请求示例：",
+            "Search request examples:",
 
             '{"kind":"rust","query":"struct Which","path_glob":"src/*.rs","context_lines":2,"max_results":10}',
 
@@ -1925,7 +1925,7 @@ class RustRepairAgent:
 
         if not materials:
 
-            return "- 当前没有可用材料；必须先通过 more_read_requests/search_requests 获取上下文。"
+            return "- No material is available yet; you must first obtain context through more_read_requests/search_requests."
 
         lines = []
 
@@ -1991,9 +1991,9 @@ class RustRepairAgent:
 
                     f"### {location}\n"
 
-                    "下面代码块左侧 `NNNN |` 是真实文件行号；edit 的 start_line/end_line 必须使用这些行号，"
+                    "The left side of the code block, `NNNN |`, is the real file line number; edit start_line/end_line must use these line numbers, "
 
-                    "不要把行号前缀写进 content。\n"
+                    "and do not write the line-number prefix into content.\n"
 
                     f"```text\n{numbered}\n```"
 
@@ -2027,7 +2027,7 @@ class RustRepairAgent:
 
         if omitted_count > 0:
 
-            error_note = f"\n注意：当前只展示了 {len(shown_paths)} 个错误块，另外还有 {omitted_count} 个错误块未展开。"
+            error_note = f"\nNote: only {len(shown_paths)} error blocks are shown now, and {omitted_count} more blocks are collapsed."
 
 
 
@@ -2045,7 +2045,7 @@ class RustRepairAgent:
 
             damaged_list = ", ".join(severely_damaged_files)
 
-            error_note += f"\n\n重要提示：以下文件存在严重的结构性括号损坏（多个 unclosed/mismatched delimiter），局部小范围编辑可能无法修复。对这些文件，你可以使用一次性的大范围 replace_range 覆盖整个函数/impl 块甚至整个文件（无行数上限），以彻底重建其结构：{damaged_list}"
+            error_note += f"\n\nImportant: the following files have severe structural brace damage (multiple unclosed/mismatched delimiters), and small local edits may not be enough. For these files, you may use one large replace_range to cover an entire function/impl block or even the entire file (no line-count limit) to fully rebuild the structure: {damaged_list}"
 
         summary_block = ""
 
@@ -2053,7 +2053,7 @@ class RustRepairAgent:
 
             summary_block += f"""
 
-当前轮已知摘要：
+Known summary for the current round:
 
 ```text
 
@@ -2067,7 +2067,7 @@ class RustRepairAgent:
 
             summary_block += f"""
 
-跨轮交接摘要：
+Cross-round handoff summary:
 
 ```text
 
@@ -2081,55 +2081,55 @@ class RustRepairAgent:
 
         material_inventory = self._format_material_inventory(materials)
 
-        return f"""你现在开始真正生成修复方案。
+        return f"""You are now generating the real repair plan.
 
 
 
-要求：
+Requirements:
 
-1. 只返回 JSON，不要解释。
+1. Return JSON only, without explanations.
 
-2. 允许的编辑 mode：replace_range / delete_range / insert_before / insert_after / create_file / create_dir。
+2. Allowed edit modes: replace_range / delete_range / insert_before / insert_after / create_file / create_dir.
 
-3. 不允许 replace_file。只有创建新文件时才允许在 create_file.content 中返回完整文件内容；create_file 默认不覆盖已有文件，确需覆盖时必须显式设置 "overwrite": true。
+3. `replace_file` is not allowed. Only when creating a new file may create_file.content contain the full file content; create_file does not overwrite existing files by default, and overwrite must be explicitly set to `true` if needed.
 
-4. 不要修改未读取的已有文件；但如果编译错误明确说明缺失模块/文件，可以使用 create_file/create_dir 创建新路径。
+4. Do not modify existing files that have not been read; but if the compile error clearly indicates a missing module/file, you may use create_file/create_dir to create a new path.
 
-5. 返回前请确保行号是基于已读取文件的真实行号。
+5. Before returning, make sure line numbers are based on the real line numbers of already read files.
 
-   已读取材料使用 `NNNN | code` 展示，`NNNN` 就是应填写到 edit 中的真实行号。
+   Read materials are shown as `NNNN | code`; `NNNN` is the real line number to fill into the edit.
 
-6. 如果当前材料不足以安全修复，可以不产出 edits，改为返回 more_read_requests 或 search_requests 继续读取更多上下文。
+6. If the current materials are insufficient for a safe fix, you may return no edits and instead return more_read_requests or search_requests to read more context.
 
-7. 这是本轮修复中的第 {cycle_index} 次动作。你已经看到当前这一时刻的最新编译结果。
+7. This is the {cycle_index}th action in this repair round. You have already seen the latest compile result at this moment.
 
-8. 只有在你基于当前编译结果判断“本轮不需要再继续读/改”时，才返回 complete=true。
+8. Only return complete=true when, based on the current compile result, you judge that no more reading/editing is needed in this round.
 
-9. 如果本次响应包含 edits，程序会先应用 edits、重新编译，再决定是否继续本轮；不要把“改完后应该继续观察编译结果”的情况标为 complete。
+9. If this response includes edits, the program will apply the edits and recompile before deciding whether to continue this round; do not mark as complete a case where you should continue observing the compile result after changes.
 
-10. 如果 cargo 报 private field / private method，禁止继续在外部模块访问 private 成员；应改用已有 public API，或在拥有该类型的模块内部增加必要 public 方法。
+10. If cargo reports a private field / private method, do not keep accessing private members from outside the module; switch to an existing public API, or add necessary public methods inside the module that owns the type.
 
-11. 给已有 impl 增加方法时，必须插入到该 impl 的 closing brace 之前；不要插入到后面的 `impl Default`、trait impl 或其它无关 impl 块里。
+11. When adding methods to an existing impl, insert them before that impl's closing brace; do not insert them into a later `impl Default`, trait impl, or other unrelated impl block.
 
-12. create_file/create_dir 只能创建项目内路径，例如 `src/foo.rs`、`src/foo/mod.rs`、`tests/foo.rs`；禁止创建 `target/`、`.git/` 或项目外路径。
+12. create_file/create_dir may only create paths inside the project, such as `src/foo.rs`, `src/foo/mod.rs`, or `tests/foo.rs`; do not create `target/`, `.git/`, or paths outside the project.
 
-13. 如果 create_file 创建了新模块文件，通常还需要同时编辑已有 `src/main.rs` 或 `src/lib.rs` 添加 `mod xxx;`，否则 Rust 不会编译该文件。
+13. If create_file creates a new module file, you usually also need to edit the existing `src/main.rs` or `src/lib.rs` to add `mod xxx;`, otherwise Rust will not compile that file.
 
-14. 禁止为了通过编译创建空行为 stub 或 fallback，例如 `fn main(_args) -> i32 {{ 0 }}`、默认返回空 Vec/None/Ok、忽略所有参数的占位实现。
+14. Do not create empty-behavior stubs or fallbacks just to make compilation pass, such as `fn main(_args) -> i32 {{ 0 }}`, default-empty Vec/None/Ok returns, or placeholder implementations that ignore all arguments.
 
-15. 如果缺失的是核心业务模块，不要创建最小空实现；必须先通过 more_read_requests/search_requests 读取对应 C 源码、spec 或已有 Rust 相关模块，再做真实修复。
+15. If the missing part is a core business module, do not create a minimal empty implementation; first use more_read_requests/search_requests to read the corresponding C source, spec, or existing Rust-related modules, then do a real fix.
 
-16. 禁止用 delete_range/replace_range 把已有有效实现大幅删短。修复应保留原功能，只改导致当前错误的最小范围。
+16. Do not use delete_range/replace_range to drastically shorten an already valid implementation. The fix should preserve existing behavior and only change the smallest range that causes the current error.
 
-17. create_file 只能用于“根据已读证据创建真实实现”或“创建纯模块声明文件”；不能创建返回默认值的占位业务模块。
+17. create_file may only be used to "create a real implementation based on already read evidence" or "create a pure module declaration file"; do not create placeholder business modules that return defaults.
 
-18. 如果当前错误是 `could not find module/type/function`，优先搜索和读取已有 Rust/C/spec 证据，判断是模块声明缺失、文件路径错误、命名不一致，还是代码生成缺失。
+18. If the current error is `could not find module/type/function`, first search and read existing Rust/C/spec evidence to determine whether the issue is a missing module declaration, a wrong file path, inconsistent naming, or missing code generation.
 
 {tool_protocol}
 
 
 
-诊断计划：
+Diagnosis plan:
 
 ```json
 
@@ -2141,7 +2141,7 @@ class RustRepairAgent:
 
 
 
-已读材料清单：
+Read material inventory:
 
 ```text
 
@@ -2151,23 +2151,23 @@ class RustRepairAgent:
 
 
 
-相关错误：
+Related errors:
 
 {chr(10).join(error_sections)}{error_note}
 
 
 
-已读取材料：
+Read materials:
 
 {chr(10).join(material_blocks)}
 
 
 
-返回 JSON：
+Return JSON:
 
 {{
 
-  "summary": "本轮修复摘要",
+  "summary": "This round's repair summary",
 
   "edits": [
 
@@ -2181,7 +2181,7 @@ class RustRepairAgent:
 
       "end_line": 30,
 
-      "content": "替换后的完整片段，保持合法 Rust"
+      "content": "Replacement full snippet, keeping valid Rust"
 
     }}
 
@@ -2205,7 +2205,7 @@ class RustRepairAgent:
 
   "complete": false,
 
-  "updated_summary": "基于本次读取、编辑和当前编译结果更新后的摘要"
+  "updated_summary": "Summary updated based on this round's reads, edits, and current compile result"
 
 }}
 
@@ -2221,7 +2221,7 @@ class RustRepairAgent:
 
         response = self.llm.generate([
 
-            {"role": "system", "content": "你是经验丰富的 Rust 编译修复助手，擅长给出最小编辑。"},
+            {"role": "system", "content": "You are an experienced Rust compile-repair assistant skilled at making minimal edits."},
 
             {"role": "user", "content": prompt},
 
@@ -2243,7 +2243,7 @@ class RustRepairAgent:
 
             return parsed
 
-        return {"summary": "LLM 结构化编辑解析失败", "edits": [], "more_read_requests": [], "search_requests": [], "complete": False, "updated_summary": ""}
+        return {"summary": "LLM structured-edit parsing failed", "edits": [], "more_read_requests": [], "search_requests": [], "complete": False, "updated_summary": ""}
 
 
 
@@ -2263,29 +2263,29 @@ class RustRepairAgent:
 
     ) -> str:
 
-        return f"""你在为下一轮 Rust 修复模型编写交接摘要。
+        return f"""You are writing a handoff summary for the next Rust repair model.
 
 
 
-要求：
+Requirements:
 
-1. 只输出纯文本摘要，不要 markdown 围栏。
+1. Output plain-text summary only; do not use markdown fences.
 
-2. 摘要要短，但要明确说明：
+2. The summary should be short but must clearly explain:
 
-   - 本轮做了什么
+   - what was done this round
 
-   - 哪些修改有效/无效
+   - which changes were effective / ineffective
 
-   - 下一轮应避免什么
+   - what the next round should avoid
 
-   - 下一轮应优先关注什么
+   - what the next round should prioritize
 
-3. 如果本轮结果未被接受，明确说明基线没有推进，下一轮会继续从旧项目副本开始。
+3. If this round's result is not accepted, explicitly state that the baseline did not advance and that the next round will continue from the old project copy.
 
 
 
-上一轮交接摘要：
+Previous handoff summary:
 
 ```text
 
@@ -2295,7 +2295,7 @@ class RustRepairAgent:
 
 
 
-本轮 AI 自己维护的摘要：
+AI-maintained summary for this round:
 
 ```text
 
@@ -2305,7 +2305,7 @@ class RustRepairAgent:
 
 
 
-基线编译结果摘要：
+Baseline compile-result summary:
 
 ```text
 
@@ -2315,7 +2315,7 @@ class RustRepairAgent:
 
 
 
-本轮结束时编译结果摘要：
+Compile-result summary at the end of this round:
 
 ```text
 
@@ -2325,7 +2325,7 @@ class RustRepairAgent:
 
 
 
-本轮结果是否被接受为新基线：{"是" if accepted_as_best else "否"}
+Was this round accepted as the new baseline: {"yes" if accepted_as_best else "no"}
 
 """
 
@@ -2365,7 +2365,7 @@ class RustRepairAgent:
 
         response = self.llm.generate([
 
-            {"role": "system", "content": "你是经验丰富的 Rust 修复交接助手。"},
+            {"role": "system", "content": "You are an experienced Rust repair handoff assistant."},
 
             {"role": "user", "content": prompt},
 
@@ -3003,29 +3003,29 @@ class RustRepairAgent:
 
     def _build_fix_prompt(self, target_rel_path: str, error_block: str, file_content: str, related_context: str) -> str:
 
-        return f"""你在修复一个已经生成好的 Rust 项目中的单个文件。
+        return f"""You are repairing a single file in an already generated Rust project.
 
 
 
-目标文件：{target_rel_path}
+Target file: {target_rel_path}
 
 
 
-要求：
+Requirements:
 
-1. 只返回修复后的完整文件内容，不要解释。
+1. Return only the complete repaired file content, with no explanation.
 
-2. 不要输出 markdown 围栏。
+2. Do not output markdown fences.
 
-3. 优先修复导致当前编译失败的根因，不要顺手大改架构。
+3. Prioritize fixing the root cause of the current compile failure; do not make large architectural changes opportunistically.
 
-4. 尽量保持与现有其它文件兼容。
+4. Keep compatibility with the existing other files as much as possible.
 
-5. 如果文件当前被 markdown 围栏污染、被截断或大括号不平衡，先修复这些问题。
+5. If the file is currently polluted by markdown fences, truncated, or has unbalanced braces, fix those issues first.
 
 
 
-当前编译错误：
+Current compile error:
 
 ```text
 
@@ -3035,7 +3035,7 @@ class RustRepairAgent:
 
 
 
-当前文件内容：
+Current file content:
 
 ```rust
 
@@ -3045,7 +3045,7 @@ class RustRepairAgent:
 
 
 
-相关上下文：
+Relevant context:
 
 ```text
 
@@ -3073,7 +3073,7 @@ class RustRepairAgent:
 
         prompt = self._build_fix_prompt(rel_path, error_block, file_content, related_context)
 
-        system_prompt = "你是经验丰富的 Rust 编译修复助手。"
+        system_prompt = "You are an experienced Rust compile-repair assistant."
 
         self._set_request_label(f"独立修复 {os.path.basename(rel_path)}")
 
@@ -3107,15 +3107,15 @@ class RustRepairAgent:
 
             continuation_user = (
 
-                f"你上一次输出在 max_tokens 处被截断了。"
+                f"Your previous output was truncated at max_tokens."
 
-                f"下面是你已经输出的全部代码：\n"
+                f"Below is all the code you have already output:\n"
 
                 f"```rust\n{fixed_code}\n```\n\n"
 
-                f"请从截断处继续输出（不要重复已有代码），直到文件完整结束。\n"
+                f"Continue from the truncation point (do not repeat existing code) until the file is complete.\n"
 
-                f"只输出代码续写部分，不需要解释。"
+                f"Output only the continued code segment and do not explain."
 
             )
 

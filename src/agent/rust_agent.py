@@ -80,7 +80,7 @@ class RustAgent:
         clipped = content[:max_chars]
         return (
             clipped
-            + "\n\n[文档过长，后续内容已截断；如需完整内容，请回到源文档查看。]\n"
+            + "\n\n[Document is too long; remaining content was truncated. Refer to the source document if full content is needed.]\n"
         )
 
     def _normalize_rel_path(self, path: str) -> str:
@@ -199,7 +199,7 @@ class RustAgent:
     def _truncate_text(self, text: str, max_chars: int) -> str:
         if len(text) <= max_chars:
             return text
-        return text[:max_chars] + "\n...[截断]..."
+        return text[:max_chars] + "\n...[truncated]..."
 
     def _build_source_context_summary(self, max_records: int = 12, max_chars: int = 16000) -> str:
         """
@@ -209,24 +209,24 @@ class RustAgent:
             return ""
 
         parts = []
-        parts.append("原始 C 源码事实摘要（来自解析 JSON，优先级高于摘要文档）：")
+        parts.append("Original C source fact summary (from parsed JSON, higher priority than summary documents):")
         grouped_by_file = defaultdict(list)
         for record in self.source_records:
             grouped_by_file[record["file"]].append(record)
 
-        parts.append("源文件概览：")
+        parts.append("Source file overview:")
         for file_path, records in list(grouped_by_file.items())[:8]:
             names = ", ".join(record["name"] for record in records[:8])
-            parts.append(f"- {file_path}: {len(records)} 个函数/记录，代表项：{names}")
+            parts.append(f"- {file_path}: {len(records)} functions/records, representative items: {names}")
 
         main_records = [record for record in self.source_records if record["name"] == "main"]
         if main_records:
-            parts.append("入口函数：")
+            parts.append("Entry functions:")
             for record in main_records[:3]:
                 signature = self._truncate_text(record.get("source", "").split("{", 1)[0].strip(), 220)
                 parts.append(f"- {record['file']} {record['span']}: {signature}")
 
-        parts.append("关键源码片段：")
+        parts.append("Key source snippets:")
         prioritized = sorted(
             self.source_records,
             key=lambda item: (
@@ -252,19 +252,19 @@ class RustAgent:
         if not self.source_records:
             return ""
 
-        parts = ["原始 C 项目的外部接口事实："]
+        parts = ["External interface facts from the original C project:"]
         main_records = [record for record in self.source_records if record["name"] == "main"]
         if main_records:
             for record in main_records[:4]:
                 signature = self._truncate_text(record.get("source", "").split("{", 1)[0].strip(), 220)
-                parts.append(f"- 入口函数：{signature} @ {record['file']}")
+                parts.append(f"- Entry function: {signature} @ {record['file']}")
 
         for record in self.source_records[:10]:
             if record["name"] == "main":
                 continue
             signature = self._truncate_text(record.get("source", "").split("{", 1)[0].strip(), 180)
             if signature:
-                parts.append(f"- 函数：{signature} @ {record['file']}")
+                parts.append(f"- Function: {signature} @ {record['file']}")
 
         return self._truncate_text("\n".join(parts).strip(), max_chars)
 
@@ -290,14 +290,14 @@ class RustAgent:
         if not cli_like:
             return ""
 
-        signals.append("检测结果：原始 C 项目更像工具/CLI/可执行程序，而不是单纯库。")
+        signals.append("Detection result: the original C project looks more like a tool/CLI/executable than a pure library.")
         for record in main_records[:3]:
             header = self._truncate_text(record.get("source", "").split("{", 1)[0].strip(), 220)
-            signals.append(f"- 入口签名：{header} @ {record['file']}")
-        signals.append("- 必须保留命令行入口，而不是擅自改造成仅能被库调用的 API。")
-        signals.append("- 必须尽量保持参数顺序、参数含义、stdout/stderr 输出通道、usage/error 文案职责和退出语义一致。")
-        signals.append("- 如果需要额外的库层封装，可以新增内部模块，但不能破坏原工具的外部使用方式。")
-        signals.append("- 对 main/入口调度、解析流程、错误退出路径，应优先参考原 C 源码，而不是仅根据摘要重写。")
+            signals.append(f"- Entry signature: {header} @ {record['file']}")
+        signals.append("- Preserve the command-line entry point instead of converting it into an API that can only be called as a library.")
+        signals.append("- Preserve argument order, argument meaning, stdout/stderr output channels, usage/error message responsibilities, and exit semantics as much as possible.")
+        signals.append("- If an additional library-layer wrapper is needed, internal modules may be added, but the original tool's external usage must not be broken.")
+        signals.append("- For main/entry dispatch, parsing flow, and error-exit paths, prioritize the original C source rather than rewriting from summaries alone.")
         return self._truncate_text("\n".join(signals), max_chars)
 
     def _normalize_contract_file_list(self, file_paths: List[str]) -> List[str]:
@@ -367,16 +367,16 @@ class RustAgent:
         functions = self.translation_contract.get("functions", [])
         types = self.translation_contract.get("types", [])
         parts = [
-            "迁移契约（最高优先级）：",
-            f"- 项目类型：{self.translation_contract.get('project', {}).get('kind', 'unknown')}",
-            f"- 允许生成文件：{', '.join(self.allowed_rust_files) if self.allowed_rust_files else '未限制'}",
-            f"- 依赖策略：{boundary.get('dependency_policy', 'unspecified')}",
-            f"- 允许测试文件：{bool(boundary.get('allow_tests', False))}",
-            f"- 允许示例文件：{bool(boundary.get('allow_examples', False))}",
-            f"- 允许 benchmark：{bool(boundary.get('allow_benches', False))}",
-            f"- 允许 FFI：{bool(boundary.get('allow_ffi', False))}",
+            "Migration contract (highest priority):",
+            f"- Project type: {self.translation_contract.get('project', {}).get('kind', 'unknown')}",
+            f"- Allowed generated files: {', '.join(self.allowed_rust_files) if self.allowed_rust_files else 'unrestricted'}",
+            f"- Dependency policy: {boundary.get('dependency_policy', 'unspecified')}",
+            f"- Test files allowed: {bool(boundary.get('allow_tests', False))}",
+            f"- Example files allowed: {bool(boundary.get('allow_examples', False))}",
+            f"- Benchmarks allowed: {bool(boundary.get('allow_benches', False))}",
+            f"- FFI allowed: {bool(boundary.get('allow_ffi', False))}",
             "",
-            "函数角色摘要：",
+            "Function role summary:",
         ]
         for item in functions[:80]:
             parts.append(
@@ -385,28 +385,28 @@ class RustAgent:
             )
         if types:
             parts.append("")
-            parts.append("类型事实摘要：")
+            parts.append("Type fact summary:")
             for item in types[:40]:
                 field_names = ", ".join(field.get("name", "") for field in item.get("fields", [])[:8] if field.get("name"))
-                parts.append(f"- {item.get('id', '')} {item.get('name', 'unknown')} {item.get('source', '')}: {field_names or '字段待回查'}")
+                parts.append(f"- {item.get('id', '')} {item.get('name', 'unknown')} {item.get('source', '')}: {field_names or 'fields require source lookup'}")
         forbidden = self.translation_contract.get("forbidden_without_evidence", [])
         if forbidden:
             parts.append("")
-            parts.append(f"未获证据禁止生成：{', '.join(str(item) for item in forbidden[:30])}")
+            parts.append(f"Forbidden without evidence: {', '.join(str(item) for item in forbidden[:30])}")
         text = "\n".join(parts).strip()
         return self._truncate_text(text, max_chars)
 
     def _contract_scope_instructions(self) -> str:
         if not self.translation_contract:
             return ""
-        allowed = ", ".join(self.allowed_rust_files) if self.allowed_rust_files else "契约未列出 allowed_rust_files"
+        allowed = ", ".join(self.allowed_rust_files) if self.allowed_rust_files else "contract does not list allowed_rust_files"
         return (
-            "硬性迁移边界：\n"
-            f"- 只能生成或规划这些文件：{allowed}\n"
-            "- 只能实现迁移契约中列出的 C 源码事实、公共接口、必要内部辅助逻辑。\n"
-            "- 不得新增没有 C 证据支持的高级 API、线程安全封装、恢复机制、序列化、属性测试、性能基准、FFI 或发布流程。\n"
-            "- 地道 Rust 只体现在所有权、模块组织、命名和错误表达上，不能扩大功能范围。\n"
-            "- 若迁移契约、Markdown 文档和模型计划冲突，迁移契约优先级最高。\n"
+            "Hard migration boundary:\n"
+            f"- Only generate or plan these files: {allowed}\n"
+            "- Implement only the C source facts, public interfaces, and necessary internal helper logic listed in the migration contract.\n"
+            "- Do not add advanced APIs, thread-safe wrappers, recovery mechanisms, serialization, property tests, benchmarks, FFI, or release workflows without C evidence.\n"
+            "- Native Rust should be reflected only in ownership, module organization, naming, and error expression; do not expand the feature scope.\n"
+            "- If the migration contract, Markdown docs, and model plan conflict, the migration contract has highest priority.\n"
         )
 
     def _extract_record_call_tokens(self, record: Dict) -> set[str]:
@@ -496,7 +496,7 @@ class RustAgent:
                 )[:max_records]
             ]
 
-        parts = [f"与 Rust 文件 `{file_path}` 最相关的原始 C 源码："]
+        parts = [f"Original C source most relevant to Rust file `{file_path}`:"]
         for record in fallback_records:
             calls = record.get("calls", [])[:6]
             parts.append(f"\n### {record['name']} [{record['file']} {record['span']}]")
@@ -507,7 +507,7 @@ class RustAgent:
                     if call.get("source")
                 )
                 if call_lines:
-                    parts.append(f"调用位置示例：{call_lines}")
+                    parts.append(f"Call site examples: {call_lines}")
             snippet = self._truncate_text(record.get("source", "").strip(), 1800)
             parts.append(f"```c\n{snippet}\n```")
 
@@ -680,7 +680,7 @@ class RustAgent:
         构造给模型看的精简接口契约上下文。
         """
         self._ensure_api_contract_loaded()
-        parts = ["当前已生成 Rust 接口契约摘要："]
+        parts = ["Current generated Rust interface contract summary:"]
         for rel_path, info in self.api_contract.get("files", {}).items():
             contract = info.get("contract", {})
             if not contract:
@@ -691,7 +691,7 @@ class RustAgent:
                     f"{f['name']}({'pub' if f['public'] else 'private'}:{f['type']})"
                     for f in struct.get("fields", [])[:12]
                 )
-                parts.append(f"- struct {struct['name']}: {field_desc or '无字段信息'}")
+                parts.append(f"- struct {struct['name']}: {field_desc or 'no field information'}")
             for enum in contract.get("public_enums", []):
                 parts.append(f"- enum {enum['name']}: {', '.join(enum.get('variants', [])[:12])}")
             for trait in contract.get("public_traits", []):
@@ -705,7 +705,7 @@ class RustAgent:
 
         text = "\n".join(parts).strip()
         if len(text) > max_chars:
-            return text[:max_chars] + "\n\n[接口契约摘要过长，后续内容已截断]"
+            return text[:max_chars] + "\n\n[Interface contract summary too long; remaining content truncated]"
         return text
 
     def _load_generation_plan(self) -> Dict:
@@ -853,7 +853,7 @@ class RustAgent:
             if content.strip():
                 if file_path.replace("\\", "/").lower().endswith(".rs"):
                     self._update_api_contract_for_file(file_path, content)
-                return context + f"\n\n=== 已生成文件：{file_path} ===\n{content}\n"
+                return context + f"\n\n=== Generated file: {file_path} ===\n{content}\n"
         except Exception as e:
             print(f"读取已存在文件失败：{full_path}，错误：{e}")
         return context
@@ -1192,12 +1192,12 @@ class RustAgent:
 
         initial_prompt = (
             user_prompt
-            + "\n\n额外要求：\n"
-            + "1. 如果一次无法输出完整内容，请先输出前半部分，并在真正完成时仅在末尾追加 <CGR_DONE>\n"
-            + "2. 如果尚未完成，不要输出 <CGR_DONE>\n"
-            + "3. 续写时不要重复已输出内容，要从上一次结尾处直接继续\n"
-            + "4. 如果尚未完成，不要为了让当前片段看起来完整而提前补最终收尾的大括号、结束模块或结束文件\n"
-            + "5. 除最终内容和 <CGR_DONE> 外，不要输出解释\n"
+            + "\n\nAdditional requirements:\n"
+            + "1. If you cannot output the full content in one response, output the first part and append <CGR_DONE> only at the very end when it is truly complete.\n"
+            + "2. If it is not yet complete, do not output <CGR_DONE>.\n"
+            + "3. During continuation, do not repeat previously output content; continue directly from the previous ending.\n"
+            + "4. If it is not yet complete, do not add final closing braces, closing modules, or end-of-file structure early just to make the current fragment look complete.\n"
+            + "5. Do not output explanations other than the final content and <CGR_DONE>.\n"
         )
 
         messages = [
@@ -1226,9 +1226,9 @@ class RustAgent:
                 break
 
             continue_prompt = (
-                "上一次输出尚未完成，请从刚才的最后位置直接继续，不要重复前文。\n"
-                "只输出剩余内容；如果这次完成，请仅在末尾追加 <CGR_DONE>。\n"
-                "如果尚未完成，不要提前补最终收尾的大括号、结束模块或结束文件。"
+                "The previous output was not complete. Continue directly from the last position without repeating earlier content.\n"
+                "Output only the remaining content; if this response completes it, append <CGR_DONE> only at the end.\n"
+                "If it is not yet complete, do not add final closing braces, closing modules, or end-of-file structure early."
             )
             messages = [
                 {'role': 'system', 'content': system_prompt},
@@ -1462,8 +1462,8 @@ edition = "2021"
 
         if normalized.endswith("lib.rs"):
             hints.extend([
-                "- 如果这是 lib.rs，请确保把当前项目中实际生成的核心 src/*.rs 模块通过 mod / pub mod 引入，而不是只保留空壳入口。",
-                "- lib.rs 的重导出应与已生成模块实际存在的类型和函数保持一致。",
+                "- If this is lib.rs, make sure the core src/*.rs modules actually generated for the current project are included through mod / pub mod, rather than leaving only an empty entry shell.",
+                "- Re-exports in lib.rs should stay consistent with the types and functions that actually exist in generated modules.",
             ])
 
         return "\n".join(hints)
@@ -1678,9 +1678,9 @@ cargo test
         implementation_plan = self.generation_plan.get("implementation_plan", "")
 
         if project_structure:
-            parts.append(f"项目结构：\n{project_structure}")
+            parts.append(f"Project structure:\n{project_structure}")
         if implementation_plan:
-            parts.append(f"实现计划：\n{implementation_plan}")
+            parts.append(f"Implementation plan:\n{implementation_plan}")
 
         contract_context = self._build_translation_contract_context()
         if contract_context:
@@ -1688,19 +1688,19 @@ cargo test
 
         api_contract_context = self._build_api_contract_context()
         if api_contract_context:
-            parts.append(f"当前接口契约：\n{api_contract_context}")
+            parts.append(f"Current interface contract:\n{api_contract_context}")
 
         if self.source_context_summary:
-            parts.append(f"原始 C 源码摘要：\n{self.source_context_summary}")
+            parts.append(f"Original C source summary:\n{self.source_context_summary}")
 
         if self.tool_interface_constraints:
-            parts.append(f"工具接口保持约束：\n{self.tool_interface_constraints}")
+            parts.append(f"Tool interface preservation constraints:\n{self.tool_interface_constraints}")
 
         if include_docs and self.doc_contents:
             doc_parts = []
             current_len = 0
             for path, content in self.doc_contents.items():
-                chunk = f"\n=== 文档：{path} ===\n{content}\n"
+                chunk = f"\n=== Document: {path} ===\n{content}\n"
                 if current_len + len(chunk) > max_doc_chars:
                     remaining = max_doc_chars - current_len
                     if remaining > 0:
@@ -1710,7 +1710,7 @@ cargo test
                 current_len += len(chunk)
             docs_text = "".join(doc_parts).strip()
             if docs_text:
-                parts.append(f"项目文档摘要：\n{docs_text}")
+                parts.append(f"Project document summary:\n{docs_text}")
 
         return "\n\n".join(part for part in parts if part).strip()
 
@@ -1776,26 +1776,26 @@ cargo test
         all_docs = ""
         contract_context = self._build_translation_contract_context()
         if contract_context:
-            all_docs += f"\n=== 迁移契约（最高优先级） ===\n{contract_context}\n"
+            all_docs += f"\n=== Migration Contract (Highest Priority) ===\n{contract_context}\n"
             all_docs += self._contract_scope_instructions() + "\n"
 
         for path, content in self.doc_contents.items():
-            all_docs += f"\n=== 文档：{path} ===\n"
+            all_docs += f"\n=== Document: {path} ===\n"
             all_docs += content
             all_docs += "\n"
 
         if self.source_context_summary:
-            all_docs += "\n=== 原始 C 源码摘要 ===\n"
+            all_docs += "\n=== Original C Source Summary ===\n"
             all_docs += self.source_context_summary
             all_docs += "\n"
 
         if self.source_interface_summary:
-            all_docs += "\n=== 原始 C 对外接口事实 ===\n"
+            all_docs += "\n=== Original C External Interface Facts ===\n"
             all_docs += self.source_interface_summary
             all_docs += "\n"
 
         if self.tool_interface_constraints:
-            all_docs += "\n=== 工具接口保持约束 ===\n"
+            all_docs += "\n=== Tool Interface Preservation Constraints ===\n"
             all_docs += self.tool_interface_constraints
             all_docs += "\n"
         
@@ -1843,14 +1843,14 @@ cargo test
 
         contract_context = self._build_translation_contract_context()
         if contract_context:
-            prompt += f"\n\n迁移契约（最高优先级）：\n{contract_context}\n{self._contract_scope_instructions()}\n"
+            prompt += f"\n\nMigration contract (highest priority):\n{contract_context}\n{self._contract_scope_instructions()}\n"
 
         if self.source_context_summary:
-            prompt += f"\n\n补充的原始 C 源码摘要：\n{self.source_context_summary}\n"
+            prompt += f"\n\nAdditional original C source summary:\n{self.source_context_summary}\n"
         if self.source_interface_summary:
-            prompt += f"\n\n补充的原始 C 对外接口事实：\n{self.source_interface_summary}\n"
+            prompt += f"\n\nAdditional original C external interface facts:\n{self.source_interface_summary}\n"
         if self.tool_interface_constraints:
-            prompt += f"\n\n必须遵守的工具接口保持约束：\n{self.tool_interface_constraints}\n"
+            prompt += f"\n\nTool interface preservation constraints that must be followed:\n{self.tool_interface_constraints}\n"
 
         sys_prompt = prompt_manager.get('rust_agent', 'generate_implementation_plan_system_prompt')
 
@@ -1886,48 +1886,48 @@ cargo test
             生成的代码
         """
         if self._is_cargo_toml(file_path):
-            prompt = f"""请为当前 Rust 项目生成 Cargo.toml 文件内容。
+            prompt = f"""Generate the Cargo.toml content for the current Rust project.
 
-要求：
-1. 只输出最终的 Cargo.toml 内容，不要输出解释
-2. 输出必须是合法的 TOML，而不是 Rust 代码
-3. 必须包含 [package]、[dependencies]，按需要可包含 [features]、[dev-dependencies]
-4. package.name 应与当前项目名称一致：{self.project_name}
-5. edition 默认使用 2021
-6. 不要生成 pub mod、fn、struct、impl 等 Rust 源码
-7. 如果暂时不确定某些依赖，优先保持 dependencies 简洁、可编译
+Requirements:
+1. Output only the final Cargo.toml content, with no explanation.
+2. The output must be valid TOML, not Rust code.
+3. Must include [package] and [dependencies], and may include [features] and [dev-dependencies] as needed.
+4. package.name must match the current project name: {self.project_name}
+5. Use edition 2021 by default.
+6. Do not generate Rust source code such as pub mod, fn, struct, or impl.
+7. If some dependencies are still uncertain, keep dependencies simple and compilable first.
 
-文件路径：
+File path:
 {file_path}
 
-项目上下文：
+Project context:
 {context}
 
-实现计划：
+Implementation plan:
 {implementation_plan}
 """
-            sys_prompt = "你是一个擅长生成 Rust 工程配置文件的助手。请只输出合法的 Cargo.toml 内容，不要输出解释。"
+            sys_prompt = "You are an assistant skilled at generating Rust project configuration files. Output only valid Cargo.toml content and do not explain."
         elif self._is_readme(file_path):
-            prompt = f"""请为当前 Rust 项目生成 README.md 文档内容。
+            prompt = f"""Generate README.md content for the current Rust project.
 
-要求：
-1. 只输出最终的 Markdown 文档，不要输出解释
-2. 输出必须是 README 文档，而不是 Rust 源码文件
-3. 可以包含少量示例代码块，但不要粘贴整文件实现源码
-4. 重点包含：项目简介、当前状态、构建方式、测试方式、最小使用示例
-5. 不要把大量测试代码、trait/struct/impl、长段实现细节写进 README
-6. 内容保持简洁，以项目说明为主
+Requirements:
+1. Output only the final Markdown document, with no explanation.
+2. The output must be a README document, not a Rust source file.
+3. It may include a small number of code examples, but do not paste the full implementation source code.
+4. Focus on: project introduction, current status, build method, testing method, and minimal usage example.
+5. Do not put large amounts of test code, trait/struct/impl, or long implementation details into the README.
+6. Keep the content concise and centered on the project description.
 
-文件路径：
+File path:
 {file_path}
 
-项目上下文：
+Project context:
 {context}
 
-实现计划：
+Implementation plan:
 {implementation_plan}
 """
-            sys_prompt = "你是一个擅长编写 Rust 项目 README.md 的助手。请只输出 Markdown 文档，不要输出解释，也不要把 README 写成源码文件。"
+            sys_prompt = "You are an assistant skilled at writing Rust project README.md files. Output only Markdown and do not explain or turn the README into source code."
         else:
             prompt = prompt_manager.get('rust_agent', 'generate_code_prompt',
                                        file_path=file_path,
@@ -1938,12 +1938,12 @@ cargo test
                 prompt += f"\n\n{contract_scope}\n"
             source_context = self._build_relevant_source_context_for_file(file_path)
             if source_context:
-                prompt += f"\n\n最相关的原始 C 源码片段：\n{source_context}\n"
+                prompt += f"\n\nMost relevant original C source snippets:\n{source_context}\n"
             if self.tool_interface_constraints:
-                prompt += f"\n\n必须遵守的工具接口保持约束：\n{self.tool_interface_constraints}\n"
+                prompt += f"\n\nTool interface preservation constraints that must be followed:\n{self.tool_interface_constraints}\n"
             extra_requirements = self._get_file_specific_generation_requirements(file_path)
             if extra_requirements:
-                prompt += f"\n\n额外文件级要求：\n{extra_requirements}\n"
+                prompt += f"\n\nAdditional file-level requirements:\n{extra_requirements}\n"
 
             sys_prompt = prompt_manager.get('rust_agent', 'generate_code_system_prompt')
 
@@ -1973,28 +1973,28 @@ cargo test
             生成的骨架代码
         """
         if self._is_cargo_toml(file_path):
-            prompt = f"""请先为下面的 Cargo.toml 生成“配置骨架”，用于后续逐步补全依赖和特性。
+            prompt = f"""First generate a "configuration skeleton" for the Cargo.toml below, to be completed later with dependencies and features.
 
-要求：
-1. 只输出最终的 Cargo.toml 内容，不要输出解释
-2. 输出必须是合法的 TOML，而不是 Rust 代码
-3. 至少包含 [package]、[dependencies]
-4. package.name 应与当前项目名称一致：{self.project_name}
-5. edition 默认使用 2021
-6. 如果暂时不确定依赖版本，可以先保持 [dependencies] 为空表，但结构要完整
-7. 不要生成 pub mod、fn、struct、impl 等 Rust 源码
+Requirements:
+1. Output only the final Cargo.toml content, with no explanation.
+2. The output must be valid TOML, not Rust code.
+3. Include at least [package] and [dependencies].
+4. package.name must match the current project name: {self.project_name}
+5. Use edition 2021 by default.
+6. If dependency versions are not yet certain, [dependencies] may be left empty, but the structure must be complete.
+7. Do not generate Rust source code such as pub mod, fn, struct, or impl.
 
-文件路径：
+File path:
 {file_path}
 
-项目上下文：
+Project context:
 {context}
 
-实现计划：
+Implementation plan:
 {implementation_plan}
 """
             return self._generate_with_continuation(
-                '你是一个擅长生成 Cargo.toml 骨架的助手。请只输出合法的 TOML 配置，不要输出解释。',
+                'You are an assistant skilled at generating Cargo.toml skeletons. Output only valid TOML configuration, with no explanation.',
                 prompt,
                 code_lang="toml",
                 max_rounds=4,
@@ -2003,38 +2003,38 @@ cargo test
 
         extra_requirements = self._get_skeleton_extra_requirements(file_path)
         source_context = self._build_relevant_source_context_for_file(file_path, max_records=5, max_chars=9000)
-        prompt = f"""请先为下面的 Rust 文件生成“代码骨架”，用于后续逐步补全实现。
+        prompt = f"""First generate a "code skeleton" for the Rust file below, to be gradually completed later.
 
-要求：
-1. 只输出最终代码，不要输出解释
-2. 保留模块结构、use、struct、enum、trait、type alias、函数签名
-3. 函数体可以先使用 todo!()、unimplemented!() 或最小占位实现
-4. 尽量优先把结构体、类型定义、公开接口写完整
-5. 不要省略必要的 mod/pub/use 声明
-6. 输出必须是完整的单文件 Rust 代码
-7. 对数据结构类文件，优先输出 struct/enum/type 等类型定义，再输出函数签名和实现占位
+Requirements:
+1. Output only the final code, with no explanation.
+2. Preserve the module structure, use statements, structs, enums, traits, type aliases, and function signatures.
+3. Function bodies may use todo!(), unimplemented!(), or minimal placeholder implementations at first.
+4. Prefer to complete structs, type definitions, and public interfaces first.
+5. Do not omit necessary mod/pub/use declarations.
+6. The output must be complete single-file Rust code.
+7. For data-structure files, output struct/enum/type definitions first, then function signatures and implementation placeholders.
 
-附加要求：
+Additional requirements:
 {extra_requirements}
 
-文件路径：
+File path:
 {file_path}
 
-项目上下文：
+Project context:
 {context}
 
-实现计划：
+Implementation plan:
 {implementation_plan}
 
-最相关的原始 C 源码片段：
-{source_context or '当前没有可用的源码片段，请至少严格遵循已有上下文与接口事实。'}
+Most relevant original C source snippets:
+{source_context or 'No source snippets are available yet; at minimum, strictly follow the existing context and interface facts.'}
 """
 
         if self.tool_interface_constraints:
-            prompt += f"\n必须遵守的工具接口保持约束：\n{self.tool_interface_constraints}\n"
+            prompt += f"\nTool interface preservation constraints that must be followed:\n{self.tool_interface_constraints}\n"
 
         return self._generate_with_continuation(
-            '你是一个擅长生成 Rust 工程骨架的代码助手。请只输出代码，不要输出解释。',
+            'You are a code assistant skilled at generating Rust project skeletons. Output only code and do not explain.',
             prompt,
             code_lang="rust",
             max_rounds=4,
@@ -2048,35 +2048,35 @@ cargo test
         """
         normalized = file_path.replace("\\", "/").lower()
         file_name = os.path.basename(normalized)
-        hints = ["- 优先保证代码骨架完整、稳定、可继续补全。"]
+        hints = ["- Prioritize keeping the code skeleton complete, stable, and ready for further completion."]
 
         # 这几类文件通常承载核心数据结构和公共类型，骨架阶段尽量不要只留下空壳。
         if any(token in normalized for token in ["node", "type", "data", "error"]):
             hints.extend([
-                "- 该文件优先补全结构体、类型别名、错误枚举和公开字段，不要只给空壳。",
-                "- 生成顺序上，优先写类型定义，再写关联方法、辅助函数和实现占位。",
-                "- 如果包含 struct，请尽量把字段写全；字段名、字段类型和可见性尽量一次写完整。",
-                "- 如果包含 type alias，请尽量把类型别名写全，不要只保留占位名字。",
-                "- 如果包含错误类型，请尽量把错误枚举分支写全，至少先把主要错误变体列完整。",
-                "- 如果暂时无法确定具体实现，也优先把数据结构定义完整，再把函数体留作后续补全。",
+                "- For this file, prioritize completing structs, type aliases, error enums, and public fields; do not leave only empty shells.",
+                "- In generation order, write type definitions first, then associated methods, helper functions, and implementation placeholders.",
+                "- If it contains structs, fill in fields as completely as possible; field names, field types, and visibility should preferably be complete in one pass.",
+                "- If it contains type aliases, complete the aliases as much as possible; do not leave only placeholder names.",
+                "- If it contains error types, complete the error enum variants as much as possible; at least list the main error variants first.",
+                "- Even if the concrete implementation cannot be determined yet, prioritize completing data-structure definitions and leave function bodies for later completion.",
             ])
 
         if "error" in normalized:
             hints.extend([
-                "- 如果这是错误定义文件，优先给出统一的错误枚举、错误消息和必要的 From/Result 类型约定。",
-                "- 错误类型骨架应尽量覆盖参数错误、状态错误、边界错误等主要失败场景。",
+                "- If this is an error-definition file, prioritize a unified error enum, error messages, and necessary From/Result type conventions.",
+                "- The error-type skeleton should cover main failure scenarios such as argument errors, state errors, and boundary errors where possible.",
             ])
 
         if any(token in normalized for token in ["node", "data"]):
             hints.extend([
-                "- 如果这是节点或数据文件，优先写清核心字段、所有权关系以及必要的构造接口。",
-                "- 对树节点、链表节点或容器数据结构，先保证字段定义完整，再补辅助方法。",
+                "- If this is a node or data file, first make the core fields, ownership relationships, and necessary construction interfaces clear.",
+                "- For tree nodes, linked-list nodes, or container data structures, first make field definitions complete, then add helper methods.",
             ])
 
         if "type" in normalized:
             hints.extend([
-                "- 如果这是类型定义文件，优先给出公共类型别名、关键枚举和对外暴露的数据模型。",
-                "- 类型定义尽量与后续模块共享，避免只生成临时占位类型。",
+                "- If this is a type-definition file, prioritize public type aliases, key enums, and externally exposed data models.",
+                "- Type definitions should be shared with later modules where possible; avoid generating only temporary placeholder types.",
             ])
 
         return "\n".join(hints)
@@ -2095,30 +2095,30 @@ cargo test
             补全后的代码
         """
         if self._is_cargo_toml(file_path):
-            prompt = f"""下面已经有一个 Cargo.toml 配置骨架，请在保持整体结构稳定的前提下，继续补全其中的依赖和配置内容。
+            prompt = f"""A Cargo.toml configuration skeleton already exists below. Continue completing its dependencies and configuration while keeping the overall structure stable.
 
-要求：
-1. 只输出最终的 Cargo.toml 内容，不要输出解释
-2. 输出必须是合法的 TOML，而不是 Rust 代码
-3. 保留已有的 [package]、[dependencies] 等配置结构
-4. 在此基础上补全缺失的依赖、features 或 dev-dependencies
-5. 不要生成 pub mod、fn、struct、impl 等 Rust 源码
-6. 如果上下文不足，优先保持配置简洁和可解析
+Requirements:
+1. Output only the final Cargo.toml content; do not output explanations.
+2. The output must be valid TOML, not Rust code.
+3. Preserve existing configuration structures such as [package] and [dependencies].
+4. Complete missing dependencies, features, or dev-dependencies on that basis.
+5. Do not generate Rust source code such as pub mod, fn, struct, or impl.
+6. If context is insufficient, prefer keeping the configuration simple and parseable.
 
-文件路径：
+File path:
 {file_path}
 
-当前配置骨架：
+Current configuration skeleton:
 {skeleton_code}
 
-项目上下文：
+Project context:
 {context}
 
-实现计划：
+Implementation plan:
 {implementation_plan}
 """
             return self._generate_with_continuation(
-                '你是一个擅长补全 Cargo.toml 的助手。请只输出合法的 TOML 配置，不要输出解释。',
+                'You are an assistant skilled at completing Cargo.toml. Output only valid TOML configuration and no explanations.',
                 prompt,
                 code_lang="toml",
                 max_rounds=5,
@@ -2126,41 +2126,41 @@ cargo test
             )
 
         source_context = self._build_relevant_source_context_for_file(file_path)
-        prompt = f"""下面已经有一个 Rust 文件骨架，请在保持整体结构稳定的前提下，继续补全其中的实现内容。
+        prompt = f"""A Rust file skeleton already exists below. Continue completing the implementation while keeping the overall structure stable.
 
-要求：
-1. 只输出最终完整代码，不要输出解释
-2. 尽量保留已有结构体、类型定义、函数签名和模块结构
-3. 在此基础上逐步补全函数实现
-4. 如果某些内容暂时无法确定，可以保留少量占位实现，但应优先补全核心逻辑
-5. 输出必须是完整的单文件 Rust 代码
-6. 不要把骨架里已经写出的 struct 字段、type alias、enum 分支和公开接口回退成更空的版本
-7. 如果骨架里已经有较完整的数据结构定义，补全实现时应尽量保持这些定义不变
-8. 优先在现有骨架上增补实现，不要为了改写实现而删除已有类型信息
+Requirements:
+1. Output only the final complete code; do not output explanations.
+2. Preserve existing structs, type definitions, function signatures, and module structure as much as possible.
+3. Complete function implementations step by step on that basis.
+4. If some content cannot be determined yet, you may keep a small number of placeholder implementations, but prioritize completing core logic.
+5. The output must be complete single-file Rust code.
+6. Do not regress struct fields, type aliases, enum variants, or public interfaces already written in the skeleton into emptier versions.
+7. If the skeleton already has reasonably complete data-structure definitions, keep those definitions unchanged as much as possible while completing the implementation.
+8. Prefer adding implementation to the existing skeleton; do not delete existing type information just to rewrite the implementation.
 
-文件路径：
+File path:
 {file_path}
 
-当前骨架代码：
+Current skeleton code:
 {skeleton_code}
 
-项目上下文：
+Project context:
 {context}
 
-实现计划：
+Implementation plan:
 {implementation_plan}
 
-最相关的原始 C 源码片段：
-{source_context or '当前没有可用的源码片段，请至少严格遵循已有上下文与接口事实。'}
+Most relevant original C source snippets:
+{source_context or 'No source snippets are currently available; at minimum, strictly follow the existing context and interface facts.'}
 """
         extra_requirements = self._get_file_specific_generation_requirements(file_path)
         if extra_requirements:
-            prompt += f"\n额外文件级要求：\n{extra_requirements}\n"
+            prompt += f"\nAdditional file-level requirements:\n{extra_requirements}\n"
         if self.tool_interface_constraints:
-            prompt += f"\n必须遵守的工具接口保持约束：\n{self.tool_interface_constraints}\n"
+            prompt += f"\nTool interface preservation constraints that must be followed:\n{self.tool_interface_constraints}\n"
 
         return self._generate_with_continuation(
-            '你是一个擅长在既有 Rust 骨架上逐步补全实现的代码助手。请只输出代码，不要输出解释。',
+            'You are a code assistant skilled at incrementally completing implementations from existing Rust skeletons. Output only code and no explanations.',
             prompt,
             code_lang="rust",
             max_rounds=5,
@@ -2582,7 +2582,7 @@ cargo test
         api_contract_context = self._build_api_contract_context()
         file_context = context
         if api_contract_context:
-            file_context += f"\n\n=== 当前接口契约 ===\n{api_contract_context}\n"
+            file_context += f"\n\n=== Current Interface Contract ===\n{api_contract_context}\n"
 
         skeleton_code = ""
         if getattr(self.config, "skeleton_first", False):
@@ -2632,9 +2632,9 @@ cargo test
             for finding in contract_findings:
                 print(f"  - {finding}")
 
-            repair_context = file_context + "\n\n=== 上一次生成违反迁移契约，必须修正以下问题 ===\n"
+            repair_context = file_context + "\n\n=== The previous generation violated the migration contract and must fix the following issues ===\n"
             repair_context += "\n".join(f"- {item}" for item in contract_findings)
-            repair_context += "\n- 保持当前文件职责不变，只删除越界能力并回到已有源码事实。\n"
+            repair_context += "\n- Keep the current file responsibility unchanged; only remove out-of-bound capabilities and return to existing source facts.\n"
             regenerated = self._generate_code(file_path, repair_context, implementation_plan)
             if regenerated and str(regenerated).strip():
                 code = regenerated
@@ -2727,19 +2727,19 @@ cargo test
         # 6. 逐个生成文件
         all_generated_code = {}
         context_parts = [
-            f"项目结构：\n{project_structure}",
-            f"实现计划：\n{implementation_plan}",
+            f"Project structure:\n{project_structure}",
+            f"Implementation plan:\n{implementation_plan}",
         ]
         contract_context = self._build_translation_contract_context()
         if contract_context:
             context_parts.append(contract_context)
             context_parts.append(self._contract_scope_instructions())
         if self.source_context_summary:
-            context_parts.append(f"原始 C 源码摘要：\n{self.source_context_summary}")
+            context_parts.append(f"Original C source summary:\n{self.source_context_summary}")
         if self.source_interface_summary:
-            context_parts.append(f"原始 C 对外接口事实：\n{self.source_interface_summary}")
+            context_parts.append(f"Original C external interface facts:\n{self.source_interface_summary}")
         if self.tool_interface_constraints:
-            context_parts.append(f"工具接口保持约束：\n{self.tool_interface_constraints}")
+            context_parts.append(f"Tool interface preservation constraints:\n{self.tool_interface_constraints}")
         context = "\n\n".join(context_parts) + "\n"
         
         for file_path in new_files_to_generate:
@@ -2762,7 +2762,7 @@ cargo test
             if not ok:
                 continue
             all_generated_code[file_path] = code
-            context += f"\n\n=== 已生成文件：{file_path} ===\n{code}\n"
+            context += f"\n\n=== Generated file: {file_path} ===\n{code}\n"
 
         # 二次补全：若首轮仍有缺失文件，自动补生成，避免“只生成少数文件”却返回成功。
         missing_files = self._collect_missing_files(new_files_to_generate)
@@ -2778,7 +2778,7 @@ cargo test
                     ok, code = self._generate_single_file(file_path, context, implementation_plan, new_files_to_generate)
                     if ok:
                         all_generated_code[file_path] = code
-                        context += f"\n\n=== 已生成文件：{file_path} ===\n{code}\n"
+                        context += f"\n\n=== Generated file: {file_path} ===\n{code}\n"
                 missing_files = self._collect_missing_files(new_files_to_generate)
 
         strict_full_generation = bool(getattr(self.config, "strict_full_project_generation", True))

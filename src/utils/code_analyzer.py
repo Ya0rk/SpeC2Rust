@@ -12,7 +12,7 @@ class CodeAnalyzer:
         
         # 调用LLM进行分析
         messages = [
-            {'role': 'system', 'content': '你是一个C代码分析专家，擅长分析C项目的功能和设计意图。'},
+            {'role': 'system', 'content': 'You are an expert in C code analysis, skilled at analyzing the functionality and design intent of C projects.'},
             {'role': 'user', 'content': prompt}
         ]
         
@@ -43,23 +43,23 @@ class CodeAnalyzer:
         return module_code
     
     def _build_analysis_prompt(self, module_code, module_name):
-        prompt = f"请分析以下C项目模块 '{module_name}' 的功能和设计意图，生成详细的分析报告。\n\n"
+        prompt = f"Analyze the functionality and design intent of the following C project module '{module_name}' and produce a detailed analysis report.\n\n"
         
         for file in module_code:
-            prompt += f"=== 文件: {file['path']} ===\n"
+            prompt += f"=== File: {file['path']} ===\n"
             prompt += file['content']
             prompt += "\n\n"
         
-        prompt += "请从以下几个方面详细分析这个模块：\n"
-        prompt += "1. 模块的主要功能是什么？请详细描述模块的功能和用途。\n"
-        prompt += "2. 模块包含哪些关键函数和数据结构？请列出函数签名、参数含义、返回值含义，以及数据结构的字段和用途。\n"
-        prompt += "3. 模块的设计意图是什么？请分析模块的设计思路和实现方式。\n"
-        prompt += "4. 模块是如何与其他模块交互的？请分析模块间的依赖关系和调用关系。\n"
-        # prompt += "5. 模块的代码风格和质量如何？请分析代码的可读性、可维护性和性能。\n"
-        # prompt += "6. 模块可能存在的问题或改进空间？请分析潜在的问题和优化方向。\n"
+        prompt += "Please analyze this module in detail from the following aspects:\n"
+        prompt += "1. What is the module's main functionality? Describe the module's purpose and use in detail.\n"
+        prompt += "2. Which key functions and data structures does the module contain? List function signatures, parameter meanings, return value meanings, and the fields and purpose of each data structure.\n"
+        prompt += "3. What is the module's design intent? Analyze the module's design approach and implementation strategy.\n"
+        prompt += "4. How does the module interact with other modules? Analyze the dependency and call relationships between modules.\n"
+        # prompt += "5. How are the module's code style and quality? Analyze readability, maintainability, and performance.\n"
+        # prompt += "6. What problems or improvement opportunities might the module have? Analyze potential issues and optimization directions.\n"
         prompt += "\n"
-        prompt += "在分析报告中，请为每个函数和数据结构添加源代码位置信息，格式为：[文件路径:行号]。\n"
-        prompt += "例如：函数 foo() 定义在 [src/foo.c:42]。\n"
-        prompt += "这样可以为以后的代码生成提供更加清晰的理解。\n"
+        prompt += "In the analysis report, please add source location information for each function and data structure in the format: [file_path:line_number].\n"
+        prompt += "For example: function foo() is defined at [src/foo.c:42].\n"
+        prompt += "This will provide clearer understanding for future code generation.\n"
         
         return prompt

@@ -206,7 +206,7 @@ def _load_from_path(path: Path) -> CSourceIndex:
 
 def build_source_index_display(index: CSourceIndex, max_items: int) -> str:
     if not index:
-        return "（C 项目源码索引未加载）"
+        return "(C project source index not loaded)"
     lines: List[str] = []
     for rec in index.records[:max_items]:
         lines.append(
@@ -215,7 +215,7 @@ def build_source_index_display(index: CSourceIndex, max_items: int) -> str:
         )
     if len(index.records) > max_items:
         lines.append(
-            f"... 另有 {len(index.records) - max_items} 条记录未展开，"
-            "可按函数名或文件名通过 cgr_read 请求"
+            f"... {len(index.records) - max_items} additional records are not expanded; "
+            "request them through cgr_read by function name or file name"
         )
     return "\n".join(lines)

@@ -58,7 +58,7 @@ class StableRustAgent:
             max_chars = 16000
         if len(content) <= max_chars:
             return content
-        return content[:max_chars] + "\n\n[文档已截断]\n"
+        return content[:max_chars] + "\n\n[Document truncated]\n"
 
     def load_documents(self, doc_paths: List[str]):
         self.doc_paths = doc_paths
@@ -91,7 +91,7 @@ class StableRustAgent:
         parts = []
         total = 0
         for path, content in self.doc_contents.items():
-            block = f"\n\n=== 文档：{os.path.basename(path)} ===\n{content}\n"
+            block = f"\n\n=== Document: {os.path.basename(path)} ===\n{content}\n"
             if total + len(block) > max_chars:
                 remain = max_chars - total
                 if remain > 0:
@@ -396,10 +396,10 @@ class StableRustAgent:
         accumulated = ""
         prompt = (
             user_prompt
-            + "\n\n额外要求：\n"
-            + "1. 如果一次无法写完，请续写，只有真正完成时才在末尾追加 <CGR_DONE>\n"
-            + "2. 续写时不要重复前文\n"
-            + "3. 除正文和 <CGR_DONE> 外，不要输出解释\n"
+            + "\n\nAdditional requirements:\n"
+            + "1. If you cannot finish in one response, continue writing, and append <CGR_DONE> only when it is truly complete.\n"
+            + "2. Do not repeat earlier content during continuation.\n"
+            + "3. Do not output explanations beyond the body and <CGR_DONE>.\n"
         )
         messages = [
             {"role": "system", "content": system_prompt},
@@ -425,9 +425,9 @@ class StableRustAgent:
                     "role": "user",
                     "content": (
                         user_prompt
-                        + "\n\n你上一次已经输出到这里，请从最后位置继续，不要重复：\n"
+                        + "\n\nYour previous output already reached this point. Continue from the last position and do not repeat:\n"
                         + f"```{code_lang or 'text'}\n{accumulated[-6000:]}\n```"
-                        + "\n\n完成时在末尾追加 <CGR_DONE>。"
+                        + "\n\nAppend <CGR_DONE> at the end when complete."
                     ),
                 },
             ]
@@ -435,22 +435,22 @@ class StableRustAgent:
 
     def _generate_file_plan(self) -> List[str]:
         context = self._collect_context()
-        prompt = f"""你要把一个 C 项目重写成 Rust。请先只输出一个 JSON 数组，表示需要创建的文件路径。
+        prompt = f"""Rewrite a C project into Rust. First output only a JSON array representing the file paths that need to be created.
 
-要求：
-1. 只输出 JSON 数组，不要解释
-2. 路径必须是相对路径
-3. 默认只生成核心文件，不要主动扩展大型工程结构
-4. 必须包含 Cargo.toml、README.md、核心 src/*.rs
-5. 不要输出 lib.rs；lib.rs 将由本地程序自动重建
-6. 除非文档非常明确要求，否则不要生成 tests/examples/benches
-7. 保持项目规模克制，优先贴近输入文档里的核心功能
+Requirements:
+1. Output only a JSON array; do not explain.
+2. Paths must be relative.
+3. By default, generate only core files and do not proactively expand into a large project structure.
+4. Must include Cargo.toml, README.md, and the core src/*.rs files.
+5. Do not output lib.rs; lib.rs will be rebuilt automatically by the local program.
+6. Unless the documentation explicitly requires it, do not generate tests/examples/benches.
+7. Keep the project scope restrained and prioritize the core functionality described in the input documents.
 
-文档上下文：
+Document context:
 {context}
 """
         response = self._generate_with_continuation(
-            system_prompt="你是一个 Rust 项目结构规划助手。只输出 JSON 数组。",
+            system_prompt="You are a Rust project structure planning assistant. Output only a JSON array.",
             user_prompt=prompt,
             code_lang="json",
             label="项目文件规划",
@@ -590,33 +590,33 @@ class StableRustAgent:
         extra = ""
         if rel_path.startswith("src/"):
             extra = (
-                "\n额外要求：\n"
-                "- 只实现核心功能，不要扩展大型工程能力\n"
-                "- 不要使用 thiserror\n"
-                "- 不要依赖 crate::error 或根模块自定义 prelude\n"
-                "- 让模块接口尽量简单、稳定、Rust 化\n"
-                "- 如果配置关闭测试，不要生成 #[cfg(test)] 模块\n"
+                "\nAdditional requirements:\n"
+                "- Implement only the core functionality; do not expand into large-project capabilities.\n"
+                "- Do not use thiserror.\n"
+                "- Do not depend on crate::error or a custom prelude in the root module.\n"
+                "- Keep module interfaces as simple, stable, and Rust-style as possible.\n"
+                "- If tests are disabled by configuration, do not generate #[cfg(test)] modules.\n"
             )
         elif rel_path.lower() == "readme.md":
             extra = (
-                "\n额外要求：\n"
-                "- 这是 Markdown 文档，不是 Rust 源码\n"
-                "- 不要贴整段实现源码\n"
-                "- 只保留简介、构建方式、最小示例和当前状态说明\n"
+                "\nAdditional requirements:\n"
+                "- This is a Markdown document, not Rust source code.\n"
+                "- Do not paste full implementation source.\n"
+                "- Keep only the introduction, build instructions, a minimal example, and the current status.\n"
             )
-        return f"""请只为下面这个文件生成最终内容。
+        return f"""Generate the final content for only the file below.
 
-目标文件：
+Target file:
 {rel_path}
 
-已有已生成文件摘要：
+Summary of already generated files:
 {generated_context}
 
-输入文档上下文：
+Input document context:
 {context}
 {extra}
 
-只输出该文件的最终内容，不要解释。
+Output only the final content for this file; do not explain.
 """
 
     def _generate_regular_file(self, rel_path: str, context: str, generated_context: str) -> str:
@@ -624,7 +624,7 @@ class StableRustAgent:
         if rel_path.lower() == "readme.md":
             code_lang = ""
         return self._generate_with_continuation(
-            system_prompt="你是一个负责逐文件生成最终内容的 Rust 重写助手。只输出目标文件内容。",
+            system_prompt="You are a Rust rewrite assistant responsible for generating final content file by file. Output only the target file content.",
             user_prompt=self._build_file_prompt(rel_path, context, generated_context),
             code_lang=code_lang,
             label=f"代码生成 {rel_path}",

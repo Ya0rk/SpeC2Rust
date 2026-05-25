@@ -198,11 +198,11 @@ class SpecAgent:
         accumulated = ""
         initial_prompt = (
             user_prompt
-            + "\n\n额外要求：\n"
-            + "1. 如果一次无法写完，请先输出前半部分，并且只有在真正完成时才在末尾追加 <CGR_DONE>\n"
-            + "2. 如果尚未完成，不要输出 <CGR_DONE>\n"
-            + "3. 续写时不要重复前文，要从上一次结尾处直接继续\n"
-            + "4. 只输出 markdown 正文和可能的 <CGR_DONE>，不要输出解释\n"
+            + "\n\nAdditional requirements:\n"
+            + "1. If you cannot finish in one pass, output the first half first, and append <CGR_DONE> only when truly complete.\n"
+            + "2. If not finished yet, do not output <CGR_DONE>.\n"
+            + "3. Do not repeat earlier text when continuing; continue directly from the last ending.\n"
+            + "4. Output only the markdown body and an optional <CGR_DONE>; do not output explanations.\n"
         )
 
         messages = [
@@ -230,7 +230,7 @@ class SpecAgent:
                 {'role': 'assistant', 'content': accumulated},
                 {
                     'role': 'user',
-                    'content': '上一次输出尚未完成，请从刚才最后位置继续，不要重复前文；完成时仅在末尾追加 <CGR_DONE>。'
+                    'content': 'The previous output is not complete yet. Continue from the last position without repeating earlier text; append <CGR_DONE> only at the end when complete.'
                 }
             ]
 
@@ -490,22 +490,22 @@ class SpecAgent:
         # 关键模块边界和构建目标额外沉淀为结构化字段，而不只是一份 markdown 概览。
 
         lines = [
-            f"# {project_name} 仓库清单",
+            f"# {project_name} Repository Inventory",
             "",
-            "该文档只记录当前仓库扫描阶段直接观察到的事实，不补写缺失目录树，不猜测尚未出现的产物文件。",
+            "This document records only the facts directly observed during the current repository scan. It does not fill in missing directory trees or guess at artifacts that have not appeared yet.",
             "",
-            "## 快照",
-            f"- 项目名称：`{project_name}`",
-            f"- 构建系统：`{project_info.get('build_system', 'unknown')}`",
-            f"- C 文件数：{len(project_info.get('c_files', []))}",
-            f"- 头文件数：{len(project_info.get('h_files', []))}",
-            f"- 其他文件数：{len(project_info.get('other_files', []))}",
-            f"- 构建文件：{', '.join(project_info.get('build_files', [])) or '无'}",
-            f"- 入口文件：{', '.join(project_info.get('entry_files', [])[:10]) or '无'}",
-            f"- 仓库根目录下观察到的可执行文件：{', '.join(project_info.get('executables', [])) or '无'}",
-            f"- 仓库根目录下观察到的库文件：{', '.join(project_info.get('libraries', [])) or '无'}",
+            "## Snapshot",
+            f"- Project name: `{project_name}`",
+            f"- Build system: `{project_info.get('build_system', 'unknown')}`",
+            f"- C file count: {len(project_info.get('c_files', []))}",
+            f"- Header file count: {len(project_info.get('h_files', []))}",
+            f"- Other file count: {len(project_info.get('other_files', []))}",
+            f"- Build files: {', '.join(project_info.get('build_files', [])) or 'none'}",
+            f"- Entry files: {', '.join(project_info.get('entry_files', [])[:10]) or 'none'}",
+            f"- Executables observed at the repository root: {', '.join(project_info.get('executables', [])) or 'none'}",
+            f"- Library files observed at the repository root: {', '.join(project_info.get('libraries', [])) or 'none'}",
             "",
-            "## 目录清单",
+            "## Directory Inventory",
         ]
 
         for directory, files in directory_summary:
@@ -514,35 +514,35 @@ class SpecAgent:
             other_count = len(files) - c_count - h_count
             sample = ", ".join(files[:6])
             lines.append(
-                f"- `{directory}`：共 {len(files)} 个文件"
-                f"（{c_count} 个 C 文件，{h_count} 个头文件，{other_count} 个其他文件）。"
-                f"示例：{sample}"
+                f"- `{directory}`: {len(files)} files total "
+                f"({c_count} C files, {h_count} header files, {other_count} other files). "
+                f"Examples: {sample}"
             )
 
-        lines.extend(["", "## 源文件清单"])
+        lines.extend(["", "## Source File Inventory"])
         for source_file in project_info.get("c_files", []):
-            entry_tag = "（入口候选）" if source_file in project_info.get("entry_files", []) else ""
+            entry_tag = " (entry candidate)" if source_file in project_info.get("entry_files", []) else ""
             lines.append(f"- `{self._normalize_path(source_file)}`{entry_tag}")
 
-        lines.extend(["", "## 按目录划分的头文件清单"])
+        lines.extend(["", "## Header Files by Directory"])
         if header_summary:
             for directory, headers in header_summary:
                 lines.append(f"### `{directory}`")
                 for header in headers[:40]:
                     lines.append(f"- `{header}`")
         else:
-            lines.append("- 当前没有观察到头文件。")
+            lines.append("- No header files were observed.")
 
         lines.extend(
             [
                 "",
-                "## README 摘录",
-                self._truncate_text(project_info.get("readme_content", "") or "当前没有找到 README 文件。", 2000),
+                "## README Excerpt",
+                self._truncate_text(project_info.get("readme_content", "") or "No README file was found.", 2000),
                 "",
-                "## 证据边界",
-                "- 该清单来自文件系统扫描，不代表最终安装布局。",
-                "- 未发现的可执行文件、库文件或生成目录不会被推断为存在。",
-                "- 文件职责和模块行为需要结合后续 `01_subsystems` / `03_behaviors` 文档理解。",
+                "## Evidence Boundaries",
+                "- This inventory comes from a filesystem scan and does not represent the final installation layout.",
+                "- Executables, libraries, or generated directories that were not observed will not be inferred to exist.",
+                "- File responsibilities and module behavior must be understood together with the later `01_subsystems` / `03_behaviors` documents.",
                 "",
             ]
         )
@@ -560,32 +560,32 @@ class SpecAgent:
         globals_list: List[Dict],
     ) -> str:
         lines = [
-            f"# 接口事实：{module['name']}",
+            f"# Interface Facts: {module['name']}",
             "",
-            "该文档面向后续 Rust 仓库级重写，只保留当前源码分析阶段直接观察到的接口事实。",
-            "没有在当前解析结果中出现的头文件、宏、错误码、配置项不会被补写或假设。",
+            "This document is intended for the later Rust repository-level rewrite and keeps only the interface facts directly observed in the current source-analysis stage.",
+            "Header files, macros, error codes, and configuration items that do not appear in the current parse results will not be added or assumed.",
             "",
-            "## 模块范围",
-            f"- 模块类别：`{module.get('category', 'unknown')}`",
-            f"- 所在目录：`{self._normalize_path(module.get('directory', 'root'))}`",
-            f"- 文件列表：{', '.join(self._normalize_path(path) for path in module.get('files', [])) or '无'}",
-            f"- 候选头文件：{', '.join(item['path'] for item in header_records) or '无'}",
-            f"- 观察到的导出函数数量：{len(functions)}",
-            f"- 观察到的结构体定义数量：{len(structs)}",
-            f"- 引用但未在本地定义的类型名数量：{len(referenced_structs)}",
-            f"- 相关文件中观察到的宏数量：{len(macros)}",
-            f"- 观察到的全局变量数量：{len(globals_list)}",
+            "## Module Scope",
+            f"- Module category: `{module.get('category', 'unknown')}`",
+            f"- Directory: `{self._normalize_path(module.get('directory', 'root'))}`",
+            f"- File list: {', '.join(self._normalize_path(path) for path in module.get('files', [])) or 'none'}",
+            f"- Candidate header files: {', '.join(item['path'] for item in header_records) or 'none'}",
+            f"- Exported functions observed: {len(functions)}",
+            f"- Struct definitions observed: {len(structs)}",
+            f"- Type names referenced but not defined locally: {len(referenced_structs)}",
+            f"- Macros observed in related files: {len(macros)}",
+            f"- Global variables observed: {len(globals_list)}",
             "",
-            "## 头文件证据",
+            "## Header Evidence",
         ]
 
         if header_records:
             for header in header_records:
                 lines.append(f"- `{header['path']}` {header['location']}")
         else:
-            lines.append("- 当前没有从目录、include 图或文件名证据中关联到项目头文件。")
+            lines.append("- No project header files were associated from directory, include graph, or file-name evidence.")
 
-        lines.extend(["", "## 函数"])
+        lines.extend(["", "## Functions"])
         if functions:
             for func in functions:
                 name = func.get("name", "unknown")
@@ -596,16 +596,16 @@ class SpecAgent:
                 lines.extend(
                     [
                         f"### `{name}`",
-                        f"- 定义位置：{self._format_source_location(file_path, start_line, end_line)}",
-                        f"- 源文件：`{file_path}`",
-                        f"- 观察到的声明：`{signature or '当前 parser 输出中不可用'}`",
-                        f"- 近似函数体长度：{func.get('line_count', func.get('num_lines', 0)) or '未知'} 行",
+                        f"- Definition location: {self._format_source_location(file_path, start_line, end_line)}",
+                        f"- Source file: `{file_path}`",
+                        f"- Observed declaration: `{signature or 'unavailable in current parser output'}`",
+                        f"- Approximate function body length: {func.get('line_count', func.get('num_lines', 0)) or 'unknown'} lines",
                     ]
                 )
         else:
-            lines.append("- 当前模块没有观察到函数定义。")
+            lines.append("- No function definitions were observed in the current module.")
 
-        lines.extend(["", "## 结构体与类型"])
+        lines.extend(["", "## Structs and Types"])
         if structs:
             for struct in structs:
                 name = struct.get("name", "anonymous")
@@ -616,50 +616,50 @@ class SpecAgent:
                 lines.extend(
                     [
                         f"### `{name}`",
-                        f"- 定义位置：{self._format_source_location(file_path, start_line, end_line)}",
-                        f"- 源文件：`{file_path}`",
-                        f"- 观察到的定义前缀：`{declaration or '当前 parser 输出中不可用'}`",
+                        f"- Definition location: {self._format_source_location(file_path, start_line, end_line)}",
+                        f"- Source file: `{file_path}`",
+                        f"- Observed declaration prefix: `{declaration or 'unavailable in current parser output'}`",
                     ]
                 )
         else:
-            lines.append("- 当前模块切片中没有观察到结构体定义。")
+            lines.append("- No struct definitions were observed in the current module slice.")
 
-        lines.extend(["", "## 被引用的外部类型"])
+        lines.extend(["", "## Referenced External Types"])
         if referenced_structs:
             for struct_name in referenced_structs:
                 lines.append(
-                    f"- `{struct_name}`：该名称来自聚类元数据或邻近调用分析，但在当前模块文件中没有观察到本地定义。"
+                    f"- `{struct_name}`: this name came from clustering metadata or nearby call analysis, but no local definition was observed in the current module files."
                 )
         else:
-            lines.append("- 当前没有记录到本地定义之外的外部结构体或类型引用。")
+            lines.append("- No external struct or type references beyond local definitions were recorded.")
 
-        lines.extend(["", "## 宏与常量"])
+        lines.extend(["", "## Macros and Constants"])
         if macros:
             for macro in macros:
                 snippet = self._trim_inline(macro.get("source", ""), 180)
                 lines.append(
-                    f"- `{macro['name']}` {self._format_source_location(macro['file'], macro['start_line'], macro['end_line'])}: `{snippet or '定义内容不可用'}`"
+                    f"- `{macro['name']}` {self._format_source_location(macro['file'], macro['start_line'], macro['end_line'])}: `{snippet or 'definition content unavailable'}`"
                 )
         else:
-            lines.append("- 当前模块文件及相关头文件中没有观察到宏或常量定义。")
+            lines.append("- No macro or constant definitions were observed in the current module files or related header files.")
 
-        lines.extend(["", "## 全局变量"])
+        lines.extend(["", "## Global Variables"])
         if globals_list:
             for variable in globals_list:
                 declaration = self._extract_declaration_excerpt(variable.get("source", ""))
                 lines.append(
-                    f"- `{variable['name']}` {self._format_source_location(variable['file'], variable['start_line'], variable['end_line'])}: `{declaration or '声明内容不可用'}`"
+                    f"- `{variable['name']}` {self._format_source_location(variable['file'], variable['start_line'], variable['end_line'])}: `{declaration or 'declaration content unavailable'}`"
                 )
         else:
-            lines.append("- 当前模块的 `.c` 文件中没有观察到全局变量定义。")
+            lines.append("- No global variable definitions were observed in the current module's `.c` files.")
 
         lines.extend(
             [
                 "",
-                "## 已知缺口",
-                "- 该文档根据函数定义、结构体定义、宏和全局变量的解析结果生成，不自动推断 `.h` 中未解析到的声明签名。",
-                "- 如果某个函数在“函数”一节中出现但没有明确头文件绑定，后续 Rust 迁移时应回查对应源码的 `#include` 关系与构建脚本。",
-                "- 错误码、配置项、输入输出协议只在源码中出现明确符号时记录；缺失并不代表语义不存在，只代表当前事实提取未观察到。",
+                "## Known Gaps",
+                "- This document is generated from parsed results for functions, structs, macros, and global variables; it does not infer declaration signatures from `.h` files that were not parsed.",
+                "- If a function appears in the \"Functions\" section without an explicit header binding, the later Rust migration should re-check the corresponding source `#include` relationships and build scripts.",
+                "- Error codes, configuration items, and input/output protocols are recorded only when explicit symbols appear in the source; missing entries do not mean the semantics do not exist, only that the current fact extraction did not observe them.",
                 "",
             ]
         )
@@ -673,16 +673,16 @@ class SpecAgent:
         if function_names:
             common_prefix = os.path.commonprefix(function_names).strip("_- ")
             if len(common_prefix) >= 4:
-                return f"围绕 `{common_prefix}` 前缀函数组织"
+                return f"organized around functions with the `{common_prefix}` prefix"
 
         if file_stems:
             unique_stems = sorted(set(stem for stem in file_stems if stem))
             if len(unique_stems) == 1:
-                return f"围绕 `{unique_stems[0]}` 相关源码文件组织"
+                return f"organized around source files related to `{unique_stems[0]}`"
             if len(unique_stems) <= 3:
-                return f"围绕 {', '.join(f'`{stem}`' for stem in unique_stems)} 相关源码文件组织"
+                return f"organized around source files related to {', '.join(f'`{stem}`' for stem in unique_stems)}"
 
-        return "当前只能从文件和符号分布看出这是一个局部源码切片，职责需要结合源码进一步确认"
+        return "At this point, only the file and symbol distribution indicates that this is a local source slice; its responsibilities still need to be confirmed from the source."
 
     def _build_module_summary_content(self, module: Dict) -> str:
         functions = module.get("functions", [])
@@ -695,78 +695,78 @@ class SpecAgent:
         external_calls = module.get("external_calls", 0)
 
         lines = [
-            "# 模块摘要",
+            "# Module Summary",
             "",
-            "该文档只根据模块划分结果和已解析源码事实生成，不把“信息不足”写成“空实现”或“设计错误”。",
+            "This document is generated only from module partition results and parsed source facts; it does not turn \"insufficient information\" into \"empty implementation\" or \"design mistake\".",
             "",
-            "## 1. 模块职责",
-            f"- 观察到的焦点：{focus}",
-            f"- 模块类别：`{module.get('category', 'unknown')}`",
-            f"- 目录范围：`{self._normalize_path(module.get('directory', 'root'))}`",
+            "## 1. Module Responsibilities",
+            f"- Observed focus: {focus}",
+            f"- Module category: `{module.get('category', 'unknown')}`",
+            f"- Directory scope: `{self._normalize_path(module.get('directory', 'root'))}`",
             "",
-            "## 2. 输入和输出",
-            "- 当前阶段不对运行时 I/O 做臆测，接口边界以已观察到的函数签名和源码文件为准。",
-            f"- 文件输入边界：{', '.join(self._normalize_path(path) for path in module.get('files', [])) or 'none'}",
-            f"- 函数数量：{len(functions)}",
+            "## 2. Inputs and Outputs",
+            "- At this stage, do not speculate about runtime I/O; define interface boundaries by the observed function signatures and source files.",
+            f"- File input boundary: {', '.join(self._normalize_path(path) for path in module.get('files', [])) or 'none'}",
+            f"- Function count: {len(functions)}",
             "",
-            "## 3. 核心接口列表",
+            "## 3. Core Interface List",
         ]
 
         if functions:
             for func in functions[:20]:
                 lines.append(self._build_function_fact_line(func))
         else:
-            lines.append("- 当前模块没有解析到函数定义。")
+            lines.append("- No function definitions were parsed for the current module.")
 
-        lines.extend(["", "## 4. 依赖哪些其他模块"])
-        lines.append(f"- 内部调用次数：{internal_calls}")
-        lines.append(f"- 外部调用次数：{external_calls}")
-        lines.append(f"- 内聚度分数：{cohesion_score:.2f}")
+        lines.extend(["", "## 4. Dependencies on Other Modules"])
+        lines.append(f"- Internal call count: {internal_calls}")
+        lines.append(f"- External call count: {external_calls}")
+        lines.append(f"- Cohesion score: {cohesion_score:.2f}")
         if module.get("headers"):
-            lines.append(f"- 关联头文件：{', '.join(self._normalize_path(path) for path in module.get('headers', []))}")
+            lines.append(f"- Related headers: {', '.join(self._normalize_path(path) for path in module.get('headers', []))}")
         else:
-            lines.append("- 关联头文件：当前模块元数据中未记录。")
+            lines.append("- Related headers: not recorded in the current module metadata.")
 
-        lines.extend(["", "## 5. 必须保留的关键行为"])
+        lines.extend(["", "## 5. Key Behaviors That Must Be Preserved"])
         if functions:
-            lines.append("- 至少需要保留这些函数定义所在源码中的控制流和返回约定，具体行为应回查实现体，而不是依赖摘要脑补。")
+            lines.append("- At minimum, preserve the control flow and return conventions from the source code where these function definitions live; check the implementation body directly rather than inferring from the summary.")
         else:
-            lines.append("- 当前模块没有函数定义可供提炼关键行为。")
+            lines.append("- The current module has no function definitions from which key behaviors can be distilled.")
 
         if struct_records:
             struct_names = ", ".join(
                 f"`{struct.get('name', 'anonymous')}`" for struct in struct_records[:10]
             )
-            lines.append(f"- 在本模块文件中定义的数据结构：{struct_names}")
+            lines.append(f"- Data structures defined in this module's files: {struct_names}")
         elif referenced_structs:
-            lines.append(f"- 仅观察到结构体引用名：{', '.join(f'`{name}`' for name in referenced_structs[:10])}")
+            lines.append(f"- Only struct reference names were observed: {', '.join(f'`{name}`' for name in referenced_structs[:10])}")
         else:
-            lines.append("- 当前模块没有解析到结构体定义。")
+            lines.append("- No struct definitions were parsed for the current module.")
 
-        lines.extend(["", "## 6. 模块划分信号"])
+        lines.extend(["", "## 6. Module Partition Signals"])
         if module.get("parent_module"):
             lines.append(
-                f"- 当前模块是从父模块 `{module['parent_module']}` 拆分出来的子模块，cluster 类型为 `{module.get('cluster_type', 'unknown')}`。"
+                f"- This module was split out of parent module `{module['parent_module']}`; cluster type: `{module.get('cluster_type', 'unknown')}`."
             )
             split_reasons = module.get("origin_split_reasons", [])
             if split_reasons:
-                lines.append(f"- 父模块触发拆分的真实原因：{'；'.join(split_reasons)}")
+                lines.append(f"- Actual reasons the parent module was split: {'; '.join(split_reasons)}")
             else:
-                lines.append("- 父模块已发生拆分，但当前未保留更细的拆分原因。")
+                lines.append("- The parent module was split, but no finer-grained split reasons were retained.")
         elif module.get("needs_split"):
             split_reasons = module.get("split_reasons", [])
-            lines.append("- 模块划分器仍认为这个模块需要进一步拆分。")
+            lines.append("- The module partitioner still considers this module to need further splitting.")
             if split_reasons:
-                lines.append(f"- 拆分原因：{'；'.join(split_reasons)}")
+                lines.append(f"- Split reasons: {'; '.join(split_reasons)}")
         else:
-            lines.append("- 当前模块已经是划分器收敛后的可消费单元，没有额外的拆分信号。")
+            lines.append("- The current module is already a consumable unit after partitioner convergence, with no additional split signals.")
 
         lines.extend(
             [
                 "",
-                "## 结论",
-                "- 如果源码中确实存在函数定义，就不应被描述成“空实现”；当前文档以源码位置和声明摘录为准。",
-                "- “模块划分不合理”只应来自划分器的真实拆分信号，而不应由摘要模型在信息不足时自行下结论。",
+                "## Conclusion",
+                "- If function definitions really exist in the source, they should not be described as \"empty implementations\"; this document is grounded in source locations and declaration excerpts.",
+                "- \"Module partitioning is unreasonable\" should only come from real split signals from the partitioner, not from a summary model drawing conclusions when information is insufficient.",
                 "",
             ]
         )
@@ -777,25 +777,25 @@ class SpecAgent:
         # 这里故意不用模型生成 overview，而是直接写成稳定索引。
         # 目的不是“写得漂亮”，而是给后续 Rust 迁移提供低成本、低噪声的导航页。
         lines = [
-            f"# {project_name} 公共接口总览",
+            f"# {project_name} Public Interface Overview",
             "",
-            "该索引面向后续 Rust 重写阶段，保留模块级接口入口，而不是把所有接口事实压到单一超长文档里。",
+            "This index is intended for the later Rust rewrite stage. It preserves module-level interface entry points instead of compressing all interface facts into a single overly long document.",
             "",
-            f"- 接口模块数：{len(interface_entries)}",
+            f"- Interface module count: {len(interface_entries)}",
             "",
         ]
 
         for entry in interface_entries:
             lines.append(f"## {entry['module_name']}")
-            lines.append(f"- 模块类别：{entry['category']}")
-            lines.append(f"- 关联头文件：{', '.join(entry['headers']) if entry['headers'] else '无'}")
+            lines.append(f"- Module category: {entry['category']}")
+            lines.append(f"- Related headers: {', '.join(entry['headers']) if entry['headers'] else 'none'}")
             lines.append(
-                f"- 代表函数：{', '.join(entry['functions']) if entry['functions'] else '无'}"
+                f"- Representative functions: {', '.join(entry['functions']) if entry['functions'] else 'none'}"
             )
             lines.append(
-                f"- 代表结构体：{', '.join(entry['structs']) if entry['structs'] else '无'}"
+                f"- Representative structs: {', '.join(entry['structs']) if entry['structs'] else 'none'}"
             )
-            lines.append(f"- 详细文档：{entry['detail_doc']}")
+            lines.append(f"- Detailed document: {entry['detail_doc']}")
             lines.append("")
 
         return "\n".join(lines).rstrip() + "\n"
@@ -808,7 +808,7 @@ class SpecAgent:
                 analysis.get("analysis", ""),
                 self.MAX_MODULE_ANALYSIS_CHARS,
             )
-            blocks.append(f"### {analysis['module_name']} 模块\n{excerpt}")
+            blocks.append(f"### Module {analysis['module_name']}\n{excerpt}")
         return blocks
 
     def _build_constitution_context(
@@ -1722,8 +1722,8 @@ class SpecAgent:
             # 模块分析为空时，至少生成一个可消费的占位文档，避免后续阶段找不到文件。
             content = (
                 f"# {project_name} Behavior Specification\n\n"
-                "当前没有足够的模块分析结果来推导完整行为文档。"
-                "后续 Rust 重写时需要结合模块 spec 补充运行流程和状态约束。\n"
+                "There are not enough module analysis results to derive a complete behavior document."
+                "The later Rust rewrite needs the module spec to supplement runtime flows and state constraints.\n"
             )
         elif len(behavior_chunks) == 1:
             # 模块不多时，直接单轮生成行为文档。
@@ -2020,7 +2020,7 @@ class SpecAgent:
         # 你当前把它注释掉是合理的。
         all_analyses = ""
         for analysis in module_analyses:
-            all_analyses += f"### {analysis['module_name']} 模块\n"
+            all_analyses += f"### Module {analysis['module_name']}\n"
             all_analyses += analysis['analysis']
             all_analyses += "\n\n"
         
@@ -2066,7 +2066,7 @@ class SpecAgent:
         lines = [f"# {title}", ""]
 
         if not findings:
-            lines.append("- 当前模块未发现需要特别关注的相关条目。")
+            lines.append("- No related items requiring special attention were found in the current module.")
             return "\n".join(lines) + "\n"
 
         summary = self._summarize_auxiliary_findings(findings)
@@ -2169,8 +2169,8 @@ class SpecAgent:
 
         lines.extend([
             "## 使用建议",
-            "- 若生成代码在所有权、宏替换、条件编译、回调接口处反复出错，应优先回看模块目录下的 pointer.md / macro.md。",
-            "- 本文件只做汇总，不替代各模块的专项说明。",
+            "- If generated code keeps failing around ownership, macro replacement, conditional compilation, or callback interfaces, review the module's `pointer.md` / `macro.md` first.",
+            "- This file is only a summary and does not replace the module-specific documentation.",
             "",
         ])
 

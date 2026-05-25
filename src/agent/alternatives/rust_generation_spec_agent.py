@@ -130,49 +130,49 @@ class RustGenerationSpecPrompts:
     def rewrite_contract(cls, planned=None) -> str:
         c_functions = cls._join(
             cls._attr(planned, "source_functions", []),
-            "当前文件关联的 C 函数",
+            "Current C functions associated with this file",
         )
         rust_symbols = cls._join(
             cls._attr(planned, "owns", []),
-            "当前文件规划的 Rust 类型和方法",
+            "Planned Rust types and methods for this file",
         )
-        return f"""目标是行为等价，不是 C ABI 等价。
-- C 文件名、C 类型名、C 函数名只作为溯源证据；目标 Rust API 必须使用 Rust 命名、所有权和模块组织。
-- 当前 C 证据：{c_functions}
-- 当前目标 Rust 符号：{rust_symbols}
-- `xxx_t`/`struct xxx` 应重构为 `CamelCase` Rust 类型，例如 `quadtree_bounds_t` -> `Bounds`。
-- `xxx_new/create/init` 应重构为 `Type::new` 或 `Default`，不要公开 `xxx_new` 自由函数。
-- `xxx_free/destroy/delete` 应由所有权和 `Drop` 表达，通常不需要公开 `free` API。
-- C 中的 `NULL`、可空指针、缺失值应重构为 `Option<T>`。
-- C 中的状态码应按语义重构为 `bool`、`Option<T>` 或 `Result<T, E>`，不要机械返回 `i32`。
-- C 中的 `void *` 或用户数据指针应恢复为泛型参数、具体拥有类型、引用或 trait object；不要使用 `c_void`。
-- C 回调应重构为闭包参数，例如 `impl FnMut(...)` 或泛型 `F: FnMut(...)`，不要暴露原始函数指针和用户数据指针组合。
-- 树、链表、集合等结构应使用 `Option<Box<T>>`、`Vec<T>`、切片、引用和借用表达所有权关系。
-- 禁止在普通重写代码中使用 `unsafe`、`*mut`、`*const`、`NonNull`、`Box::into_raw`、`Box::from_raw`、`std::ptr`、`core::ptr`、`c_void`、`#[repr(C)]`、`extern \"C\"`、`#[no_mangle]`。
-- 禁止用 `#[allow(non_camel_case_types)]`、`#[allow(non_snake_case)]` 等方式掩盖 C 风格命名。
-- 示例映射：`foo_new` -> `Foo::new`，`foo_extend` -> `Foo::extend`，`tree_insert` -> `Tree::insert`，`tree_search` -> `Tree::search`。"""
+        return f"""The goal is behavioral equivalence, not C ABI equivalence.
+- C file names, C type names, and C function names are only trace evidence; the target Rust API must use Rust naming, ownership, and module organization.
+- Current C evidence: {c_functions}
+- Current target Rust symbols: {rust_symbols}
+- `xxx_t` / `struct xxx` should be refactored into `CamelCase` Rust types, for example `quadtree_bounds_t` -> `Bounds`.
+- `xxx_new` / `create` / `init` should be refactored into `Type::new` or `Default`; do not expose a free `xxx_new` function.
+- `xxx_free` / `destroy` / `delete` should be expressed through ownership and `Drop`; a public `free` API is usually unnecessary.
+- `NULL`, nullable pointers, and missing values in C should be refactored into `Option<T>`.
+- C status codes should be refactored by meaning into `bool`, `Option<T>`, or `Result<T, E>`; do not mechanically return `i32`.
+- `void *` or user-data pointers in C should be recovered as generic parameters, concrete owned types, references, or trait objects; do not use `c_void`.
+- C callbacks should be refactored into closure parameters, such as `impl FnMut(...)` or generic `F: FnMut(...)`; do not expose the original function-pointer plus user-data-pointer combination.
+- Trees, linked lists, sets, and similar structures should use `Option<Box<T>>`, `Vec<T>`, slices, references, and borrowing to express ownership relationships.
+- Do not use `unsafe`, `*mut`, `*const`, `NonNull`, `Box::into_raw`, `Box::from_raw`, `std::ptr`, `core::ptr`, `c_void`, `#[repr(C)]`, `extern \"C\"`, or `#[no_mangle]` in ordinary rewrite code.
+- Do not hide C-style naming with `#[allow(non_camel_case_types)]`, `#[allow(non_snake_case)]`, or similar attributes.
+- Example mappings: `foo_new` -> `Foo::new`, `foo_extend` -> `Foo::extend`, `tree_insert` -> `Tree::insert`, `tree_search` -> `Tree::search`."""
 
     @staticmethod
     def evidence_boundary() -> str:
-        return """证据边界：
-- `translation_contract.json` 是最高优先级范围契约；若与普通 Markdown 冲突，以 contract 为准。
-- `docs/rewrite-context/02_interfaces` 提供接口事实，不代表目标 Rust API 必须照抄 C 名称。
-- `docs/rewrite-context/03_behaviors` 提供行为约束，应优先用于控制返回语义、边界条件和副作用。
-- `specs/*/spec.md` 提供模块级目标和约束；`plan.md`/`tasks.md` 只作为次级辅助，不应覆盖接口与行为事实。
-- `.specify/memory/constitution.md` 是治理约束，用于限制范围、依赖和质量要求。
-- pointer/macro 风险文档只能作为迁移风险提示，不能直接授权 FFI/raw pointer 设计。"""
+        return """Evidence boundary:
+- `translation_contract.json` is the highest-priority scope contract; if it conflicts with ordinary Markdown, the contract wins.
+- `docs/rewrite-context/02_interfaces` provides interface facts, but does not mean the target Rust API must copy C names.
+- `docs/rewrite-context/03_behaviors` provides behavioral constraints and should be used first to control return semantics, boundary conditions, and side effects.
+- `specs/*/spec.md` provides module-level goals and constraints; `plan.md` and `tasks.md` are only secondary aids and must not override interface or behavior facts.
+- `.specify/memory/constitution.md` is a governance constraint used to limit scope, dependencies, and quality requirements.
+- Pointer/macro risk documents are only migration risk hints and do not directly authorize FFI or raw-pointer designs."""
 
     @classmethod
     def context_guide(cls, planned=None) -> str:
-        path = cls._attr(planned, "path", "当前目标文件")
+        path = cls._attr(planned, "path", "current target file")
         return f"""=== RUST GENERATION CONTEXT GUIDE ===
-目标文件：{path}
-使用方式：
-- 下面的 spec section 是按目标文件筛选后的局部上下文，不是完整项目 dump。
-- 优先从当前目标 Rust 符号、source_functions、source_files 中确认职责边界。
-- 如果行为、类型字段、调用关系或依赖仍不清楚，使用 `<CGR_READ>` 请求更多 spec/source/rust/registry。
-- **对于 C 源码索引中只有签名而没有内联源码的函数，你必须在第一轮回复中用 `<CGR_READ>` 一次性请求全部缺失源码，然后再生成代码。禁止凭签名猜测函数实现。**
-- 不要因为上下文片段中出现其它 C 函数，就把其它模块职责搬进当前文件。
+Target file: {path}
+Usage:
+- The spec sections below are local context filtered for the target file, not a full project dump.
+- Confirm the responsibility boundary first from the current target Rust symbols, source_functions, and source_files.
+- If behavior, type fields, call relationships, or dependencies are still unclear, use `<CGR_READ>` to request more spec/source/rust/registry data.
+- **For functions that appear only as signatures in the C source index and do not have inline source, you must use `<CGR_READ>` in your first reply to request all missing source at once, then generate code. Do not guess function implementations from signatures.**
+- Do not move responsibilities from other modules into the current file just because other C functions appear in the context snippets.
 
 {cls.evidence_boundary()}
 
@@ -181,13 +181,13 @@ class RustGenerationSpecPrompts:
     @staticmethod
     def project_structure_system_prompt() -> str:
         return (
-            "你是一个 Rust 架构设计专家，擅长根据 spec 文档和迁移契约设计地道的 Rust 项目结构。\n\n"
-            "设计原则：\n"
-            "1. 遵循 Rust 惯用法，但迁移范围优先于'最佳实践发挥'\n"
-            "2. 只有在输入证据支持时才引入 trait 或额外抽象，默认保持简单直接\n"
-            "3. 不要凭空创造原 C 项目中不存在的核心模块、指令集、状态机、协议、线程模型或恢复机制\n"
-            "4. 默认依赖策略是 std-only；没有明确证据不要引入第三方 crate\n"
-            "5. 清晰的模块划分，但不要扩展出输入中不存在的能力边界"
+            "You are a Rust architecture design expert, skilled at designing native Rust project structures from spec documents and migration contracts.\n\n"
+            "Design principles:\n"
+            "1. Follow Rust idioms, but migration scope takes priority over 'best-practice flourish'\n"
+            "2. Introduce traits or extra abstraction only when input evidence supports it; default to keeping things simple and direct\n"
+            "3. Do not invent core modules, instruction sets, state machines, protocols, threading models, or recovery mechanisms that did not exist in the original C project\n"
+            "4. The default dependency policy is std-only; do not introduce third-party crates without explicit evidence\n"
+            "5. Keep module boundaries clear, but do not expand into capabilities that are not present in the input"
         )
 
     @classmethod
@@ -198,45 +198,45 @@ class RustGenerationSpecPrompts:
         static_context: str,
         spec_overview: str,
     ) -> str:
-        return f"""请根据以下 spec 文档和迁移契约，设计一个地道的 Rust 项目结构。
+        return f"""Design a native Rust project structure based on the following spec documents and migration contract.
 
-项目名称：{project_name}
+Project name: {project_name}
 
-程序化推导的初始文件计划（供参考，你可以调整模块划分）：
+Programmatically inferred initial file plan (for reference; you may adjust the module split):
 {plan_summary}
 
-静态项目上下文（含迁移契约）：
+Static project context (including migration contract):
 {static_context}
 
-Spec 文档概览：
-{spec_overview or '(无 spec 概览)'}
+Spec document overview:
+{spec_overview or '(no spec overview)'}
 
-请设计项目结构，包括：
-1. 项目目录文件结构（使用 tree 命令格式，<project_file> 标签包裹）
-2. 主要模块划分和每个模块的职责
-3. 核心数据结构和 trait 设计
-4. 关键函数和方法签名
-5. 错误处理策略
-6. 如果有 <CGR_READ> 需要更多信息可以请求
+Please design the project structure, including:
+1. The project directory layout (use tree command format, wrapped in `<project_file>` tags)
+2. The main module split and the responsibility of each module
+3. Core data structures and trait design
+4. Key function and method signatures
+5. Error handling strategy
+6. If needed, request more information with `<CGR_READ>`
 
 {cls.evidence_boundary()}
 
-约束：
-- 目录树只能落在迁移契约允许的文件范围内
-- 不要为了"更 Rust"而额外拆出大量新模块
-- 不要输出 tests/examples/benches/ffi/release 相关目录，除非上下文明确要求
-- C 源码事实优先于摘要性描述
+Constraints:
+- The directory tree must stay within the file scope allowed by the migration contract
+- Do not split out lots of extra modules just to be "more Rust"
+- Do not output tests/examples/benches/ffi/release directories unless the context explicitly requires them
+- C source facts take priority over summary descriptions
 """
 
     @staticmethod
     def implementation_plan_system_prompt() -> str:
         return (
-            "你是一个 Rust 实现专家，擅长制定详细的代码实现计划。\n\n"
-            "实现原则：\n"
-            "1. 由简到繁，分析依赖关系，自底向上逐步实现\n"
-            "2. 减少 unsafe 使用，优先使用 safe 的 Rust 标准库\n"
-            "3. 遵循 Rust 编码规范\n"
-            "4. 不扩写输入中没有证据支持的技术能力或工程设施"
+            "You are a Rust implementation expert, skilled at creating detailed code implementation plans.\n\n"
+            "Implementation principles:\n"
+            "1. Move from simple to complex, analyze dependencies, and implement bottom-up step by step\n"
+            "2. Reduce `unsafe` usage and prefer safe Rust standard library APIs\n"
+            "3. Follow Rust coding conventions\n"
+            "4. Do not expand into technical capabilities or engineering infrastructure that are not supported by the input evidence"
         )
 
     @classmethod
@@ -247,92 +247,92 @@ Spec 文档概览：
         files_list: Sequence[str],
     ) -> str:
         files_text = "\n".join(f"- {f}" for f in files_list)
-        return f"""基于以下项目结构设计和文件计划，制定详细的实现计划。
+        return f"""Create a detailed implementation plan based on the following project structure design and file plan.
 
-项目结构设计：
+Project structure design:
 {project_structure}
 
-程序化推导的文件计划（含 C 函数映射）：
+Programmatically inferred file plan (including C function mapping):
 {plan_summary}
 
-需要生成的文件列表：
+Files to generate:
 {files_text}
 
-请制定分步骤的实现计划，包括：
-1. 依赖分析：各模块之间的依赖关系
-2. 生成顺序：自底向上的文件生成计划（将新的文件列表顺序保存到 <new_files_to_generate> 标签中）
-3. 每个文件的实现策略：需要实现的关键类型和方法、算法要点
-4. 跨文件接口约定：类型共享、错误传播方式
+Please create a step-by-step implementation plan, including:
+1. Dependency analysis: relationships between modules
+2. Generation order: a bottom-up file generation plan (save the new file order in `<new_files_to_generate>` tags)
+3. Implementation strategy for each file: key types and methods to implement, and algorithmic notes
+4. Cross-file interface conventions: shared types and error propagation approach
 
-约束：
-- 新的文件顺序只能重排已有文件，不能新增
-- 默认只使用 Rust 标准库
-- C 源码函数体和接口事实为准，不要扩写无证据部分
-- Phase 数量保持克制，优先使用 3-5 个阶段
-- 不要把同一事实反复重写
+Constraints:
+- The new file order may only reorder existing files; no new files may be added
+- Default to using only the Rust standard library
+- Use the C source bodies and interface facts as the source of truth; do not expand unsupported parts
+- Keep the number of phases restrained, preferably 3-5
+- Do not rewrite the same fact repeatedly
 
 {cls.evidence_boundary()}
 
-请使用 <implementation_plan> 标签包裹实现计划。"""
+Please wrap the implementation plan in `<implementation_plan>` tags."""
 
     @staticmethod
     def project_planning_system_prompt() -> str:
         return (
-            "你是严谨的 Rust 项目结构规划助手。"
-            "你必须基于 spec 和迁移契约规划文件结构，输出 <CGR_PLAN>JSON</CGR_PLAN> 或 <CGR_READ> 请求。"
-            "禁止把 C 函数名当成目标 Rust API，禁止规划无证据扩展功能。"
+            "You are a rigorous Rust project structure planning assistant."
+            "You must plan the file structure based on the spec and migration contract, and output either `<CGR_PLAN>JSON</CGR_PLAN>` or a `<CGR_READ>` request."
+            "Do not treat C function names as the target Rust API, and do not plan unsupported expanded functionality."
         )
 
     @classmethod
     def project_planning_prompt(cls, fallback_files: Sequence[str], static_context: str) -> str:
         files_json = "\n".join(f'- "{path}"' for path in fallback_files)
-        return f"""请规划这个 C 到 Rust 重写项目的 Rust 文件结构和自底向上生成顺序。
+        return f"""Plan the Rust file structure and bottom-up generation order for this C-to-Rust rewrite project.
 
-你只能输出 JSON，并用 <CGR_PLAN> 包裹。JSON schema：
+You may only output JSON wrapped in `<CGR_PLAN>`. JSON schema:
 {{
   "files": [
     {{
       "path": "src/example.rs",
-      "role": "该文件职责，必须克制",
-      "owns": ["该文件唯一拥有的目标 Rust 类型、方法或自由函数；禁止填写 C 函数名"],
-      "depends_on": ["必须先生成的文件路径"],
-      "spec_queries": ["生成该文件时最需要读取的 spec 关键词"],
-      "source_files": ["对应 C 源文件"],
-      "source_functions": ["对应 C 函数；只作证据"]
+      "role": "The file's responsibility, kept deliberately restrained",
+      "owns": ["The unique target Rust types, methods, or free functions owned by this file; do not fill in C function names"],
+      "depends_on": ["Files that must be generated first"],
+      "spec_queries": ["Spec keywords most needed when generating this file"],
+      "source_files": ["Corresponding C source files"],
+      "source_functions": ["Corresponding C functions; evidence only"]
     }}
   ],
   "order": ["Cargo.toml", "src/example.rs", "src/lib.rs", "README.md"]
 }}
 
-规划规则：
-1. 自底向上：基础类型、错误、常量、数据结构先生成；聚合容器和算法后生成；lib.rs 最后由本地程序重建。
-2. 一个 Rust 类型只能由一个文件拥有；不要让 node.rs、data.rs、tree.rs 重复定义同一结构体。
-3. 每个文件只承担一个明确职责。文件太大时优先按类型或模块拆分，但不要无证据扩展工程规模。
-4. `owns` 必须写 Rust 目标符号，例如 `Bounds`、`Bounds::new`、`Quadtree::insert`；C 函数名只能放进 `source_functions` 或 `spec_queries`。
-5. 不要规划 spec/C 源码未体现的功能；不要主动添加 serde、async、线程安全、恢复机制等。
-6. 如果有迁移契约 allowed_rust_files，必须只在允许文件集合内选择。
-7. 除非配置或文档明确要求，不规划 tests/examples/benches。
-8. 如果信息不足，使用 <CGR_READ> 请求更多 spec/source/registry；不要猜。
+Planning rules:
+1. Bottom-up: generate base types, errors, constants, and data structures first; generate aggregate containers and algorithms later; rebuild lib.rs locally last.
+2. A Rust type may be owned by only one file; do not let node.rs, data.rs, and tree.rs define the same struct repeatedly.
+3. Each file should serve one clear responsibility. If a file is too large, split it by type or module first, but do not expand the project size without evidence.
+4. `owns` must contain Rust target symbols, such as `Bounds`, `Bounds::new`, and `Quadtree::insert`; C function names may only go into `source_functions` or `spec_queries`.
+5. Do not plan functionality that is not reflected in the spec or C source; do not proactively add serde, async, threading, or recovery mechanisms.
+6. If the migration contract has `allowed_rust_files`, select only from the allowed file set.
+7. Unless configuration or documentation explicitly requires it, do not plan tests/examples/benches.
+8. If information is insufficient, use `<CGR_READ>` to request more spec/source/registry data; do not guess.
 
-可选兜底文件集合：
+Optional fallback file set:
 {files_json or "- (empty)"}
 
 {cls.evidence_boundary()}
 
-静态项目上下文：
+Static project context:
 {static_context}
 """
 
     @staticmethod
     def file_generation_system_prompt() -> str:
         return (
-            "你是一个按需读取上下文的 Rust 代码生成助手。"
-            "你的任务是生成单个目标文件，严格遵守已规划文件边界、已有符号表和迁移契约。"
-            "你必须重构为 Rust 风格 API，而不是模拟 C ABI；禁止 raw pointer、unsafe、c_void 和 C 风格函数名。"
-            "\n\n关键原则：你必须实现 owns 列表中的所有符号。"
-            "如果某个函数只有签名索引而没有完整源码，你 **禁止猜测实现**，必须立即使用 <CGR_READ> 请求完整源码。"
-            "只有看到完整 C 源码后才能编写对应的 Rust 实现。"
-            "宁可多发一轮 <CGR_READ>，也不要生成不完整的文件或跳过任何 owns 中的符号。"
+            "You are a context-on-demand Rust code generation assistant."
+            "Your task is to generate a single target file while strictly honoring the planned file boundaries, the existing symbol table, and the migration contract."
+            "You must refactor into a Rust-style API rather than simulating the C ABI; raw pointers, `unsafe`, `c_void`, and C-style function names are forbidden."
+            "\n\nKey principle: you must implement every symbol in the owns list."
+            "If a function is only indexed by signature and does not have full source, you are **forbidden to guess the implementation** and must immediately use `<CGR_READ>` to request the full source."
+            "You may only write the corresponding Rust implementation after seeing the complete C source."
+            "It is better to send one more round of `<CGR_READ>` than to generate an incomplete file or skip any symbol in `owns`."
         )
 
     @classmethod
@@ -346,68 +346,68 @@ Spec 文档概览：
         source_context: str,
     ) -> str:
         path = cls._attr(planned, "path", "")
-        return f"""请生成目标文件的最终内容。
+        return f"""Generate the final content of the target file.
 
-目标文件：{path}
-文件职责：{cls._attr(planned, "role", "") or '按计划实现该文件职责'}
-该文件唯一拥有的目标 Rust 符号：{cls._join(cls._attr(planned, "owns", []), '(由当前文件内容自然决定，但不得重复已有符号)')}
-对应 C 源文件：{cls._join(cls._attr(planned, "source_files", []), '(无直接源文件映射)')}
-对应 C 函数（只作为行为证据，禁止照抄为 Rust API 名）：{cls._join(cls._attr(planned, "source_functions", []), '(无直接函数映射)')}
-必须先依赖的文件：{cls._join(cls._attr(planned, "depends_on", []), '(无明确依赖)')}
-允许/计划文件集合：{cls._join(planned_files, '(未提供)', limit=80)}
+Target file: {path}
+File responsibility: {cls._attr(planned, "role", "") or 'Implement this file responsibility as planned'}
+Unique target Rust symbols owned by this file: {cls._join(cls._attr(planned, "owns", []), '(determined naturally by the current file content, but may not duplicate existing symbols)')}
+Corresponding C source files: {cls._join(cls._attr(planned, "source_files", []), '(no direct source-file mapping)')}
+Corresponding C functions (behavior evidence only; do not copy as Rust API names): {cls._join(cls._attr(planned, "source_functions", []), '(no direct function mapping)')}
+Files that must be depended on first: {cls._join(cls._attr(planned, "depends_on", []), '(no explicit dependencies)')}
+Allowed/planned file set: {cls._join(planned_files, '(not provided)', limit=80)}
 
-项目生成计划：
+Project generation plan:
 {plan_summary}
 
-已生成 Rust 符号表：
+Generated Rust symbol table:
 {registry_summary}
 
-当前文件相关 spec/source 上下文：
-{spec_context or '(当前没有匹配到 spec 片段，可用 <CGR_READ> 请求 spec)'}
+Current spec/source context for this file:
+{spec_context or '(no matching spec snippet found; use <CGR_READ> to request spec)'}
 
-相关 C 源码（关键函数已内联，其余为索引）：
-{source_context or '(当前没有匹配到源码，可用 <CGR_READ> 请求 source)'}
+Relevant C source (key functions are inlined; the rest are indexed):
+{source_context or '(no matching source found; use <CGR_READ> to request source)'}
 
-Rust 化迁移契约：
+Rust migration contract:
 {cls.rewrite_contract(planned)}
 
-生成约束：
-1. 只输出 `{path}` 的最终内容，不要解释。
-2. 不要重新定义符号表中已经由其他文件拥有的 struct/enum/type/trait/free fn/const/static。
-3. 已生成 Rust 符号表中的 `references` 包含 public/private、函数参数、返回类型和结构体字段；跨文件只能引用 public 符号，private 符号只能在其定义文件内部使用。
-4. 调用已有函数或方法时必须匹配符号表中的参数列表和返回类型；访问结构体字段时只能访问 `references` 中存在的 public field；不要只凭 C 源码字段名猜 Rust 成员。
-5. 可以 `use crate::...` 引用已生成符号表中的 public 模块和 public 符号；不要引用未规划模块。
-6. 如果必须引用尚未生成的文件，优先改为通过当前文件已有依赖或标准库实现；不要凭空创建新模块。
-7. 不要添加无证据功能，不要引入未授权第三方依赖，不要生成内联测试模块，除非配置明确允许。
-8. 不要生成 C ABI 适配层，不要公开 `项目名前缀_*`/`*_free`/`*_new` 这类 C 风格自由函数。
-9. 不要使用 raw pointer、`unsafe`、`c_void`、`repr(C)` 或 `extern \"C\"` 来模拟原 C 项目。
-10. 代码应符合 Rust 命名习惯：类型 `CamelCase`，方法/函数 `snake_case`，模块职责清晰。
-11. C 源码区域中只内联了关键函数，其余函数仅提供索引。
-    **你必须实现 owns 列表中的每一个符号。**
-    如果某个符号对应的 C 函数只有签名索引而没有内联源码，你 **必须** 先用 <CGR_READ> 请求完整源码再实现，禁止凭签名猜测函数体。
-    请求格式：
+Generation constraints:
+1. Output only the final content of `{path}`; do not explain.
+2. Do not redefine any struct/enum/type/trait/free fn/const/static that is already owned by another file in the symbol table.
+3. The `references` in the generated Rust symbol table include public/private visibility, function parameters, return types, and struct fields; cross-file references may only use public symbols, and private symbols may only be used inside their defining file.
+4. When calling existing functions or methods, match the parameter list and return types in the symbol table; when accessing struct fields, only access public fields that exist in `references`; do not guess Rust members from C source field names alone.
+5. You may `use crate::...` to reference public modules and public symbols already present in the generated symbol table; do not reference unplanned modules.
+6. If you must reference a file that has not been generated yet, first try to implement it through existing dependencies in the current file or the standard library; do not invent new modules out of thin air.
+7. Do not add unsupported features, do not introduce unauthorized third-party dependencies, and do not generate inline test modules unless configuration explicitly allows it.
+8. Do not generate a C ABI adapter layer, and do not expose C-style free functions such as `project_prefix_*` / `*_free` / `*_new`.
+9. Do not use raw pointers, `unsafe`, `c_void`, `repr(C)`, or `extern \"C\"` to simulate the original C project.
+10. The code must follow Rust naming conventions: types in `CamelCase`, methods/functions in `snake_case`, and clear module responsibilities.
+11. Only key functions are inlined in the C source area; the rest are index entries only.
+    **You must implement every symbol in the owns list.**
+    If a symbol corresponds to a C function that only has a signature index and no inline source, you **must** first use `<CGR_READ>` to request the full source before implementing it, and you are forbidden to guess the function body from the signature.
+    Request format:
 <CGR_READ>
-[{{"kind":"source","query":"函数名或文件名"}}, {{"kind":"spec","query":"关键词"}}, {{"kind":"rust","query":"src/existing.rs"}}, {{"kind":"registry"}}]
+[{{"kind":"source","query":"function name or file name"}}, {{"kind":"spec","query":"keyword"}}, {{"kind":"rust","query":"src/existing.rs"}}, {{"kind":"registry"}}]
 </CGR_READ>
-    一次可发多个请求。source 支持按函数名（如 "quadtree_insert"）或文件名（如 "node.c"）查询。
-    **在第一轮回复中，先检查索引中所有未内联的函数，一次性请求全部需要的源码，不要分多轮请求。**
-12. 信息足够时输出完整文件内容，并在最后单独添加 `<CGR_DONE>`。
-    **如果输出的文件缺少 owns 中的任何符号，视为失败。**
+    You may send multiple requests at once. `source` supports querying by function name (for example `"quadtree_insert"`) or file name (for example `"node.c"`).
+    **In your first reply, inspect all non-inlined functions in the index and request all required source at once; do not split the request across multiple rounds.**
+12. When information is sufficient, output the complete file content and append `<CGR_DONE>` on its own at the end.
+    **If the output file is missing any symbol in `owns`, treat it as a failure.**
 """
 
     @staticmethod
     def read_materials_followup(materials: str) -> str:
         return (
-            "下面是你请求读取的材料。请继续；如果信息已经足够，直接输出目标结果。"
-            "不要重复请求同一材料，不要把读取到的无关模块职责搬进当前文件。\n\n"
+            "Here is the material you requested to read. Continue; if the information is already sufficient, output the target result directly."
+            "Do not request the same material again, and do not bring unrelated module responsibilities from the retrieved material into the current file.\n\n"
             + materials
         )
 
     @staticmethod
     def repair_system_prompt() -> str:
         return (
-            "你是严格的 Rust 文件边界和 Rust 风格修复助手。"
-            "只修当前文件，不能扩写项目功能，不能保留 C ABI 模拟层。"
+            "You are a strict Rust file-boundary and Rust-style repair assistant."
+            "Only fix the current file; do not expand project functionality or keep a C ABI simulation layer."
         )
 
     @classmethod
@@ -421,39 +421,39 @@ Rust 化迁移契约：
     ) -> str:
         path = cls._attr(planned, "path", "")
         findings_text = "\n".join("- " + item for item in findings)
-        return f"""上一次生成的 `{path}` 违反了项目边界，请在保持文件职责不变的前提下修正。
+        return f"""The previously generated `{path}` violated the project boundary. Please fix it while keeping the file responsibility unchanged.
 
-违规项：
+Violations:
 {findings_text}
 
-已有符号表：
+Existing symbol table:
 {registry_summary}
 
-项目计划：
+Project plan:
 {plan_summary}
 
-当前错误内容：
+Current erroneous content:
 ```rust
 {current_content}
 ```
 
-Rust 化迁移契约：
+Rust migration contract:
 {cls.rewrite_contract(planned)}
 
-要求：
-1. 只输出 `{path}` 的完整修正版内容。
-2. 删除重复定义和越界能力，不要把其它文件职责搬进当前文件。
-3. 跨文件引用只能使用符号表中标记为 public 的引用；调用已有函数或方法必须匹配符号表里的参数和返回类型，字段访问也必须存在于符号表 field 引用中。
-4. 如果违规项来自 C ABI 或 C 风格代码，必须重构为 Rust 类型、方法、Option/Result、所有权和闭包；不要继续修补 raw pointer 版本。
-5. 如果需要其它上下文，可以使用 <CGR_READ>，否则直接输出最终内容并以 <CGR_DONE> 结束。
+Requirements:
+1. Output only the complete corrected content for `{path}`.
+2. Remove duplicate definitions and out-of-bounds capabilities; do not move responsibilities from other files into the current file.
+3. Cross-file references may only use references marked as public in the symbol table; calls to existing functions or methods must match the parameter and return types in the symbol table, and field access must also exist in the symbol table's field references.
+4. If the violations come from C ABI or C-style code, you must refactor them into Rust types, methods, `Option` / `Result`, ownership, and closures; do not keep patching the raw-pointer version.
+5. If more context is needed, use `<CGR_READ>`; otherwise output the final content directly and end with `<CGR_DONE>`.
 """
 
     @staticmethod
     def force_write_system_prompt() -> str:
         return (
-            "你是 Rust 文件最终写入决策助手。"
-            "你会收到仍然违反边界检查的文件。"
-            "优先修复；只有当你明确认为当前内容必须保留且用户需要强制推进时，才允许输出 <CGR_FORCE_WRITE>。"
+            "You are the final write-decision assistant for Rust files."
+            "You will receive files that still violate boundary checks."
+            "Prefer repair; only allow `<CGR_FORCE_WRITE>` when you clearly believe the current content must be kept and the user needs to force progress."
         )
 
     @classmethod
@@ -467,31 +467,31 @@ Rust 化迁移契约：
     ) -> str:
         path = cls._attr(planned, "path", "")
         findings_text = "\n".join("- " + item for item in findings)
-        return f"""`{path}` 修复后仍然触发禁止写入规则。请做最后一次决策。
+        return f"""After repair, `{path}` still triggers the write prohibition rules. Make a final decision.
 
-剩余违规项：
+Remaining violations:
 {findings_text}
 
-已有符号表：
+Existing symbol table:
 {registry_summary}
 
-项目计划：
+Project plan:
 {plan_summary}
 
-当前候选内容：
+Current candidate content:
 ```rust
 {current_content}
 ```
 
-决策规则：
-1. 首选：继续修复文件，让它不再违反上述规则。此时只输出完整修正版内容，并以 `<CGR_DONE>` 结束。
-2. 如果你认为这些违规是误报，或者为了保持项目可继续生成必须写入当前候选内容，可以强制写入。
-3. 强制写入时必须输出完整文件内容，并额外包含：
+Decision rules:
+1. Preferred: keep repairing the file until it no longer violates the above rules. In that case, output only the complete corrected content and end with `<CGR_DONE>`.
+2. If you believe these violations are false positives, or if the current candidate content must be written to keep the project generation moving, you may force the write.
+3. When forcing a write, you must output the full file content and additionally include:
 <CGR_FORCE_WRITE>
-用一句话说明为什么必须越过当前禁止写入规则。
+Explain in one sentence why the current write prohibition rule must be bypassed.
 </CGR_FORCE_WRITE>
-4. 没有 `<CGR_FORCE_WRITE>` 标记时，外层 agent 仍会按禁止写入处理。
-5. 不要只输出标记；必须输出可写入 `{path}` 的完整文件内容。
+4. Without the `<CGR_FORCE_WRITE>` marker, the outer agent will still treat the result as prohibited.
+5. Do not output only the marker; you must output the complete file content that can be written to `{path}`.
 """
 
 
@@ -786,11 +786,11 @@ class RustGenerationSpecAgent:
     def _plan_for_path(self, path: str) -> RustFilePlan:
         normalized = path.replace("\\", "/")
         if normalized == "Cargo.toml":
-            return RustFilePlan(path=normalized, role="Cargo package manifest，本地生成最小可编译配置")
+            return RustFilePlan(path=normalized, role="Cargo package manifest; locally generate a minimal compilable configuration")
         if normalized == "src/lib.rs":
-            return RustFilePlan(path=normalized, role="crate 入口，本地根据已生成模块和符号表重建")
+            return RustFilePlan(path=normalized, role="crate entry point; locally rebuilt from generated modules and the symbol table")
         if normalized.lower() == "readme.md":
-            return RustFilePlan(path=normalized, role="项目说明文档，只说明构建、使用和当前能力")
+            return RustFilePlan(path=normalized, role="project documentation; describe only build, usage, and current capabilities")
 
         source_files = self._source_files_for_rust_path(normalized)
         source_functions: List[str] = []
@@ -804,9 +804,9 @@ class RustGenerationSpecAgent:
         stem = _stem(normalized)
         spec_queries = _dedupe([stem] + source_files + source_functions[:12] + source_types[:8])
         role = (
-            f"根据 `{', '.join(source_files)}` 的行为证据实现 Rust 化 API；C 函数名只作溯源，不作为目标 API"
+            f"Implement a Rust-style API based on the behavior evidence from `{', '.join(source_files)}`; C function names are only traceability evidence, not the target API"
             if source_files
-            else f"实现 `{stem}` 相关的 Rust 模块，不承载其它文件职责；目标 API 必须 Rust 化"
+            else f"Implement the Rust module related to `{stem}`; do not carry responsibilities from other files, and the target API must be Rust-style"
         )
 
         return RustFilePlan(
@@ -1072,7 +1072,7 @@ class RustGenerationSpecAgent:
             )
             parts.append(block)
             total += len(block)
-        return "\n".join(parts).strip() or "没有找到匹配的 spec section。"
+        return "\n".join(parts).strip() or "No matching spec section found."
 
     def _reference_table_for_plan(self, plan: RustFilePlan) -> str:
         lines = [
@@ -1534,7 +1534,7 @@ class RustGenerationSpecAgent:
         by_kind: Dict[str, int] = {}
         for section in self.sections:
             by_kind[section.kind] = by_kind.get(section.kind, 0) + 1
-        lines.append("文档 section 统计：")
+        lines.append("Document section statistics:")
         for kind in sorted(by_kind):
             lines.append(f"- {kind}: {by_kind[kind]}")
         lines.append("")
@@ -1543,7 +1543,7 @@ class RustGenerationSpecAgent:
             boundary = self.translation_contract.get("generation_boundary", {})
             functions = self.translation_contract.get("functions", [])
             types = self.translation_contract.get("types", [])
-            lines.append("迁移契约统计：")
+            lines.append("Migration contract statistics:")
             lines.append(f"- project kind: {self.translation_contract.get('project', {}).get('kind', 'unknown')}")
             lines.append(f"- allowed_rust_files: {len(boundary.get('allowed_rust_files', []) if isinstance(boundary, dict) else [])}")
             lines.append(f"- functions: {len(functions) if isinstance(functions, list) else 0}")
@@ -1551,7 +1551,7 @@ class RustGenerationSpecAgent:
             lines.append(f"- dependency_policy: {boundary.get('dependency_policy', 'unspecified') if isinstance(boundary, dict) else 'unspecified'}")
             lines.append("")
 
-        lines.append("C 源文件到 Rust 文件候选映射：")
+        lines.append("C source file to candidate Rust file mapping:")
         for source_file in self.source_files:
             rust_path = self._rust_path_for_source(source_file)
             if rust_path:
@@ -1559,7 +1559,7 @@ class RustGenerationSpecAgent:
 
         if self.function_signatures:
             lines.append("")
-            lines.append("已提取的函数声明数：")
+            lines.append("Extracted function declaration count:")
             lines.append(f"- signatures: {len(self.function_signatures)}")
 
         return "\n".join(lines)

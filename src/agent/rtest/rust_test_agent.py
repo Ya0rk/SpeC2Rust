@@ -157,9 +157,9 @@ class RustTestAgent:
         if not binary_path:
             expected = os.path.join(rust_project_path, "target", "release", rust_bin_name)
             print(
-                f"[rtest] 错误：未找到 Rust 可执行文件 {expected}[.exe]。"
-                f" 请确认 Cargo.toml 里 [[bin]] name = \"{rust_bin_name}\"，"
-                f" 并已成功执行 cargo build --release。"
+                f"[rtest] Error: Rust executable not found at {expected}[.exe]."
+                f" Please confirm that Cargo.toml has [[bin]] name = \"{rust_bin_name}\","
+                f" and that `cargo build --release` completed successfully."
             )
             return TestRunSummary(0, 0, 0, [])
         print(f"[rtest] 使用 Rust 可执行文件：{binary_path}")
@@ -724,8 +724,8 @@ class RustTestAgent:
             block = block[:1500] + "\n...\n" + block[-3000:]
         if _looks_like_argv0_path_diff(block):
             block += (
-                "\n\n[系统诊断] 当前 diff 看起来主要来自 C_BIN 与 RUST_BIN 的 argv[0]/绝对路径不同。"
-                "这通常是测试迁移问题；优先修当前 test 脚本的运行/归一化方式，不要在 Rust 代码里硬编码路径。"
+                "\n\n[System diagnosis] The current diff appears to mainly come from argv[0] / absolute path differences between C_BIN and RUST_BIN. "
+                "This is usually a test-migration issue; prioritize fixing the current test script's execution/normalization path, and do not hardcode paths in Rust code."
             )
         return block
 
@@ -877,8 +877,8 @@ class RustTestAgent:
                 {
                     "role": "system",
                     "content": (
-                        "你是经验丰富的 Rust 修复助手，擅长根据 sh 测试脚本失败信息"
-                        "定位并修复 C->Rust 翻译产物中的功能缺陷。"
+                        "You are an experienced Rust repair assistant skilled at using sh test script failure information "
+                        "to locate and fix functional defects in C-to-Rust translation outputs."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -902,10 +902,10 @@ class RustTestAgent:
             # 把 LLM 原始回复尾部带入下一轮，让模型看到自己的格式错误并自我纠正。
             raw_tail = (text or "")[-1500:].strip()
             state.history_summary += (
-                f"\n[系统] 上一轮（第 {attempt} 轮）LLM 返回无法解析为 JSON，"
-                f"已跳过（连续 {state.json_parse_failures}/{max_json_retries} 次）。"
-                f"\n上一轮原始回复尾部：\n```\n{raw_tail}\n```\n"
-                "下一轮必须严格只返回 JSON 对象，不要包含任何 markdown 围栏之外的文字。"
+                f"\n[System] The LLM output from the previous round (round {attempt}) could not be parsed as JSON, "
+                f"so it was skipped (consecutive {state.json_parse_failures}/{max_json_retries} failures)."
+                f"\nTail of the previous raw reply:\n```\n{raw_tail}\n```\n"
+                "The next round must return only a JSON object, with no text outside markdown fences."
             )
             print(
                 f"    [rtest] LLM 返回不可解析为 JSON（第 {state.json_parse_failures} 次），"
@@ -931,8 +931,8 @@ class RustTestAgent:
         edits = self._filter_fake_impl_edits(raw_edits, expected_outputs, failing_case)
         if raw_edits and not edits:
             state.history_summary += (
-                "\n[系统] 上一轮提交的所有 edit 都被反作弊检测拒绝，"
-                "请根据 C 源码真正实现该 flag 的逻辑，而不是占位/复读期望输出。"
+                "\n[System] All edits submitted in the previous round were rejected by the anti-cheat check; "
+                "implement the real flag logic from the C source instead of placeholders or repeating expected output."
             )
 
         # Edits 去重（#20）
@@ -945,8 +945,8 @@ class RustTestAgent:
                     "跳过重复应用"
                 )
                 state.history_summary += (
-                    "\n[系统] 上一轮 edits 与更早一轮完全相同，已跳过应用。"
-                    "下一轮必须读取新材料或给出不同的局部修复。"
+                    "\n[System] The edits from the previous round were identical to an earlier round and have been skipped. "
+                    "The next round must read new material or provide a different local fix."
                 )
                 edits = []
             else:
@@ -998,8 +998,8 @@ class RustTestAgent:
         if not new_material and not edits:
             print("    [rtest] LLM 既没请求材料也没产生新编辑，继续下一轮并要求改变策略")
             state.history_summary += (
-                "\n[系统] 上一轮没有产生可执行动作。下一轮必须请求缺失材料，"
-                "或基于已有材料给出新的有效 edits。"
+                "\n[System] The previous round did not produce any executable action. The next round must request missing materials "
+                "or provide new valid edits."
             )
             return "continue"
         return "continue"
@@ -1083,7 +1083,7 @@ class RustTestAgent:
             )
             state.last_build_error = build_output if not ok else ""
             print("    [rtest] 修复后编译失败，将编译错误带入下一轮")
-            state.history_summary += "\n[系统] 上一次编辑导致编译失败，请优先修复编译错误。"
+            state.history_summary += "\n[System] The previous edit caused a compile failure; prioritize fixing the compile error."
             return "continue"
 
         state.last_build_error = ""
@@ -1132,12 +1132,12 @@ class RustTestAgent:
                 if restored_binary:
                     runner.restage_rust_binary(restored_binary)
                 state.regression_warning = (
-                    "本次 edits 让 "
-                    f"{failing_case.name} 通过，但同时让以下用例回归失败："
+                    "This round's edits made "
+                    f"{failing_case.name} pass, but also caused the following cases to regress: "
                     + ", ".join(sorted(regressed))
-                    + "。已回滚本次 edits。回归失败证据如下：\n"
+                    + ". These edits have been rolled back. Regression evidence follows:\n"
                     + regression_detail
-                    + "\n下一轮必须同时保持当前用例通过，并解释为什么不会再次破坏这些回归用例。"
+                    + "\nThe next round must keep the current case passing and explain why these regression cases will not be broken again."
                 )
                 failing_case.passed = False
                 # 回归回滚后重置 stall 计数（#29）
@@ -1159,8 +1159,8 @@ class RustTestAgent:
                 "判定为停滞风险；继续下一轮但要求改变策略"
             )
             state.history_summary += (
-                "\n[系统] 当前失败签名已连续多轮不变。下一轮必须改变策略："
-                "优先读取最新 Rust 文件、必要 C 函数或测试产物；不要继续提交同类 edits。"
+                "\n[System] The current failure signature has remained unchanged for multiple rounds. The next round must change strategy: "
+                "prioritize reading the latest Rust files, necessary C functions, or test artifacts; do not keep submitting the same kind of edits."
             )
             return "continue"
 

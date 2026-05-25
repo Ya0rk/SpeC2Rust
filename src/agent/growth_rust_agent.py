@@ -19,48 +19,48 @@ class GrowthRustAgent(RustAgent):
     def _generate_growth_plan(self, project_structure: str, files_to_generate: List[str]) -> str:
         print("生成生长式代码规划...")
 
-        prompt = f"""下面是当前 Rust 项目的候选结构和文件列表，请你为“逐步生长式生成”制定计划。
+        prompt = f"""Below are the candidate structure and file list for the current Rust project. Create a plan for "incremental growth-style generation".
 
-项目结构：
+Project structure:
 {project_structure}
 
-候选文件列表：
+Candidate file list:
 {files_to_generate}
 
-目标：
-1. 先找出“最小可编译集”
-2. 再从中选择一条主树干文件路径，优先生成
-3. 树干之外的依赖先允许使用占位实现，避免一次生成过多内容
-4. 后续再逐步扩展树枝文件
+Goals:
+1. First identify the "minimum compilable set".
+2. Then select one main trunk file path from it and generate it first.
+3. Allow dependencies outside the trunk to use placeholder implementations first, avoiding too much content in one generation.
+4. Gradually expand branch files later.
 
-请严格使用下面标签输出：
+Strictly use the following tags for output:
 
 <trunk_files>
-每行一个文件路径
+One file path per line
 </trunk_files>
 
 <branch_files>
-每行一个文件路径
+One file path per line
 </branch_files>
 
 <growth_strategy>
-用简短中文说明：
-- 最小可编译集是什么
-- 为什么这样选主树干
-- 哪些依赖允许先占位
+Briefly explain in Chinese:
+- What the minimum compilable set is.
+- Why the main trunk is selected this way.
+- Which dependencies may be placeholders first.
 </growth_strategy>
 
-要求：
-1. trunk_files 只保留首轮真正关键的核心文件，数量尽量少
-2. branch_files 放剩余文件
-3. 优先保证 Cargo.toml、src/lib.rs、核心类型文件、核心模块文件进入 trunk_files
-4. 不要输出解释性前言，只输出上述三个标签
+Requirements:
+1. trunk_files should keep only the truly critical core files for the first round, with as few files as possible.
+2. Put the remaining files in branch_files.
+3. Prioritize putting Cargo.toml, src/lib.rs, core type files, and core module files into trunk_files.
+4. Do not output an explanatory preface; output only the three tags above.
 """
 
         messages = [
             {
                 "role": "system",
-                "content": "你是一个擅长把大型代码生成任务拆成最小可编译集并逐步扩展的 Rust 架构助手。请严格按标签输出。"
+                "content": "You are a Rust architecture assistant skilled at splitting large code generation tasks into a minimum compilable set and expanding them incrementally. Strictly output according to the tags."
             },
             {"role": "user", "content": prompt},
         ]
@@ -114,41 +114,41 @@ class GrowthRustAgent(RustAgent):
         if self._is_cargo_toml(file_path):
             return self._generate_code(file_path, context, growth_plan)
 
-        stage_text = "主树干" if stage == "trunk" else "树枝扩展"
-        prompt = f"""请为下面的 Rust 文件生成代码，当前阶段是“{stage_text}”。
+        stage_text = "main trunk" if stage == "trunk" else "branch expansion"
+        prompt = f"""Generate code for the following Rust file. The current stage is "{stage_text}".
 
-当前文件：
+Current file:
 {file_path}
 
-主树干文件：
+Main trunk files:
 {trunk_files}
 
-后续树枝文件：
+Later branch files:
 {branch_files}
 
-生长式规划：
+Growth-style plan:
 {growth_plan}
 
-当前上下文：
+Current context:
 {context}
 
-生成要求：
-1. 只输出最终 Rust 代码，不要输出解释
-2. 当前阶段优先保证项目尽快可编译
-3. 如果当前文件需要依赖尚未生成的树枝函数或树枝模块，可以先使用最小占位实现
-4. 占位实现优先使用：
+Generation requirements:
+1. Output only the final Rust code, with no explanation.
+2. At the current stage, prioritize making the project compile as soon as possible.
+3. If the current file needs to depend on branch functions or branch modules that have not yet been generated, you may use minimal placeholder implementations first.
+4. Prefer these placeholder implementations:
    - `todo!()`
    - `unimplemented!()`
-   - 明确的占位错误返回
-5. 不要为了追求完整而引入大量未实现依赖
-6. 如果是 trunk 文件，优先保证类型定义、模块边界、公开接口、主调用路径可工作
-7. 如果是 branch 文件，尽量补全 trunk 中已经留下的占位依赖
+   - explicit placeholder error returns
+5. Do not introduce many unimplemented dependencies in pursuit of completeness.
+6. If this is a trunk file, prioritize making type definitions, module boundaries, public interfaces, and the main call path work.
+7. If this is a branch file, complete placeholder dependencies already left in the trunk as much as possible.
 """
 
         messages = [
             {
                 "role": "system",
-                "content": "你是一个擅长逐步生长式生成 Rust 项目的代码助手。你的首要目标是先保证最小可编译集成立，再逐步扩展功能。请只输出代码。"
+                "content": "You are a code assistant skilled at incremental growth-style generation of Rust projects. Your primary goal is to make the minimum compilable set work first, then gradually expand functionality. Output only code."
             },
             {"role": "user", "content": prompt},
         ]
@@ -191,7 +191,7 @@ class GrowthRustAgent(RustAgent):
         print(f"主树干文件: {trunk_files}")
         print(f"树枝文件: {branch_files}")
 
-        context = f"项目结构：\n{project_structure}\n\n生长式规划：\n{growth_plan}\n"
+        context = f"Project structure:\n{project_structure}\n\nGrowth-style plan:\n{growth_plan}\n"
 
         for file_path in trunk_files:
             print(f"生成主树干文件：{file_path}")
@@ -206,7 +206,7 @@ class GrowthRustAgent(RustAgent):
 
             full_path = os.path.join(self.project_path, file_path)
             self._write_file(full_path, code)
-            context += f"\n\n=== 已生成文件：{file_path} ===\n{code}\n"
+            context += f"\n\n=== Generated file: {file_path} ===\n{code}\n"
             self._check_after_growth_step(file_path)
 
         for index, file_path in enumerate(branch_files, start=1):
@@ -218,7 +218,7 @@ class GrowthRustAgent(RustAgent):
 
             full_path = os.path.join(self.project_path, file_path)
             self._write_file(full_path, code)
-            context += f"\n\n=== 已生成文件：{file_path} ===\n{code}\n"
+            context += f"\n\n=== Generated file: {file_path} ===\n{code}\n"
 
             if index % 2 == 0:
                 self._check_after_growth_step(file_path)

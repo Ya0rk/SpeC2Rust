@@ -15,77 +15,77 @@ class CDocAgentPrompts:
     def create_analysis_plan(project_name: str, files: list, functions_count: int, 
                             structs_count: int, readme_content: str = "") -> str:
         """制定项目分析计划并生成文档骨架的 prompt"""
-        prompt = f"请为以下 C 项目制定一个详细的分析计划并生成项目文档骨架，目标是完全理解这个项目。\n\n"
-        prompt += f"项目名称：{project_name}\n"
-        prompt += f"项目文件数量：{len(files)}\n"
-        prompt += f"函数数量：{functions_count}\n"
-        prompt += f"结构体数量：{structs_count}\n"
+        prompt = f"Create a detailed analysis plan and project-document skeleton for the following C project. The goal is to fully understand this project.\n\n"
+        prompt += f"Project name: {project_name}\n"
+        prompt += f"Number of project files: {len(files)}\n"
+        prompt += f"Number of functions: {functions_count}\n"
+        prompt += f"Number of structs: {structs_count}\n"
         if readme_content:
-            prompt += f"项目 README 内容：{readme_content}\n\n"
-        prompt += f"文件列表：{', '.join(files)}\n\n"
-        prompt += "请制定一个详细的分析计划，包括：\n"
-        prompt += "1. 整体分析策略\n"
-        prompt += "2. 分阶段分析步骤\n"
-        prompt += "3. 重点关注的模块和功能\n"
-        prompt += "4. 如何验证分析的完整性\n"
-        prompt += "5. 每轮迭代的具体任务\n"
-        prompt += '''使用<analysis_plan>标签包裹分析计划，例如：
+            prompt += f"Project README content: {readme_content}\n\n"
+        prompt += f"File list: {', '.join(files)}\n\n"
+        prompt += "Create a detailed analysis plan that includes:\n"
+        prompt += "1. Overall analysis strategy\n"
+        prompt += "2. Phased analysis steps\n"
+        prompt += "3. Modules and features to focus on\n"
+        prompt += "4. How to verify analysis completeness\n"
+        prompt += "5. Specific tasks for each iteration\n"
+        prompt += '''Wrap the analysis plan in <analysis_plan> tags, for example:
         <analysis_plan>
-        分析计划
+        Analysis plan
         </analysis_plan>
         '''
-        prompt += "同时，请生成项目文档骨架，包括以下内容的详细标题结构：\n"
-        prompt += "1. 项目概述\n"
-        prompt += "2. 项目功能\n"
-        prompt += "3. 项目架构\n"
-        prompt += "4. 模块关系\n"
-        prompt += "5. 代码结构和关键组件\n"
-        prompt += "6. 关键函数分析\n"
-        prompt += "7. 数据结构分析\n"
-        prompt += "8. 核心算法分析\n"
-        prompt += '''使用<doc_skeleton>标签包裹文档骨架，例如：
+        prompt += "At the same time, generate a project-document skeleton with a detailed heading structure for:\n"
+        prompt += "1. Project overview\n"
+        prompt += "2. Project functionality\n"
+        prompt += "3. Project architecture\n"
+        prompt += "4. Module relationships\n"
+        prompt += "5. Code structure and key components\n"
+        prompt += "6. Key function analysis\n"
+        prompt += "7. Data structure analysis\n"
+        prompt += "8. Core algorithm analysis\n"
+        prompt += '''Wrap the document skeleton in <doc_skeleton> tags, for example:
         <doc_skeleton>
-        文档骨架
+        Document skeleton
         </doc_skeleton>
         '''
-        prompt += "\n请为每个部分提供详细的子标题结构，后续轮次将基于此骨架进行内容完善。"
+        prompt += "\nProvide a detailed subheading structure for each section. Later iterations will use this skeleton to fill in the content."
         return prompt
     
     @staticmethod
     def create_analysis_plan_system_prompt() -> str:
         """制定分析计划的系统 prompt"""
-        sys_prompt = "你是一个 C 项目分析专家，擅长制定详细的项目分析计划和文档结构。"
-        sys_prompt += "**注意事项：**"
-        sys_prompt += "1. 分析计划必须详细，包括每个模块的分析任务和验证方法\n"
-        sys_prompt += "2. 每轮迭代的任务必须基于上一轮的分析结果，不能独立进行\n"
+        sys_prompt = "You are a C project analysis expert skilled at creating detailed project analysis plans and document structures."
+        sys_prompt += "**Notes:**"
+        sys_prompt += "1. The analysis plan must be detailed and include analysis tasks and verification methods for each module.\n"
+        sys_prompt += "2. Each iteration's tasks must be based on the previous iteration's analysis results and must not be performed independently.\n"
         return sys_prompt
     
     @staticmethod
     def perform_iteration(project_name: str, current_analysis: str, 
                          analysis_plan: str, doc_skeleton: str, iteration: int) -> str:
         """执行迭代分析的 prompt"""
-        prompt = f"请基于以下 C 项目的当前分析结果和文档骨架，进行第 {iteration} 轮迭代分析和文档完善。\n\n"
-        prompt += f"项目名称：{project_name}\n\n"
-        prompt += "当前分析结果:\n"
+        prompt = f"Based on the current analysis results and document skeleton for the following C project, perform iteration {iteration} of iterative analysis and document refinement.\n\n"
+        prompt += f"Project name: {project_name}\n\n"
+        prompt += "Current analysis results:\n"
         prompt += current_analysis
         prompt += "\n"
-        prompt += f"分析计划:\n{analysis_plan}\n\n"
-        prompt += f"文档骨架:\n{doc_skeleton}\n\n"
-        prompt += "请在本轮迭代中：\n"
-        prompt += "1. 基于上一轮的分析结果进行深入分析\n"
-        prompt += "2. 检查文档骨架的准确性，如有需要可以修复骨架中不准确的地方\n"
-        prompt += "3. 为文档骨架中的各个部分填充详细内容\n"
-        prompt += "4. 补充缺失的信息\n"
-        prompt += "5. 修正错误的理解\n"
-        prompt += "6. 完善文档的细节\n"
-        prompt += "7. 不要将具体的代码细节写到分析报告中，而是使用代码定位方式，例如：'a.c [开始行：结束行]'\n"
-        prompt += "8. 不需要生成项目的使用安装说明和代码风格质量说明，只需要生成项目的分析报告\n"
-        prompt += "9. 不需要测试项目的性能，只需要分析项目的代码结构和功能\n"
-        prompt += "10. 完全专注于正在研究的特定主题，不要偏离到相关主题\n"
-        prompt += '''11. 如果修改了文档骨架，将新骨架包裹在</doc_skeleton>标签中，
+        prompt += f"Analysis plan:\n{analysis_plan}\n\n"
+        prompt += f"Document skeleton:\n{doc_skeleton}\n\n"
+        prompt += "In this iteration:\n"
+        prompt += "1. Perform deeper analysis based on the previous iteration's analysis results.\n"
+        prompt += "2. Check the document skeleton for accuracy and fix inaccurate parts if needed.\n"
+        prompt += "3. Fill in detailed content for each section in the document skeleton.\n"
+        prompt += "4. Add missing information.\n"
+        prompt += "5. Correct misunderstandings.\n"
+        prompt += "6. Improve document details.\n"
+        prompt += "7. Do not write concrete code details in the analysis report. Instead, use code locations, for example: 'a.c [start line:end line]'.\n"
+        prompt += "8. Do not generate project usage/installation instructions or code style/quality notes. Generate only the project analysis report.\n"
+        prompt += "9. Do not test project performance. Analyze only the project's code structure and functionality.\n"
+        prompt += "10. Focus completely on the specific topic under investigation and do not drift into related topics.\n"
+        prompt += '''11. If you modify the document skeleton, wrap the new skeleton in </doc_skeleton> tags,
         eg:
             <doc_skeleton>
-            新的文档骨架内容
+            New document skeleton content
             </doc_skeleton>
         '''
         return prompt
@@ -93,162 +93,162 @@ class CDocAgentPrompts:
     @staticmethod
     def perform_iteration_system_prompt() -> str:
         """迭代分析的系统 prompt"""
-        return '你是一个 C 项目分析专家，擅长基于现有分析和文档骨架进行迭代完善。'
+        return 'You are a C project analysis expert skilled at iterative refinement based on existing analysis and a document skeleton.'
     
     @staticmethod
     def generate_final_document(project_name: str, doc_skeleton: str, 
                                all_analyses: str, iteration_history: str,
                                analysis_plan: str) -> str:
         """生成最终版文档的 prompt"""
-        prompt = f"请基于以下 C 项目的文档骨架、所有分析结果和迭代历史，生成一个准确详细的最终版文档。\n\n"
-        prompt += f"项目名称：{project_name}\n\n"
-        prompt += f"分析计划:\n{analysis_plan}\n\n"
-        prompt += f"文档骨架:\n{doc_skeleton}\n\n"
-        prompt += "所有分析结果:\n"
+        prompt = f"Based on the document skeleton, all analysis results, and iteration history for the following C project, generate an accurate and detailed final document.\n\n"
+        prompt += f"Project name: {project_name}\n\n"
+        prompt += f"Analysis plan:\n{analysis_plan}\n\n"
+        prompt += f"Document skeleton:\n{doc_skeleton}\n\n"
+        prompt += "All analysis results:\n"
         prompt += all_analyses
         prompt += "\n"
-        prompt += "迭代历史:\n"
+        prompt += "Iteration history:\n"
         prompt += iteration_history
         prompt += "\n"
-        prompt += "不要将具体的代码细节写到分析报告中，而是使用代码定位方式，例如：'a.c [开始行：结束行]'\n"
-        prompt += "请严格按照文档骨架的结构生成最终文档，同时整合所有分析结果和迭代历史中的信息。\n"
-        prompt += "文档应该详细、准确，包含源代码位置信息，并严格按照分析计划执行的结果生成。\n"
+        prompt += "Do not write concrete code details in the analysis report. Instead, use code locations, for example: 'a.c [start line:end line]'.\n"
+        prompt += "Generate the final document strictly according to the document skeleton structure while integrating information from all analysis results and iteration history.\n"
+        prompt += "The document should be detailed and accurate, include source-code location information, and be generated strictly from the results of executing the analysis plan.\n"
         return prompt
     
     @staticmethod
     def generate_final_document_system_prompt() -> str:
         """生成最终文档的系统 prompt"""
-        return '你是一个 C 项目分析专家，擅长基于文档骨架和分析结果生成详细准确的项目文档。'
+        return 'You are a C project analysis expert skilled at generating detailed and accurate project documentation from a document skeleton and analysis results.'
     
     @staticmethod
     def generate_spec(project_name: str, branch_name: str, today: str,
                      files_info: str, functions_info: str, structs_info: str,
                      all_analyses: str) -> str:
         """生成 spec-kit spec 文档的 prompt"""
-        return f"""请基于以下 C 项目分析结果，生成一个 spec-kit 格式的功能规格文档（spec.md），用于指导将该 C 项目重写为 Rust 版本。
+        return f"""Based on the following C project analysis results, generate a spec-kit functional specification document (spec.md) to guide rewriting this C project in Rust.
 
-项目名称：{project_name}
-Rust 项目分支：{branch_name}
-生成日期：{today}
+Project name: {project_name}
+Rust project branch: {branch_name}
+Generation date: {today}
 
-## C 项目结构分析
+## C Project Structure Analysis
 
-### 文件列表
+### File List
 {files_info}
 
-### 主要函数（前 20 个）
+### Main Functions (first 20)
 {functions_info}
 
-### 主要数据结构（前 20 个）
+### Main Data Structures (first 20)
 {structs_info}
 
-### 详细模块分析
+### Detailed Module Analysis
 {all_analyses}
 
-请生成一个完整的 spec.md 文档，包含以下内容：
+Generate a complete spec.md document containing:
 
-1. **Feature Specification**: 描述这个 C 项目的功能，以及 Rust 版本需要实现的功能
-2. **User Scenarios & Testing**: 描述 C 项目的使用场景，Rust 版本需要支持这些场景
+1. **Feature Specification**: Describe this C project's functionality and the functionality the Rust version must implement.
+2. **User Scenarios & Testing**: Describe the C project's usage scenarios. The Rust version must support these scenarios.
 3. **Requirements**: 
-   - Functional Requirements: C 项目实现的功能需求
-   - Key Entities: C 项目中的关键数据结构和它们的关系
-4. **Success Criteria**: Rust 版本需要达到的成功标准
+   - Functional Requirements: The functional requirements implemented by the C project.
+   - Key Entities: The key data structures in the C project and their relationships.
+4. **Success Criteria**: The success criteria the Rust version must meet.
 
-**重要指导原则**：
-- 专注于 C 项目的**功能**和**行为**，而不是实现细节
-- 使用场景应该描述用户如何使用这个 C 项目
-- 功能需求应该列出 C 项目提供的所有主要功能
-- 关键实体应该描述 C 项目中的核心数据结构、它们之间的关系和用途
-- 成功标准应该是可测量的，例如"能够处理相同的输入"、"产生相同的输出"等
-- 使用 spec-kit 的 spec-template.md 格式
-- 标题、正文、说明全部使用简体中文；不要输出英文章节名
+**Important guidelines**:
+- Focus on the C project's **functionality** and **behavior**, not implementation details.
+- Usage scenarios should describe how users use this C project.
+- Functional requirements should list all major functionality provided by the C project.
+- Key entities should describe the core data structures in the C project, their relationships, and their purposes.
+- Success criteria should be measurable, such as "can process the same inputs" and "produces the same outputs".
+- Use spec-kit's spec-template.md format.
+- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
 
-**输出格式**：使用标准的 spec-kit spec 文档格式，包含所有必要的章节和标记，但标题和正文统一使用简体中文。"""
+**Output format**: Use the standard spec-kit spec document format with all required sections and markers, but use Simplified Chinese consistently for titles and body text."""
     
     @staticmethod
     def generate_spec_system_prompt() -> str:
         """生成 spec 文档的系统 prompt"""
-        return '你是一个 spec-kit 专家，擅长创建用于指导 C 到 Rust 项目转换的功能规格文档。输出必须统一使用简体中文。'
+        return 'You are a spec-kit expert skilled at creating functional specification documents that guide C-to-Rust project conversion. Output must consistently use Simplified Chinese.'
     
     @staticmethod
     def generate_plan(project_name: str, branch_name: str, all_analyses: str) -> str:
         """生成 spec-kit plan 文档的 prompt"""
-        return f"""请基于以下 C 项目分析结果和 spec 文档，生成一个 spec-kit 格式的实现计划文档（plan.md），用于指导将该 C 项目重写为 Rust 版本。
+        return f"""Based on the following C project analysis results and spec document, generate a spec-kit implementation plan document (plan.md) to guide rewriting this C project in Rust.
 
-项目名称：{project_name}
-Rust 项目分支：{branch_name}
+Project name: {project_name}
+Rust project branch: {branch_name}
 
-## C 项目详细分析
+## Detailed C Project Analysis
 {all_analyses}
 
-请生成一个完整的 plan.md 文档，包含以下内容：
+Generate a complete plan.md document containing:
 
-1. **Summary**: C 项目的主要功能和 Rust 实现的技术方法
+1. **Summary**: The C project's main functionality and the technical approach for the Rust implementation.
 2. **Technical Context**: 
-   - Language/Version: Rust (指定版本)
-   - Primary Dependencies: 推荐的 Rust crates
-   - Storage: 如果 C 项目使用文件/数据库，Rust 版本对应的方案
+   - Language/Version: Rust (specify version)
+   - Primary Dependencies: Recommended Rust crates.
+   - Storage: If the C project uses files/databases, the corresponding Rust-version approach.
    - Testing: cargo test
-   - Target Platform: 与 C 项目相同的平台
-   - Project Type: library/cli/application (根据 C 项目类型)
-   - Performance Goals: 与 C 项目相当或更好的性能
-   - Constraints: 内存安全、线程安全等 Rust 特有的约束
-   - Scale/Scope: 与 C 项目相同的规模
-3. **Project Structure**: Rust 项目的目录结构
-4. **Implementation Phases**: 分阶段实现计划
+   - Target Platform: The same platform as the C project.
+   - Project Type: library/cli/application (based on the C project type)
+   - Performance Goals: Performance comparable to or better than the C project.
+   - Constraints: Rust-specific constraints such as memory safety and thread safety.
+   - Scale/Scope: The same scale as the C project.
+3. **Project Structure**: Directory structure of the Rust project.
+4. **Implementation Phases**: Phased implementation plan.
 
-**重要指导原则**：
-- 技术选型应该考虑 Rust 的最佳实践和生态系统
-- 项目结构应该符合 Rust 的标准约定（src/, tests/, Cargo.toml 等）
-- 实现计划应该分阶段，从基础到复杂
-- 考虑 C 到 Rust 的映射：C 的结构体→Rust 的 struct/enum，C 的函数→Rust 的函数等
-- 特别注意内存管理、错误处理、并发模型的转换
-- 标题、正文、说明全部使用简体中文；不要输出英文章节名
+**Important guidelines**:
+- Technical choices should consider Rust best practices and the ecosystem.
+- The project structure should follow Rust standard conventions (src/, tests/, Cargo.toml, etc.).
+- The implementation plan should be phased from basic to complex.
+- Consider C-to-Rust mappings: C structs -> Rust structs/enums, C functions -> Rust functions, and so on.
+- Pay special attention to converting memory management, error handling, and concurrency models.
+- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
 
-**输出格式**：使用 spec-kit 的 plan-template.md 格式，但标题和正文统一使用简体中文。"""
+**Output format**: Use spec-kit's plan-template.md format, but use Simplified Chinese consistently for titles and body text."""
     
     @staticmethod
     def generate_plan_system_prompt() -> str:
         """生成 plan 文档的系统 prompt"""
-        return '你是一个 Rust 架构师，擅长制定从 C 到 Rust 的详细实现计划。输出必须统一使用简体中文。'
+        return 'You are a Rust architect skilled at creating detailed implementation plans for C-to-Rust conversion. Output must consistently use Simplified Chinese.'
     
     @staticmethod
     def generate_tasks(project_name: str, branch_name: str, all_analyses: str) -> str:
         """生成 spec-kit tasks 文档的 prompt"""
-        return f"""请基于以下 C 项目分析、spec 文档和 plan 文档，生成一个 spec-kit 格式的任务列表文档（tasks.md），用于指导将该 C 项目重写为 Rust 版本。
+        return f"""Based on the following C project analysis, spec document, and plan document, generate a spec-kit task-list document (tasks.md) to guide rewriting this C project in Rust.
 
-项目名称：{project_name}
-Rust 项目分支：{branch_name}
+Project name: {project_name}
+Rust project branch: {branch_name}
 
-## C 项目分析
+## C Project Analysis
 {all_analyses}
 
-请生成一个完整的 tasks.md 文档，包含以下任务阶段：
+Generate a complete tasks.md document containing the following task phases:
 
-1. **Phase 1: Setup** - Rust 项目初始化
-2. **Phase 2: Foundational** - 基础架构实现
-3. **Phase 3-N: User Stories** - 按优先级实现各个功能模块
-4. **Final Phase: Polish** - 优化和完善
+1. **Phase 1: Setup** - Rust project initialization.
+2. **Phase 2: Foundational** - Foundational architecture implementation.
+3. **Phase 3-N: User Stories** - Implement each functional module by priority.
+4. **Final Phase: Polish** - Optimization and refinement.
 
-**任务格式**：使用 `[ID] [P?] [Story] Description` 格式
-- [P] 标记可以并行执行的任务
-- [Story] 标记任务属于哪个用户场景
-- 包含具体的文件路径
+**Task format**: Use the `[ID] [P?] [Story] Description` format.
+- [P] marks tasks that can be executed in parallel.
+- [Story] marks which user scenario the task belongs to.
+- Include concrete file paths.
 
-**重要指导原则**：
-- 任务应该按照 spec 中的用户故事优先级组织
-- 每个用户故事应该可以独立实现和测试
-- 包含测试任务（如果 spec 中要求）
-- 考虑 C 到 Rust 的转换顺序：先数据结构，再核心逻辑，最后接口
-- 标记任务之间的依赖关系
-- 标题、正文、说明全部使用简体中文；不要输出英文章节名
+**Important guidelines**:
+- Tasks should be organized by the user-story priorities in the spec.
+- Each user story should be independently implementable and testable.
+- Include test tasks if required by the spec.
+- Consider the C-to-Rust conversion order: data structures first, then core logic, then interfaces.
+- Mark dependencies between tasks.
+- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
 
-**输出格式**：使用 spec-kit 的 tasks-template.md 格式，但标题和正文统一使用简体中文。"""
+**Output format**: Use spec-kit's tasks-template.md format, but use Simplified Chinese consistently for titles and body text."""
     
     @staticmethod
     def generate_tasks_system_prompt() -> str:
         """生成 tasks 文档的系统 prompt"""
-        return '你是一个 Rust 开发专家，擅长创建详细的 C 到 Rust 转换任务列表。输出必须统一使用简体中文。'
+        return 'You are a Rust development expert skilled at creating detailed C-to-Rust conversion task lists. Output must consistently use Simplified Chinese.'
     
     # ============================================================================
     # 分层聚类方法相关 Prompts
@@ -261,7 +261,7 @@ Rust 项目分支：{branch_name}
         """生成函数簇摘要的 prompt"""
         files_info = ""
         for f in files_content:
-            files_info += f"\n=== 文件：{f['path']} ===\n"
+            files_info += f"\n=== File: {f['path']} ===\n"
             files_info += f["content"][:1500]
         
         functions_list = ""
@@ -277,62 +277,62 @@ Rust 项目分支：{branch_name}
             if isinstance(struct, dict):
                 structs_list += f"- {struct.get('name', 'unknown')}\n"
         
-        return f"""请分析以下 C 项目函数簇，生成简洁的摘要。
+        return f"""Analyze the following C project function cluster and generate a concise summary.
 
-簇名称：{cluster_name}
-簇类型：{cluster_type}
-包含文件：{', '.join([f['path'] for f in files_content])}
+Cluster name: {cluster_name}
+Cluster type: {cluster_type}
+Included files: {', '.join([f['path'] for f in files_content])}
 
-## 函数列表
+## Function List
 {functions_list}
 
-## 相关结构体
+## Related Structs
 {structs_list}
 
-## 代码内容
+## Code Content
 {files_info}
 
-请从以下几个方面生成摘要：
-1. 这个函数簇的主要职责（一句话概括）
-2. 核心功能和输入输出
-3. 关键数据结构和它们的关系
-4. 与外部的依赖关系
-5. 潜在风险点或需要注意的行为
+Generate the summary from these aspects:
+1. The main responsibility of this function cluster (summarized in one sentence).
+2. Core functionality, inputs, and outputs.
+3. Key data structures and their relationships.
+4. Dependencies on external components.
+5. Potential risk points or behaviors that need attention.
 
-**重要**：摘要控制在 300 字以内，专注于功能职责，不要陷入实现细节。"""
+**Important**: Keep the summary within 300 Chinese characters, focus on functional responsibilities, and do not get lost in implementation details."""
     
     @staticmethod
     def generate_cluster_summary_system_prompt() -> str:
         """生成函数簇摘要的系统 prompt"""
-        return '你是一个 C 代码分析专家，擅长从代码中提取功能职责和关键信息。'
+        return 'You are a C code analysis expert skilled at extracting functional responsibilities and key information from code.'
     
     @staticmethod
     def generate_file_summary(file_path: str, cluster_summaries: List[Dict]) -> str:
         """生成文件摘要的 prompt"""
         clusters_info = ""
         for cs in cluster_summaries:
-            clusters_info += f"\n### {cs['cluster_name']} 簇\n"
+            clusters_info += f"\n### {cs['cluster_name']} Cluster\n"
             clusters_info += cs['summary']
         
-        return f"""请基于以下文件包含的函数簇摘要，生成文件级别的摘要。
+        return f"""Based on the function-cluster summaries contained in the following file, generate a file-level summary.
 
-文件路径：{file_path}
+File path: {file_path}
 
-## 包含的函数簇摘要
+## Included Function-Cluster Summaries
 {clusters_info}
 
-请生成文件摘要，包括：
-1. 文件的主要职责
-2. 提供的公共接口
-3. 依赖的外部模块
-4. 在整体架构中的位置
+Generate a file summary including:
+1. The file's main responsibility.
+2. The public interfaces it provides.
+3. External modules it depends on.
+4. Its position in the overall architecture.
 
-**重要**：基于簇摘要进行汇总，不要引入新信息。"""
+**Important**: Summarize based on the cluster summaries and do not introduce new information."""
     
     @staticmethod
     def generate_file_summary_system_prompt() -> str:
         """生成文件摘要的系统 prompt"""
-        return '你是一个 C 架构分析专家，擅长从局部信息汇总出模块职责。'
+        return 'You are a C architecture analysis expert skilled at summarizing module responsibilities from local information.'
     
     @staticmethod
     def generate_module_summary(module_name: str, module_category: str, 
@@ -357,45 +357,45 @@ Rust 项目分支：{branch_name}
         for fs in file_summaries[:10]:
             file_summaries_text += f"\n{fs}\n"
         
-        return f"""请基于以下信息，生成 C 项目模块的详细摘要。
+        return f"""Based on the following information, generate a detailed summary of the C project module.
 
-模块名称：{module_name}
-模块类别：{module_category}
-内聚度分数：{cohesion_score:.2f}
-内部调用：{internal_calls}
-外部调用：{external_calls}
+Module name: {module_name}
+Module category: {module_category}
+Cohesion score: {cohesion_score:.2f}
+Internal calls: {internal_calls}
+External calls: {external_calls}
 
-## 包含文件
+## Included Files
 {files_info}
 
-## 主要函数
+## Main Functions
 {functions_list}
 
-## 核心数据结构
+## Core Data Structures
 {structs_list}
 
-## 文件摘要
+## File Summaries
 {file_summaries_text}
 
-请从以下几个方面生成模块摘要：
-1. 模块职责（能用一句话说明白）
-2. 输入和输出（清晰的接口边界）
-3. 核心接口列表
-4. 依赖哪些其他模块
-5. 必须保留的关键行为
-6. 如果模块过大，指出可以进一步拆分的点
+Generate the module summary from these aspects:
+1. Module responsibility (explainable in one sentence).
+2. Inputs and outputs (clear interface boundaries).
+3. List of core interfaces.
+4. Which other modules it depends on.
+5. Key behaviors that must be preserved.
+6. If the module is too large, identify points where it can be split further.
 
-**重要**：
-- 职责必须能用一句话说清楚
-- 输入输出必须明确
-- 核心接口必须列出
-- 依赖关系必须清晰
-- 如果做不到以上几点，说明模块划分不合理，需要继续拆分"""
+**Important**:
+- The responsibility must be explainable in one sentence.
+- Inputs and outputs must be clear.
+- Core interfaces must be listed.
+- Dependencies must be clear.
+- If the above cannot be done, state that the module split is unreasonable and needs further splitting."""
     
     @staticmethod
     def generate_module_summary_system_prompt() -> str:
         """生成模块摘要的系统 prompt"""
-        return '你是一个 C 模块化设计专家，擅长识别高内聚低耦合的模块边界。'
+        return 'You are a C modular design expert skilled at identifying high-cohesion, low-coupling module boundaries.'
     
     @staticmethod
     def generate_module_spec(project_name: str, module_name: str, 
@@ -405,47 +405,47 @@ Rust 项目分支：{branch_name}
         """为单个模块生成 spec 文档的 prompt"""
         files_list = "\n".join(files[:20])
         
-        return f"""请基于以下 C 项目模块分析结果，生成一个 spec-kit 格式的功能规格文档 (spec.md)，用于指导将该模块重写为 Rust 版本。
+        return f"""Based on the following C project module analysis results, generate a spec-kit functional specification document (spec.md) to guide rewriting this module in Rust.
 
-项目名称：{project_name}
-模块名称：{module_name}
-模块类别：{module_category}
-Rust 项目分支：{branch_name}
-生成日期：{today}
+Project name: {project_name}
+Module name: {module_name}
+Module category: {module_category}
+Rust project branch: {branch_name}
+Generation date: {today}
 
-## 模块文件
+## Module Files
 {files_list}
 
-## 主要函数
+## Main Functions
 {functions_info}
 
-## 核心数据结构
+## Core Data Structures
 {structs_info}
 
-请生成一个完整的 spec.md 文档，包含以下内容：
+Generate a complete spec.md document containing:
 
-1. **Feature Specification**: 描述这个模块的功能，以及 Rust 版本需要实现的功能
-2. **User Scenarios & Testing**: 描述模块的使用场景，Rust 版本需要支持这些场景
+1. **Feature Specification**: Describe this module's functionality and the functionality the Rust version must implement.
+2. **User Scenarios & Testing**: Describe module usage scenarios. The Rust version must support these scenarios.
 3. **Requirements**: 
-   - Functional Requirements: 模块实现的功能需求
-   - Key Entities: 模块中的关键数据结构和它们的关系
-4. **Success Criteria**: Rust 版本需要达到的成功标准
+   - Functional Requirements: The functional requirements implemented by the module.
+   - Key Entities: The key data structures in the module and their relationships.
+4. **Success Criteria**: The success criteria the Rust version must meet.
 
-**重要指导原则**：
-- 专注于模块的**功能**和**行为**，而不是实现细节
-- 使用场景应该描述如何使用这个模块
-- 功能需求应该列出模块提供的所有主要功能
-- 关键实体应该描述模块中的核心数据结构
-- 成功标准应该是可测量的
-- 使用 spec-kit 的 spec-template.md 格式
-- 标题、正文、说明全部使用简体中文；不要输出英文章节名
+**Important guidelines**:
+- Focus on the module's **functionality** and **behavior**, not implementation details.
+- Usage scenarios should describe how this module is used.
+- Functional requirements should list all major functionality provided by the module.
+- Key entities should describe the module's core data structures.
+- Success criteria should be measurable.
+- Use spec-kit's spec-template.md format.
+- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
 
-**输出格式**：使用标准的 spec-kit spec 文档格式，但标题和正文统一使用简体中文。"""
+**Output format**: Use the standard spec-kit spec document format, but use Simplified Chinese consistently for titles and body text."""
     
     @staticmethod
     def generate_module_spec_system_prompt() -> str:
         """生成模块 spec 文档的系统 prompt"""
-        return '你是一个 spec-kit 专家，擅长为单个 C 模块创建功能规格文档。输出必须统一使用简体中文。'
+        return 'You are a spec-kit expert skilled at creating functional specification documents for individual C modules. Output must consistently use Simplified Chinese.'
     
     @staticmethod
     def generate_module_plan(project_name: str, module_name: str,
@@ -465,47 +465,47 @@ Rust 项目分支：{branch_name}
             if isinstance(struct, dict):
                 structs_list += f"- {struct.get('name', 'unknown')}\n"
         
-        return f"""请基于以下 C 模块分析结果，生成一个 spec-kit 格式的实现计划文档 (plan.md)。
+        return f"""Based on the following C module analysis results, generate a spec-kit implementation plan document (plan.md).
 
-项目名称：{project_name}
-模块名称：{module_name}
-模块类别：{module_category}
-Rust 项目分支：{branch_name}
+Project name: {project_name}
+Module name: {module_name}
+Module category: {module_category}
+Rust project branch: {branch_name}
 
-## 模块文件
+## Module Files
 {files_list}
 
-## 函数列表
+## Function List
 {functions_list}
 
-## 数据结构
+## Data Structures
 {structs_list}
 
-请生成一个完整的 plan.md 文档，包含：
+Generate a complete plan.md document containing:
 
-1. **Summary**: 模块的主要功能和 Rust 实现的技术方法
+1. **Summary**: The module's main functionality and the technical approach for the Rust implementation.
 2. **Technical Context**: 
-   - Language/Version: Rust (指定版本)
-   - Primary Dependencies: 推荐的 Rust crates
+   - Language/Version: Rust (specify version)
+   - Primary Dependencies: Recommended Rust crates.
    - Testing: cargo test
-   - Performance Goals: 性能目标
-3. **Module Mapping**: C 模块到 Rust 模块的映射
-4. **Data Model**: 数据结构映射（C struct → Rust struct/enum）
-5. **Implementation Phases**: 分阶段实现计划
+   - Performance Goals: Performance goals.
+3. **Module Mapping**: Mapping from the C module to the Rust module.
+4. **Data Model**: Data-structure mapping (C struct -> Rust struct/enum).
+5. **Implementation Phases**: Phased implementation plan.
 
-**重要指导原则**：
-- 技术选型考虑 Rust 最佳实践
-- 项目结构符合 Rust 标准约定
-- 考虑 C 到 Rust 的映射
-- 特别注意内存管理、错误处理
-- 标题、正文、说明全部使用简体中文；不要输出英文章节名
+**Important guidelines**:
+- Technical choices should consider Rust best practices.
+- The project structure should follow Rust standard conventions.
+- Consider C-to-Rust mappings.
+- Pay special attention to memory management and error handling.
+- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
 
-**输出格式**：使用 spec-kit 的 plan-template.md 格式，但标题和正文统一使用简体中文。"""
+**Output format**: Use spec-kit's plan-template.md format, but use Simplified Chinese consistently for titles and body text."""
     
     @staticmethod
     def generate_module_plan_system_prompt() -> str:
         """生成模块 plan 文档的系统 prompt"""
-        return '你是一个 Rust 架构师，擅长为单个 C 模块制定 Rust 实现计划。输出必须统一使用简体中文。'
+        return 'You are a Rust architect skilled at creating Rust implementation plans for individual C modules. Output must consistently use Simplified Chinese.'
     
     @staticmethod
     def generate_module_tasks(project_name: str, module_name: str,
@@ -515,46 +515,46 @@ Rust 项目分支：{branch_name}
         """为单个模块生成 tasks 文档的 prompt"""
         files_list = "\n".join(files[:20])
         
-        return f"""请基于以下 C 模块分析，生成一个 spec-kit 格式的任务列表文档 (tasks.md)。
+        return f"""Based on the following C module analysis, generate a spec-kit task-list document (tasks.md).
 
-项目名称：{project_name}
-模块名称：{module_name}
-模块类别：{module_category}
-Rust 项目分支：{branch_name}
+Project name: {project_name}
+Module name: {module_name}
+Module category: {module_category}
+Rust project branch: {branch_name}
 
-## 模块文件
+## Module Files
 {files_list}
 
-## 函数
-{len(functions)} 个
+## Functions
+{len(functions)}
 
-## 数据结构
-{len(structs)} 个
+## Data Structures
+{len(structs)}
 
-请生成一个完整的 tasks.md 文档，包含以下任务阶段：
+Generate a complete tasks.md document containing the following task phases:
 
-1. **Phase 1: Setup** - Rust 项目初始化
-2. **Phase 2: Foundational** - 基础数据结构实现
-3. **Phase 3-N: Functions** - 按功能分组实现各个函数
-4. **Final Phase: Polish** - 优化和完善
+1. **Phase 1: Setup** - Rust project initialization.
+2. **Phase 2: Foundational** - Foundational data-structure implementation.
+3. **Phase 3-N: Functions** - Implement functions grouped by functionality.
+4. **Final Phase: Polish** - Optimization and refinement.
 
-**任务格式**：使用 `[ID] [P?] [Story] Description` 格式
-- 包含具体的文件路径
-- 标记任务依赖关系
+**Task format**: Use the `[ID] [P?] [Story] Description` format.
+- Include concrete file paths.
+- Mark task dependencies.
 
-**重要指导原则**：
-- 先实现数据结构，再实现函数
-- 相关函数分组实现
-- 包含测试任务
-- 标记可并行的任务
-- 标题、正文、说明全部使用简体中文；不要输出英文章节名
+**Important guidelines**:
+- Implement data structures first, then functions.
+- Implement related functions in groups.
+- Include test tasks.
+- Mark tasks that can be parallelized.
+- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
 
-**输出格式**：使用 spec-kit 的 tasks-template.md 格式，但标题和正文统一使用简体中文。"""
+**Output format**: Use spec-kit's tasks-template.md format, but use Simplified Chinese consistently for titles and body text."""
     
     @staticmethod
     def generate_module_tasks_system_prompt() -> str:
         """生成模块 tasks 文档的系统 prompt"""
-        return '你是一个 Rust 开发专家，擅长为单个 C 模块创建详细任务列表。输出必须统一使用简体中文。'
+        return 'You are a Rust development expert skilled at creating detailed task lists for individual C modules. Output must consistently use Simplified Chinese.'
 
 
 # ============================================================================
@@ -567,31 +567,31 @@ class CodeFixerPrompts:
     @staticmethod
     def generate_fix_prompt(error_type: str, error_message: str, file_content: str = "") -> str:
         """生成代码修复提示"""
-        prompt = f'''你是一个 Rust 代码修复专家。请修复以下错误：
+        prompt = f'''You are a Rust code repair expert. Fix the following error:
 
-错误类型：{error_type}
-错误信息：
+Error type: {error_type}
+Error message:
 {error_message}
 '''
         
         if file_content:
             prompt += f'''
-当前代码内容：
+Current code content:
 ```rust
 {file_content}
 ```
 
 '''
         
-        prompt += '''请提供修复后的完整代码，只返回代码，不要解释。
-将返回的代码包裹在 ```rust ``` 的 markdown 代码块中。'''
+        prompt += '''Provide the complete repaired code. Return only code and do not explain.
+Wrap the returned code in a ```rust ``` markdown code block.'''
         
         return prompt
     
     @staticmethod
     def system_prompt() -> str:
         """系统 prompt"""
-        return '你是一个 Rust 代码修复专家，擅长根据错误信息修复代码。'
+        return 'You are a Rust code repair expert skilled at fixing code based on error messages.'
 
 
 # ============================================================================
@@ -604,32 +604,32 @@ class TestFixerPrompts:
     @staticmethod
     def generate_fix_prompt(test_error: str, test_name: str, file_content: str = "") -> str:
         """生成测试修复提示"""
-        prompt = f'''你是一个 Rust 测试修复专家。请修复以下测试失败的问题：
+        prompt = f'''You are a Rust test repair expert. Fix the following test failure:
 
-测试名称：{test_name}
+Test name: {test_name}
 
-测试错误信息：
+Test error message:
 {test_error}
 '''
 
         if file_content:
             prompt += f'''
-相关代码内容：
+Relevant code content:
 ```rust
 {file_content}
 ```
 
 '''
         
-        prompt += '''请分析测试失败的原因，并修复代码中的逻辑和算法错误。
-只返回修复后的完整代码，不要解释。
-将返回的代码包裹在 ```rust ``` 的 markdown 代码块中。'''
+        prompt += '''Analyze the cause of the test failure and fix logic and algorithm errors in the code.
+Return only the complete repaired code and do not explain.
+Wrap the returned code in a ```rust ``` markdown code block.'''
         return prompt
     
     @staticmethod
     def system_prompt() -> str:
         """系统 prompt"""
-        return '你是一个 Rust 测试修复专家，擅长分析测试失败原因并修复代码逻辑错误。'
+        return 'You are a Rust test repair expert skilled at analyzing test failures and fixing code logic errors.'
 
 
 # ============================================================================
@@ -642,14 +642,14 @@ class RustAgentPrompts:
     @staticmethod
     def generate_project_structure_prompt(project_name: str, all_docs: str) -> str:
         """生成项目结构设计的 prompt"""
-        return f"""请根据以下项目文档，设计一个地道但严格受约束的 Rust 项目结构。
+        return f"""Based on the following project documentation, design an idiomatic but strictly constrained Rust project structure.
 
 {all_docs}
 
-请设计一个符合 Rust 惯用法、且不超出迁移范围的项目结构，包括：
-1. 项目名称：{project_name}
-2. 项目目录文件结构（**重要**：必须使用 tree 命令格式展示，并严格使用<project_file>标签包裹）
-例如：
+Design a project structure that follows Rust idioms while staying within the migration scope, including:
+1. Project name: {project_name}
+2. Project directory/file structure (**Important**: show it in tree command format and strictly wrap it in <project_file> tags)
+Example:
 <project_file>
 {project_name}/
 ├── Cargo.toml
@@ -662,125 +662,125 @@ class RustAgentPrompts:
 │   └── avl_tree_test.rs
 └── README.md
 </project_file>
-3. 主要模块划分
-4. 核心数据结构和 trait 设计
-5. 关键函数和方法签名
-6. 错误处理策略
+3. Main module breakdown.
+4. Core data structures and trait design.
+5. Key function and method signatures.
+6. Error-handling strategy.
 
-额外要求：
-- 如果上下文中提供了“迁移契约”或 allowed_rust_files，它是硬边界；目录树只能落在这些文件内
-- 如果上下文中已经提供了 C 源码片段、函数体或接口事实，这些源码事实优先于摘要性描述
-- 不要凭空创造原 C 项目中不存在的核心模块、指令集、状态机、协议、线程模型或恢复机制
-- 如果原项目明显是工具/CLI/可执行程序，Rust 项目结构必须保留对应的入口与对外使用方式，不要擅自改成纯库项目
-- 不要为了“更 Rust”而额外拆出大量新模块；只有当输入中已有明确职责边界时才拆分
-- 默认依赖策略是 std-only；如果上下文没有明确证据，不要引入第三方 crate
-- 不要输出 tests/examples/benches/ffi/release 相关目录，除非上下文明确要求且迁移契约允许
+Additional requirements:
+- If the context provides a "migration contract" or allowed_rust_files, it is a hard boundary; the directory tree may only use those files.
+- If the context already provides C source snippets, function bodies, or interface facts, those source facts take precedence over summary descriptions.
+- Do not invent core modules, instruction sets, state machines, protocols, threading models, or recovery mechanisms that do not exist in the original C project.
+- If the original project is clearly a tool/CLI/executable, the Rust project structure must preserve the corresponding entry point and external usage. Do not arbitrarily turn it into a pure library project.
+- Do not split out many extra modules just to be "more Rust"; split only when the input already contains clear responsibility boundaries.
+- The default dependency strategy is std-only; if the context has no explicit evidence, do not introduce third-party crates.
+- Do not output tests/examples/benches/ffi/release-related directories unless the context explicitly requires them and the migration contract permits them.
 """
     
     @staticmethod
     def generate_project_structure_system_prompt() -> str:
         """生成项目结构设计的系统 prompt"""
-        return """你是一个 Rust 架构设计专家，擅长根据需求文档设计地道的 Rust 项目结构。
+        return """You are a Rust architecture design expert skilled at designing idiomatic Rust project structures from requirements documents.
         
-设计原则：
-1. 遵循 Rust 惯用法，但迁移范围优先于“最佳实践发挥”
-2. 合理使用所有权和借用，避免二次可变借用和不可变借用冲突
-3. 只有在输入证据支持时才引入 trait 或额外抽象，默认保持简单直接
-4. 错误处理要克制，不擅自引入复杂错误体系
-5. 清晰的模块划分，但不要扩展出输入中不存在的能力边界
+Design principles:
+1. Follow Rust idioms, but migration scope takes priority over "best-practice embellishment".
+2. Use ownership and borrowing reasonably, avoiding secondary mutable borrows and mutable/immutable borrow conflicts.
+3. Introduce traits or extra abstractions only when supported by input evidence; keep the default simple and direct.
+4. Keep error handling restrained and do not introduce a complex error system arbitrarily.
+5. Use clear module boundaries, but do not expand capability boundaries that are absent from the input.
 """
     
     @staticmethod
     def generate_implementation_plan_prompt(project_structure: str, files_to_generate: list) -> str:
         """生成实现计划的 prompt"""
-        return f"""基于以下 Rust 项目结构设计，制定详细的实现计划。
+        return f"""Based on the following Rust project structure design, create a detailed implementation plan.
 
 {project_structure}
 
-需要生成的文件列表：
+Files that need to be generated:
 {files_to_generate}
 
-请制定一个分步骤的实现计划，包括：
-1. 第一步：创建基础数据结构和 trait
-2. 第二步：设计各个函数模块之间的依赖关系，制定自底向上的函数生成计划，确保每个函数在其依赖的函数之后生成，生成新的文件列表顺序（**注意**：将新的文件列表顺序保存到<new_files_to_generate>标签中）
-3. 第三步：实现核心功能
-4. 第四步：实现辅助功能
-5. 第五步：实现错误处理
+Create a step-by-step implementation plan, including:
+1. Step 1: Create foundational data structures and traits.
+2. Step 2: Design dependencies between function modules and create a bottom-up function generation plan, ensuring each function is generated after the functions it depends on. Generate a new file-list order (**Note**: save the new file-list order in <new_files_to_generate> tags).
+3. Step 3: Implement core functionality.
+4. Step 4: Implement auxiliary functionality.
+5. Step 5: Implement error handling.
 
-对于每个步骤，请详细说明：
-- 需要创建的文件
-- 需要实现的函数/方法
-- 关键算法和实现要点
-- 减少 unsafe 的使用
+For each step, explain in detail:
+- Files that need to be created.
+- Functions/methods that need to be implemented.
+- Key algorithms and implementation points.
+- How to reduce unsafe usage.
 
-约束：
-- 新的文件顺序只能重排 `files_to_generate` 中已有的文件，不能新增额外文件
-- 默认只使用 Rust 标准库；只有在上下文明确给出证据时才允许建议第三方 crate
-- 如果上下文中提供了 C 源码函数体、源码片段或接口事实，计划必须以这些事实为准
-- 对工具类项目，必须明确保留命令行入口、参数语义、输出行为和退出方式的迁移方案
-- 不要把只有源码位置但未给出实现依据的部分擅自扩写成复杂新设计
-- 不要规划线程安全封装、恢复机制、序列化、FFI、benchmark、属性测试、发布流程，除非上下文明确要求
-- 计划应尽量去重：不要把同一事实在 Summary、Technical Context、Implementation Phases 中反复重写
-- Phase 数量保持克制，优先使用 3-5 个阶段表达，不要无限拆分
+Constraints:
+- The new file order may only reorder files already present in `files_to_generate`; it must not add extra files.
+- By default, use only the Rust standard library; suggest third-party crates only when the context provides explicit evidence.
+- If the context provides C source function bodies, source snippets, or interface facts, the plan must follow those facts.
+- For tool projects, explicitly preserve the command-line entry point, argument semantics, output behavior, and exit behavior in the migration plan.
+- Do not expand parts that only have source locations but no implementation basis into complex new designs.
+- Do not plan thread-safety wrappers, recovery mechanisms, serialization, FFI, benchmarks, property tests, or release flows unless explicitly required by the context.
+- Deduplicate the plan as much as possible: do not rewrite the same fact repeatedly in Summary, Technical Context, and Implementation Phases.
+- Keep the number of phases restrained, preferably 3-5 phases; do not split indefinitely.
 
-请使用<implementation_plan>标签包裹实现计划。"""
+Wrap the implementation plan in <implementation_plan> tags."""
     
     @staticmethod
     def generate_implementation_plan_system_prompt() -> str:
         """生成实现计划的系统 prompt"""
-        return """你是一个 Rust 实现专家，擅长制定详细的代码实现计划。
+        return """You are a Rust implementation expert skilled at creating detailed code implementation plans.
         
-实现原则：
-1. 由简到繁，分析需要的生成函数依赖关系，自底向上，逐步实现
-2. 减少 unsafe 使用
-3. 优先使用 safe 的 Rust 标准库
-4. 遵循 Rust 编码规范
-5. 不扩写输入中没有证据支持的技术能力或工程设施"""
+Implementation principles:
+1. Move from simple to complex: analyze required generated-function dependencies and implement bottom-up, step by step.
+2. Reduce unsafe usage.
+3. Prefer safe Rust standard-library APIs.
+4. Follow Rust coding conventions.
+5. Do not expand technical capabilities or engineering facilities that are not supported by input evidence."""
     
     @staticmethod
     def generate_code_prompt(file_path: str, context: str, implementation_plan: str) -> str:
         """生成代码的 prompt"""
-        return f"""请为 Rust 项目生成以下文件的代码实现。
+        return f"""Generate the code implementation for the following file in the Rust project.
 
-文件路径：{file_path}
+File path: {file_path}
 
-项目上下文：
+Project context:
 {context}
 
-实现计划：
+Implementation plan:
 {implementation_plan}
 
-请生成地道、规范的 Rust 代码，要求：
-1. 使用地道的 Rust 惯用法
-2. 完善的错误处理（使用 Result 和 Option)
-3. 合理的类型设计
-4. 所有权和借用清晰，避免二次可变借用和不可变借用冲突
-5. 遵循 Rust 编码规范（使用 rustfmt 风格）
-6. 代码简洁、可读性好
-7. Cargo.toml 不要使用 // 注释，而要使用 # 注释
-8. 减少 unsafe 的使用
-9. 注意算法的合理正确性，避免逻辑错误
-10. 如果上下文中已经提供了 C 源码片段、函数体、宏、全局变量或接口事实，必须优先按照这些源码事实实现，不要自行脑补
-11. 如果原项目是工具/CLI，必须保持对外使用接口一致，不要擅自改变参数形式、入口方式、输出通道或退出语义
-12. 如果当前 Rust 文件与某个 C 函数/模块明显对应，应尽量贴着对应源码迁移，而不是只根据模块摘要重写成另一套逻辑
-13. 只能实现当前文件职责范围内的代码；不要顺手加入与当前文件无关的新类型、新 trait、新模块协议
-14. 默认只使用 std；如果上下文没有明确允许，不要使用 serde、tokio、anyhow、thiserror、clap、rand、regex 等外部依赖
-15. 不要引入线程安全封装、恢复机制、FFI、benchmark、属性测试、发布脚本或“更完整”的附加工程设施
-16. 如证据不足，保持实现最小且保守；不要为了显得完善而扩大功能边界
+Generate idiomatic, standard Rust code with these requirements:
+1. Use idiomatic Rust patterns.
+2. Provide complete error handling (using Result and Option).
+3. Use reasonable type design.
+4. Keep ownership and borrowing clear, avoiding secondary mutable borrows and mutable/immutable borrow conflicts.
+5. Follow Rust coding conventions (rustfmt style).
+6. Keep the code concise and readable.
+7. In Cargo.toml, use # comments instead of // comments.
+8. Reduce unsafe usage.
+9. Pay attention to reasonable algorithmic correctness and avoid logic errors.
+10. If the context already provides C source snippets, function bodies, macros, global variables, or interface facts, implement according to those source facts first; do not invent details yourself.
+11. If the original project is a tool/CLI, keep the external usage interface consistent. Do not arbitrarily change argument forms, entry points, output channels, or exit semantics.
+12. If the current Rust file clearly corresponds to a C function/module, migrate as closely as possible to the corresponding source code instead of rewriting a different logic only from the module summary.
+13. Implement only code within the current file's responsibility; do not opportunistically add new types, traits, or module protocols unrelated to the current file.
+14. Use only std by default; if the context does not explicitly allow it, do not use external dependencies such as serde, tokio, anyhow, thiserror, clap, rand, or regex.
+15. Do not introduce thread-safety wrappers, recovery mechanisms, FFI, benchmarks, property tests, release scripts, or "more complete" additional engineering facilities.
+16. If evidence is insufficient, keep the implementation minimal and conservative; do not expand functional boundaries to appear more complete.
 
-请直接输出代码内容，不要包含其他说明文字。使用```rust 代码块包裹代码。"""
+Output the code content directly with no other explanatory text. Wrap the code in a ```rust code block."""
     
     @staticmethod
     def generate_code_system_prompt() -> str:
         """生成代码的系统 prompt"""
-        return """你是一个 Rust 编程专家，擅长生成地道、规范的 Rust 代码。
+        return """You are a Rust programming expert skilled at generating idiomatic, standard Rust code.
         
-代码风格：
-1. 使用 Rust 惯用法
-2. 清晰的命名
-3. 合理的抽象
-4. 高效的实现
-5. 抽象必须克制，不能超出输入中已有能力范围"""
+Code style:
+1. Use Rust idioms.
+2. Use clear naming.
+3. Use reasonable abstractions.
+4. Implement efficiently.
+5. Abstractions must be restrained and must not exceed the capability scope already present in the input."""
 
 
 # ============================================================================
@@ -793,87 +793,87 @@ class SpecAgentPrompts:
     @staticmethod
     def generate_repo_manifest(project_info: Dict) -> str:
         """生成 repo_manifest 文档的 prompt"""
-        return f"""请根据以下 C 项目信息，生成一个详细的仓库地图文档 (00_repo_manifest.md)。
+        return f"""Based on the following C project information, generate a detailed repository map document (00_repo_manifest.md).
 
-项目名称：{project_info['project_name']}
-C 文件数量：{len(project_info['c_files'])}
-头文件数量：{len(project_info['h_files'])}
-其他文件数量：{len(project_info['other_files'])}
-构建系统：{project_info['build_system']}
-可执行文件：{', '.join(project_info['executables']) if project_info['executables'] else '无'}
-库文件：{', '.join(project_info['libraries']) if project_info['libraries'] else '无'}
+Project name: {project_info['project_name']}
+Number of C files: {len(project_info['c_files'])}
+Number of header files: {len(project_info['h_files'])}
+Number of other files: {len(project_info['other_files'])}
+Build system: {project_info['build_system']}
+Executables: {', '.join(project_info['executables']) if project_info['executables'] else 'None'}
+Libraries: {', '.join(project_info['libraries']) if project_info['libraries'] else 'None'}
 
-## C 文件列表
+## C File List
 {chr(10).join(project_info['c_files'][:50])}
 
-## 头文件列表
+## Header File List
 {chr(10).join(project_info['h_files'][:50])}
 
-## README 内容
-{project_info['readme_content'][:2000] if project_info['readme_content'] else '无 README 文件'}
+## README Content
+{project_info['readme_content'][:2000] if project_info['readme_content'] else 'No README file'}
 
-请生成一个详细的仓库地图文档，包括：
-1. 项目概述
-2. 目录结构分析
-3. 核心源文件列表及其职责
-4. 头文件组织
-5. 构建系统说明
-6. 可执行程序和库
-7. 后续需要重点分析的子目录
+Generate a detailed repository map document including:
+1. Project overview.
+2. Directory structure analysis.
+3. Core source file list and responsibilities.
+4. Header file organization.
+5. Build system description.
+6. Executables and libraries.
+7. Subdirectories that need focused follow-up analysis.
 
-**重要约束**：
-1. 只能使用输入中明确给出的事实，不得补写未出现的目录树、头文件、可执行文件或库文件。
-2. 如果某项信息缺失，直接写“未在当前输入中观察到”，不要使用“假设”“推测”“可能存在”。
-3. 文件职责只能基于文件名和 README 摘要做保守描述，避免臆造实现细节。
-4. 该文档是后续 Rust 迁移的导航页，优先保留可追溯的文件路径和目录信息。"""
+**Important constraints**:
+1. Use only facts explicitly provided in the input. Do not add directory trees, header files, executables, or libraries that do not appear.
+2. If any information is missing, directly write "not observed in the current input"; do not use "assume", "infer", or "may exist".
+3. File responsibilities may only be described conservatively from file names and the README summary; avoid inventing implementation details.
+4. This document is a navigation page for the later Rust migration; prioritize traceable file paths and directory information."""
     
     @staticmethod
     def generate_repo_manifest_system_prompt() -> str:
         """生成 repo_manifest 文档的系统 prompt"""
-        return '你是一个严谨的 C 项目架构分析专家。只记录输入中明确存在的仓库事实，禁止虚构目录、头文件、产物和职责。'
+        return 'You are a rigorous C project architecture analysis expert. Record only repository facts explicitly present in the input, and never fabricate directories, header files, artifacts, or responsibilities.'
     
     @staticmethod
     def identify_subsystems(project_info: Dict, file_count: int, 
                            functions_count: int, structs_count: int) -> str:
         """识别子系统的 prompt"""
-        return f"""请分析以下 C 项目，识别出主要的子系统/模块。
+        return f"""Analyze the following C project and identify the main subsystems/modules.
 
-项目名称：{project_info['project_name']}
-文件数量：{file_count}
-函数数量：{functions_count}
-结构体数量：{structs_count}
+Project name: {project_info['project_name']}
+Number of files: {file_count}
+Number of functions: {functions_count}
+Number of structs: {structs_count}
 
-## 文件列表
-C 文件：{', '.join(project_info['c_files'][:30])}
-头文件：{', '.join(project_info['h_files'][:30])}
+## File List
+C files: {', '.join(project_info['c_files'][:30])}
+Header files: {', '.join(project_info['h_files'][:30])}
 
-请识别项目中的主要子系统/模块，并以 JSON 数组格式返回，每个子系统包含：
-- name: 子系统名称
-- description: 子系统职责描述
-- files: 该子系统包含的文件列表
+Identify the main subsystems/modules in the project and return them as a JSON array. Each subsystem must contain:
+- name: subsystem name
+- description: subsystem responsibility description
+- files: list of files contained in this subsystem
 
-例如：
+Example:
 ```json
 [
   {{
     "name": "parser",
-    "description": "解析器模块，负责解析输入文件",
+    "description": "Parser module responsible for parsing input files",
     "files": ["src/parser.c", "src/parser.h", "src/lexer.c"]
   }},
   {{
     "name": "utils",
-    "description": "工具函数库",
+    "description": "Utility function library",
     "files": ["src/utils.c", "src/utils.h"]
   }}
 ]
 ```
 
-**重要**：只返回 JSON 数组，不要其他说明文字。"""
+**Important**: Return only the JSON array and no other explanatory text."""
     
     @staticmethod
     def identify_subsystems_system_prompt() -> str:
         """识别子系统的系统 prompt"""
-        return '你是一个 C 项目模块化分析专家，擅长识别项目中的功能模块和子系统。'
+        return 'You are a C project modular analysis expert skilled at identifying functional modules and subsystems in projects.'
     
     @staticmethod
     def generate_subsystem_doc(subsystem_name: str, subsystem_description: str, 
@@ -881,34 +881,34 @@ C 文件：{', '.join(project_info['c_files'][:30])}
         """生成子系统文档的 prompt"""
         files_content = ""
         for f in files[:10]:  # 限制文件数量
-            files_content += f"\n=== 文件：{f['path']} ===\n"
+            files_content += f"\n=== File: {f['path']} ===\n"
             files_content += f["content"][:3000]  # 限制每个文件长度
         
-        return f"""请分析以下 C 项目子系统，生成详细的子系统说明文档。
+        return f"""Analyze the following C project subsystem and generate a detailed subsystem description document.
 
-子系统名称：{subsystem_name}
-子系统职责：{subsystem_description}
+Subsystem name: {subsystem_name}
+Subsystem responsibility: {subsystem_description}
 
-## 包含的文件
+## Included Files
 {chr(10).join([f['path'] for f in files])}
 
-## 文件内容
+## File Content
 {files_content}
 
-请从以下几个方面详细分析这个子系统：
-1. 子系统的主要功能和职责
-2. 关键数据结构（struct, enum, typedef 等）
-3. 对外暴露的接口（公共函数）
-4. 内部实现细节
-5. 与其他子系统的依赖关系
-6. 重要算法和实现策略
+Analyze this subsystem in detail from these aspects:
+1. The subsystem's main functionality and responsibilities.
+2. Key data structures (struct, enum, typedef, etc.).
+3. Externally exposed interfaces (public functions).
+4. Internal implementation details.
+5. Dependencies on other subsystems.
+6. Important algorithms and implementation strategies.
 
-**重要**：为每个函数和数据结构添加源代码位置信息，格式为：[文件路径：行号]。"""
+**Important**: Add source-code location information for each function and data structure, using the format: [file path:line number]."""
     
     @staticmethod
     def generate_subsystem_doc_system_prompt() -> str:
         """生成子系统文档的系统 prompt"""
-        return '你是一个 C 子系统分析专家，擅长深入分析模块的功能、接口和实现细节。'
+        return 'You are a C subsystem analysis expert skilled at deeply analyzing module functionality, interfaces, and implementation details.'
     
     @staticmethod
     def generate_interfaces_doc(public_headers: List[str], functions: List[Dict], 
@@ -929,65 +929,65 @@ C 文件：{', '.join(project_info['c_files'][:30])}
                 f"{struct.get('start_line', struct.get('startLine', '?'))}\n"
             )
         
-        return f"""请根据以下 C 项目的接口信息，生成详细的接口事实文档 (02_interfaces)。
+        return f"""Based on the following C project interface information, generate a detailed interface facts document (02_interfaces).
 
-## 公共头文件
+## Public Header Files
 {chr(10).join(public_headers[:20])}
 
-## 主要函数（前{len(functions)}个）
+## Main Functions (first {len(functions)})
 {functions_list}
 
-## 主要数据结构（前{len(structs)}个）
+## Main Data Structures (first {len(structs)})
 {structs_list}
 
-请生成一个详细的接口文档，包括：
-1. 公共头文件组织
-2. 导出函数列表（函数签名、参数说明、返回值说明）
-3. 重要结构体和类型定义
-4. 宏定义和常量
-5. 错误码定义
-6. 输入输出格式规范
-7. 配置项说明
+Generate a detailed interface document including:
+1. Public header file organization.
+2. Exported function list (function signatures, parameter descriptions, return-value descriptions).
+3. Important structs and type definitions.
+4. Macro definitions and constants.
+5. Error code definitions.
+6. Input/output format specifications.
+7. Configuration item descriptions.
 
-**重要约束**：
-1. 只能使用输入中明确给出的头文件、函数、结构体和位置信息。
-2. 严禁编造 `xxx.h`、错误码、宏、配置项、结构体、函数签名或返回值语义。
-3. 如果没有观察到某一类信息，明确写“未在当前分析结果中发现”，不要写“假设存在”“可以推测”。
-4. 所有函数和结构体条目都要保留源码位置；如果签名不完整，只能标注“定义签名待回查源码”，不能自行补全。
-5. 该文档面向 Rust 重写，优先输出可追溯事实，而不是泛化描述。"""
+**Important constraints**:
+1. Use only header files, functions, structs, and location information explicitly provided in the input.
+2. It is strictly forbidden to invent `xxx.h`, error codes, macros, configuration items, structs, function signatures, or return-value semantics.
+3. If a category of information is not observed, explicitly write "not found in the current analysis results"; do not write "assumed to exist" or "can be inferred".
+4. Preserve source locations for all function and struct entries. If a signature is incomplete, only mark "definition signature requires source lookup"; do not complete it yourself.
+5. This document is for Rust rewriting; prioritize traceable facts rather than generalized descriptions."""
     
     @staticmethod
     def generate_interfaces_doc_system_prompt() -> str:
         """生成接口文档的系统 prompt"""
-        return '你是一个严格的 C 接口事实整理专家。缺失信息必须标成缺失，禁止假设任何头文件、签名、宏、错误码或配置项。'
+        return 'You are a strict C interface fact-organizing expert. Missing information must be marked as missing; never assume any header file, signature, macro, error code, or configuration item.'
     
     @staticmethod
     def generate_behaviors_doc(project_name: str, all_analyses: str) -> str:
         """生成行为文档的 prompt"""
-        return f"""请根据以下 C 项目 {project_name} 的模块分析结果，生成详细的行为说明文档 (03_behaviors)。
+        return f"""Based on the following module analysis results for C project {project_name}, generate a detailed behavior description document (03_behaviors).
 
-## 模块分析结果
+## Module Analysis Results
 {all_analyses}
 
-请从以下几个方面生成行为说明文档：
-1. 初始化流程和启动顺序
-2. 主要用户操作流程
-3. 状态机和状态转换
-4. 错误处理流程
-5. 边界条件和特殊情况处理
-6. 与 C 版本必须保持一致的行为
-7. 性能敏感路径
+Generate the behavior description document from these aspects:
+1. Initialization flow and startup order.
+2. Main user operation flows.
+3. State machines and state transitions.
+4. Error-handling flows.
+5. Boundary conditions and special-case handling.
+6. Behaviors that must remain consistent with the C version.
+7. Performance-sensitive paths.
 
-**重要**：这里记录的是"动态行为"，而不是"静态接口"。要说明程序实际如何运行，状态如何变化。
-额外约束：
-- 只能基于输入中的模块分析结果描述行为，不得补写未观察到的分配策略、错误码语义或返回约定。
-- 如果证据不足，明确写“当前模块摘要不足以支持更细行为判断”，不要使用“可能”“推测”“大概”。
-- 不要把“没有调用关系”解释成“没有功能”或“空实现”。"""
+**Important**: This records "dynamic behavior", not "static interfaces". Explain how the program actually runs and how state changes.
+Additional constraints:
+- Describe behavior only from the module analysis results in the input. Do not add unobserved allocation strategies, error-code semantics, or return conventions.
+- If evidence is insufficient, explicitly write "the current module summary is insufficient to support a more detailed behavior judgment"; do not use "possibly", "infer", or "probably".
+- Do not interpret "no call relationships" as "no functionality" or "empty implementation"."""
     
     @staticmethod
     def generate_behaviors_doc_system_prompt() -> str:
         """生成行为文档的系统 prompt"""
-        return '你是一个 C 程序行为分析专家，擅长分析程序的动态行为和运行流程。'
+        return 'You are a C program behavior analysis expert skilled at analyzing dynamic behavior and runtime flows.'
 
     @staticmethod
     def generate_behaviors_batch_summary(
@@ -997,81 +997,81 @@ C 文件：{', '.join(project_info['c_files'][:30])}
         batch_analyses: str,
     ) -> str:
         """生成行为文档批次摘要的 prompt"""
-        return f"""请根据以下 C 项目 {project_name} 的部分模块分析结果，生成一份行为摘要。
+        return f"""Based on the following partial module analysis results for C project {project_name}, generate a behavior summary.
 
-当前批次：{batch_index}/{total_batches}
+Current batch: {batch_index}/{total_batches}
 
-## 模块分析结果
+## Module Analysis Results
 {batch_analyses}
 
-请输出一份适合后续总汇总的行为摘要，重点保留：
-1. 初始化和启动顺序
-2. 模块之间的主要交互
-3. 状态变化和关键状态机
-4. 错误处理和边界条件
-5. 后续 Rust 重写必须保持一致的行为约束
+Output a behavior summary suitable for later final aggregation, focusing on:
+1. Initialization and startup order.
+2. Main interactions between modules.
+3. State changes and key state machines.
+4. Error handling and boundary conditions.
+5. Behavioral constraints that the later Rust rewrite must keep consistent.
 
-要求：
-- 只保留高价值行为事实，不要重复静态接口列表
-- 不确定的地方明确标注“待确认”
-- 输出使用清晰的 Markdown 小节和要点
-- 不要把低内聚度、低调用计数或信息缺失误写成“空实现”“无功能”或“设计错误”"""
+Requirements:
+- Keep only high-value behavior facts; do not repeat static interface lists.
+- Clearly mark uncertain areas as "to be confirmed".
+- Output with clear Markdown sections and bullet points.
+- Do not miswrite low cohesion, low call counts, or missing information as "empty implementation", "no functionality", or "design error"."""
 
     @staticmethod
     def generate_behaviors_batch_summary_system_prompt() -> str:
         """生成行为文档批次摘要的系统 prompt"""
-        return '你是一个程序行为归纳专家，擅长把大规模模块分析压缩成可汇总的行为事实。'
+        return 'You are a program behavior synthesis expert skilled at compressing large-scale module analysis into behavior facts that can be aggregated.'
 
     @staticmethod
     def generate_behaviors_final_doc(project_name: str, batch_summaries: str) -> str:
         """基于批次摘要生成最终行为文档的 prompt"""
-        return f"""请根据以下 C 项目 {project_name} 的分批行为摘要，生成最终的行为说明文档 (03_behaviors)。
+        return f"""Based on the following batched behavior summaries for C project {project_name}, generate the final behavior description document (03_behaviors).
 
-## 批次行为摘要
+## Batched Behavior Summaries
 {batch_summaries}
 
-请生成一个完整且可用于 Rust 重写的行为文档，必须覆盖：
-1. 初始化流程和启动顺序
-2. 核心运行流程
-3. 状态机与状态转换
-4. 错误处理和恢复路径
-5. 边界条件和特殊分支
-6. 必须与 C 版本保持一致的外部可观察行为
-7. 性能敏感路径
+Generate a complete behavior document usable for the Rust rewrite. It must cover:
+1. Initialization flow and startup order.
+2. Core runtime flow.
+3. State machines and state transitions.
+4. Error handling and recovery paths.
+5. Boundary conditions and special branches.
+6. Externally observable behavior that must remain consistent with the C version.
+7. Performance-sensitive paths.
 
-要求：
-- 合并重复内容，避免批次之间互相抄写
-- 以“行为等价”为目标组织文档
-- 明确标注存在不确定性的行为点
-- 如果没有充分证据，使用“待源码确认”，不要补写猜测性行为结论"""
+Requirements:
+- Merge duplicate content and avoid copying between batches.
+- Organize the document around the goal of "behavioral equivalence".
+- Clearly mark behavior points that contain uncertainty.
+- If evidence is insufficient, use "requires source confirmation" and do not add speculative behavior conclusions."""
 
     @staticmethod
     def generate_behaviors_final_doc_system_prompt() -> str:
         """生成最终行为文档的系统 prompt"""
-        return '你是一个程序行为建模专家，擅长把多批次分析结果整合成统一、可执行的行为规范。'
+        return 'You are a program behavior modeling expert skilled at integrating multi-batch analysis results into a unified, executable behavior specification.'
     
     @staticmethod
     def generate_gaps_and_risks(project_name: str, all_analyses: str) -> str:
         """生成不确定点和风险文档的 prompt"""
-        return f"""请根据以下 C 项目 {project_name} 的分析结果，生成不确定点和风险文档 (04_gaps_and_risks)。
+        return f"""Based on the following analysis results for C project {project_name}, generate a gaps and risks document (04_gaps_and_risks).
 
-## 模块分析结果
+## Module Analysis Results
 {all_analyses}
 
-请识别并列出：
-1. 不确定点：代码中行为不明确、需要人工确认的地方
-2. 潜在风险：Rust 迁移时可能遇到的问题
-3. 需要进一步调查的模块
-4. 可能存在但未明确说明的隐式行为
-5. 全局变量和副作用
-6. 未文档化的边界条件
+Identify and list:
+1. Uncertainties: places where behavior in the code is unclear and requires human confirmation.
+2. Potential risks: problems that may be encountered during Rust migration.
+3. Modules that require further investigation.
+4. Implicit behaviors that may exist but are not clearly described.
+5. Global variables and side effects.
+6. Undocumented boundary conditions.
 
-**重要**：这是为了保证 Rust 迁移时不会遗漏重要细节，需要尽可能全面。"""
+**Important**: This is to ensure important details are not missed during Rust migration, so be as comprehensive as possible."""
     
     @staticmethod
     def generate_gaps_and_risks_system_prompt() -> str:
         """生成不确定点和风险文档的系统 prompt"""
-        return '你是一个风险评估专家，擅长识别 C 到 Rust 迁移中的不确定因素和潜在风险。'
+        return 'You are a risk assessment expert skilled at identifying uncertainties and potential risks in C-to-Rust migration.'
     
     @staticmethod
     def generate_constitution(
@@ -1081,184 +1081,184 @@ C 文件：{', '.join(project_info['c_files'][:30])}
         behavior_summary: str = "",
     ) -> str:
         """生成 constitution 文档的 prompt"""
-        return f"""请为 C 项目 {project_name} 的 Rust 迁移生成项目级原则文档 (constitution.md)。
+        return f"""Generate a project-level principles document (constitution.md) for the Rust migration of C project {project_name}.
 
-这个文档将规定整个迁移工程必须遵守的核心原则。
+This document will define the core principles that the entire migration project must follow.
 
-## 项目概况
+## Project Overview
 {project_context}
 
-## 接口摘要
+## Interface Summary
 {interface_summary}
 
-## 行为摘要
+## Behavior Summary
 {behavior_summary}
 
-请生成一个 constitution.md 文档，包括以下章节：
+Generate a constitution.md document including the following sections:
 
-1. **Core Principles** (核心原则)
-   - 行为等价性原则
-   - 接口兼容优先原则
-   - 安全优先原则
-   - 性能约束原则
+1. **Core Principles**
+   - Behavioral equivalence principle.
+   - Interface compatibility first principle.
+   - Safety first principle.
+   - Performance constraint principle.
 
-2. **Migration Guidelines** (迁移指导)
-   - C 到 Rust 的映射规则
-   - 不确定行为处理原则
-   - 测试验证要求
+2. **Migration Guidelines**
+   - C-to-Rust mapping rules.
+   - Principles for handling uncertain behavior.
+   - Test verification requirements.
 
-3. **Quality Gates** (质量关卡)
-   - 必须通过的测试
-   - 代码审查标准
-   - 性能基准要求
+3. **Quality Gates**
+   - Tests that must pass.
+   - Code review standards.
+   - Performance benchmark requirements.
 
-**重要**：这是整个迁移工程的"法律"，后续的 spec、plan、tasks 都必须遵守这些原则。"""
+**Important**: This is the "law" for the entire migration project. Later spec, plan, and tasks documents must follow these principles."""
     
     @staticmethod
     def generate_constitution_system_prompt() -> str:
         """生成 constitution 文档的系统 prompt"""
-        return '你是一个软件工程原则制定专家，擅长为复杂迁移项目制定指导原则和质量标准。'
+        return 'You are a software engineering principles expert skilled at creating guiding principles and quality standards for complex migration projects.'
     
     @staticmethod
     def generate_spec(project_name: str, branch_name: str, today: str,
                      files_info: str, functions_info: str, structs_info: str,
                      all_analyses: str) -> str:
         """生成 spec 文档的 prompt"""
-        return f"""请基于以下 C 项目分析结果，生成一个 spec-kit 格式的功能规格文档 (spec.md)，用于指导将该 C 项目重写为 Rust 版本。
+        return f"""Based on the following C project analysis results, generate a spec-kit functional specification document (spec.md) to guide rewriting this C project in Rust.
 
-项目名称：{project_name}
-Rust 项目分支：{branch_name}
-生成日期：{today}
+Project name: {project_name}
+Rust project branch: {branch_name}
+Generation date: {today}
 
-## C 项目结构分析
+## C Project Structure Analysis
 
-### 文件列表
+### File List
 {files_info}
 
-### 主要函数
+### Main Functions
 {functions_info}
 
-### 主要数据结构
+### Main Data Structures
 {structs_info}
 
-### 详细模块分析
+### Detailed Module Analysis
 {all_analyses}
 
-请生成一个完整的 spec.md 文档，包含以下内容：
+Generate a complete spec.md document containing:
 
-1. **Feature Specification**: 描述这个 C 项目的功能，以及 Rust 版本需要实现的功能
-2. **User Scenarios & Testing**: 描述 C 项目的使用场景，Rust 版本需要支持这些场景
+1. **Feature Specification**: Describe this C project's functionality and the functionality the Rust version must implement.
+2. **User Scenarios & Testing**: Describe the C project's usage scenarios. The Rust version must support these scenarios.
 3. **Requirements**: 
-   - Functional Requirements: C 项目实现的功能需求
-   - Key Entities: C 项目中的关键数据结构和它们的关系
-4. **Success Criteria**: Rust 版本需要达到的成功标准
+   - Functional Requirements: The functional requirements implemented by the C project.
+   - Key Entities: The key data structures in the C project and their relationships.
+4. **Success Criteria**: The success criteria the Rust version must meet.
 
-**重要指导原则**：
-- 专注于 C 项目的**功能**和**行为**，而不是实现细节
-- 使用场景应该描述用户如何使用这个 C 项目
-- 功能需求应该列出 C 项目提供的所有主要功能
-- 关键实体应该描述 C 项目中的核心数据结构、它们之间的关系和用途
-- 成功标准应该是可测量的，例如"能够处理相同的输入"、"产生相同的输出"等
-- 使用 spec-kit 的 spec-template.md 格式
-- 标题、正文、说明全部使用简体中文；不要输出英文章节名
-- 避免把“文件列表/函数列表/结构体列表”在多个章节逐项复述；只保留后续 Rust 迁移真正需要的事实
-- 每条 requirement 必须能追溯到输入中的文件、函数、类型或行为摘要；没有证据就标注缺失
-- 不要扩写输入中没有证据的能力，如线程安全封装、恢复机制、序列化、FFI、benchmark、发布流程
-- 不要把“Rust 最佳实践”写成新增功能需求；spec 只描述必须迁移的行为边界
+**Important guidelines**:
+- Focus on the C project's **functionality** and **behavior**, not implementation details.
+- Usage scenarios should describe how users use this C project.
+- Functional requirements should list all major functionality provided by the C project.
+- Key entities should describe the core data structures in the C project, their relationships, and their purposes.
+- Success criteria should be measurable, such as "can process the same inputs" and "produces the same outputs".
+- Use spec-kit's spec-template.md format.
+- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
+- Avoid repeating the "file list/function list/struct list" item by item across multiple sections; keep only facts truly needed for the later Rust migration.
+- Every requirement must be traceable to a file, function, type, or behavior summary in the input. If there is no evidence, mark it as missing.
+- Do not expand capabilities not evidenced in the input, such as thread-safety wrappers, recovery mechanisms, serialization, FFI, benchmarks, or release flows.
+- Do not turn "Rust best practices" into new functional requirements; the spec describes only behavior boundaries that must be migrated.
 
-**输出格式**：使用标准的 spec-kit spec 文档格式，包含所有必要的章节和标记，但标题和正文统一使用简体中文。"""
+**Output format**: Use the standard spec-kit spec document format with all required sections and markers, but use Simplified Chinese consistently for titles and body text."""
     
     @staticmethod
     def generate_spec_system_prompt() -> str:
         """生成 spec 文档的系统 prompt"""
-        return '你是一个严格的 spec-kit 规格作者。只保留迁移必需的功能与行为事实，禁止把缺失信息扩写成新需求。输出必须统一使用简体中文。'
+        return 'You are a strict spec-kit specification writer. Keep only functionality and behavior facts required for migration, and never expand missing information into new requirements. Output must consistently use Simplified Chinese.'
     
     @staticmethod
     def generate_plan(project_name: str, branch_name: str, all_analyses: str) -> str:
         """生成 plan 文档的 prompt"""
-        return f"""请基于以下 C 项目分析结果和 spec 文档，生成一个 spec-kit 格式的实现计划文档 (plan.md)，用于指导将该 C 项目重写为 Rust 版本。
+        return f"""Based on the following C project analysis results and spec document, generate a spec-kit implementation plan document (plan.md) to guide rewriting this C project in Rust.
 
-项目名称：{project_name}
-Rust 项目分支：{branch_name}
+Project name: {project_name}
+Rust project branch: {branch_name}
 
-## C 项目详细分析
+## Detailed C Project Analysis
 {all_analyses}
 
-请生成一个完整的 plan.md 文档，包含以下内容：
+Generate a complete plan.md document containing:
 
-1. **Summary**: C 项目的主要功能和 Rust 实现的技术方法
+1. **Summary**: The C project's main functionality and the technical approach for the Rust implementation.
 2. **Technical Context**: 
-   - Language/Version: Rust (指定版本)
-   - Primary Dependencies: 推荐的 Rust crates
-   - Storage: 如果 C 项目使用文件/数据库，Rust 版本对应的方案
+   - Language/Version: Rust (specify version)
+   - Primary Dependencies: Recommended Rust crates.
+   - Storage: If the C project uses files/databases, the corresponding Rust-version approach.
    - Testing: cargo test
-   - Target Platform: 与 C 项目相同的平台
-   - Project Type: library/cli/application (根据 C 项目类型)
-   - Performance Goals: 与 C 项目相当或更好的性能
-   - Constraints: 内存安全、线程安全等 Rust 特有的约束
-   - Scale/Scope: 与 C 项目相同的规模
-3. **Project Structure**: Rust 项目的目录结构
-4. **Implementation Phases**: 分阶段实现计划
+   - Target Platform: The same platform as the C project.
+   - Project Type: library/cli/application (based on the C project type)
+   - Performance Goals: Performance comparable to or better than the C project.
+   - Constraints: Rust-specific constraints such as memory safety and thread safety.
+   - Scale/Scope: The same scale as the C project.
+3. **Project Structure**: Directory structure of the Rust project.
+4. **Implementation Phases**: Phased implementation plan.
 
-**重要指导原则**：
-- 技术选型默认从 Rust 标准库开始；只有输入中有明确证据时才建议第三方 crate
-- 项目结构应该符合 Rust 的标准约定，但不要因此新增原项目没有证据支持的模块或工程设施
-- 实现计划应该分阶段，从基础到复杂
-- 考虑 C 到 Rust 的映射：C 的结构体→Rust 的 struct/enum，C 的函数→Rust 的函数等
-- 特别注意内存管理、错误处理、并发模型的转换
-- 标题、正文、说明全部使用简体中文；不要输出英文章节名
-- 不要规划线程安全封装、恢复机制、序列化、FFI、benchmark、发布到 crates.io 等无证据扩展
-- 避免和 spec/接口文档重复抄写同一批函数事实；plan 只保留迁移步骤、文件映射和必要技术决策
-- 阶段数量保持克制，优先 3-5 个阶段
+**Important guidelines**:
+- Technical choices should start from the Rust standard library by default; suggest third-party crates only when there is explicit evidence in the input.
+- The project structure should follow Rust standard conventions, but do not add modules or engineering facilities not supported by evidence from the original project.
+- The implementation plan should be phased from basic to complex.
+- Consider C-to-Rust mappings: C structs -> Rust structs/enums, C functions -> Rust functions, and so on.
+- Pay special attention to converting memory management, error handling, and concurrency models.
+- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
+- Do not plan thread-safety wrappers, recovery mechanisms, serialization, FFI, benchmarks, publishing to crates.io, or other unevidenced extensions.
+- Avoid copying the same batch of function facts from the spec/interface docs; the plan should keep only migration steps, file mappings, and necessary technical decisions.
+- Keep the number of phases restrained, preferably 3-5 phases.
 
-**输出格式**：使用 spec-kit 的 plan-template.md 格式，但标题和正文统一使用简体中文。"""
+**Output format**: Use spec-kit's plan-template.md format, but use Simplified Chinese consistently for titles and body text."""
     
     @staticmethod
     def generate_plan_system_prompt() -> str:
         """生成 plan 文档的系统 prompt"""
-        return '你是一个克制的 Rust 架构师。计划必须以迁移范围为边界，不得为追求完整性而扩写新能力。输出必须统一使用简体中文。'
+        return 'You are a restrained Rust architect. Plans must be bounded by the migration scope and must not expand new capabilities in pursuit of completeness. Output must consistently use Simplified Chinese.'
     
     @staticmethod
     def generate_tasks(project_name: str, branch_name: str, all_analyses: str) -> str:
         """生成 tasks 文档的 prompt"""
-        return f"""请基于以下 C 项目分析、spec 文档和 plan 文档，生成一个 spec-kit 格式的任务列表文档 (tasks.md)，用于指导将该 C 项目重写为 Rust 版本。
+        return f"""Based on the following C project analysis, spec document, and plan document, generate a spec-kit task-list document (tasks.md) to guide rewriting this C project in Rust.
 
-项目名称：{project_name}
-Rust 项目分支：{branch_name}
+Project name: {project_name}
+Rust project branch: {branch_name}
 
-## C 项目分析
+## C Project Analysis
 {all_analyses}
 
-请生成一个完整的 tasks.md 文档，包含以下任务阶段：
+Generate a complete tasks.md document containing the following task phases:
 
-1. **Phase 1: Setup** - Rust 项目初始化
-2. **Phase 2: Foundational** - 基础架构实现
-3. **Phase 3-N: User Stories** - 按优先级实现各个功能模块
-4. **Final Phase: Polish** - 优化和完善
+1. **Phase 1: Setup** - Rust project initialization.
+2. **Phase 2: Foundational** - Foundational architecture implementation.
+3. **Phase 3-N: User Stories** - Implement each functional module by priority.
+4. **Final Phase: Polish** - Optimization and refinement.
 
-**任务格式**：使用 `[ID] [P?] [Story] Description` 格式
-- [P] 标记可以并行执行的任务
-- [Story] 标记任务属于哪个用户场景
-- 包含具体的文件路径
+**Task format**: Use the `[ID] [P?] [Story] Description` format.
+- [P] marks tasks that can be executed in parallel.
+- [Story] marks which user scenario the task belongs to.
+- Include concrete file paths.
 
-**重要指导原则**：
-- 任务应该按照 spec 中的用户故事优先级组织
-- 每个用户故事应该可以独立实现和测试
-- 包含测试任务（如果 spec 中要求）
-- 考虑 C 到 Rust 的转换顺序：先数据结构，再核心逻辑，最后接口
-- 标记任务之间的依赖关系
-- 标题、正文、说明全部使用简体中文；不要输出英文章节名
-- 不要为同一项工作创建重复任务；任务应直接对应一个明确的迁移动作
-- Phase 数量保持克制，避免扩展到 Phase 8/9/10 之类的尾部工程化阶段
-- 不要加入无证据的线程安全、恢复机制、序列化、FFI、benchmark、发布流程任务
-- 文件路径只写输入中可推导出的 Rust 目标文件，不要凭空新增大批支撑文件
+**Important guidelines**:
+- Tasks should be organized by the user-story priorities in the spec.
+- Each user story should be independently implementable and testable.
+- Include test tasks if required by the spec.
+- Consider the C-to-Rust conversion order: data structures first, then core logic, then interfaces.
+- Mark dependencies between tasks.
+- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
+- Do not create duplicate tasks for the same work; each task should correspond directly to one clear migration action.
+- Keep the number of phases restrained and avoid expanding into tail engineering phases such as Phase 8/9/10.
+- Do not add tasks for unevidenced thread safety, recovery mechanisms, serialization, FFI, benchmarks, or release flows.
+- Write only Rust target file paths that can be inferred from the input; do not invent many support files.
 
-**输出格式**：使用 spec-kit 的 tasks-template.md 格式，但标题和正文统一使用简体中文。"""
+**Output format**: Use spec-kit's tasks-template.md format, but use Simplified Chinese consistently for titles and body text."""
     
     @staticmethod
     def generate_tasks_system_prompt() -> str:
         """生成 tasks 文档的系统 prompt"""
-        return '你是一个严格控制范围的 Rust 开发专家。任务列表必须可执行、去重，并且不得超出迁移边界。输出必须统一使用简体中文。'
+        return 'You are a Rust development expert who strictly controls scope. The task list must be executable, deduplicated, and must not exceed the migration boundary. Output must consistently use Simplified Chinese.'
     
     @staticmethod
     def generate_module_summary(module_name: str, module_category: str, 
@@ -1283,45 +1283,45 @@ Rust 项目分支：{branch_name}
         for fs in file_summaries[:10]:
             file_summaries_text += f"\n{fs}\n"
         
-        return f"""请基于以下信息，生成 C 项目模块的详细摘要。
+        return f"""Based on the following information, generate a detailed summary of the C project module.
 
-模块名称：{module_name}
-模块类别：{module_category}
-内聚度分数：{cohesion_score:.2f}
-内部调用：{internal_calls}
-外部调用：{external_calls}
+Module name: {module_name}
+Module category: {module_category}
+Cohesion score: {cohesion_score:.2f}
+Internal calls: {internal_calls}
+External calls: {external_calls}
 
-## 包含文件
+## Included Files
 {files_info}
 
-## 主要函数
+## Main Functions
 {functions_list}
 
-## 核心数据结构
+## Core Data Structures
 {structs_list}
 
-## 文件摘要
+## File Summaries
 {file_summaries_text}
 
-请从以下几个方面生成模块摘要：
-1. 模块职责（能用一句话说明白）
-2. 输入和输出（清晰的接口边界）
-3. 核心接口列表
-4. 依赖哪些其他模块
-5. 必须保留的关键行为
-6. 如果模块过大，指出可以进一步拆分的点
+Generate the module summary from these aspects:
+1. Module responsibility (explainable in one sentence).
+2. Inputs and outputs (clear interface boundaries).
+3. List of core interfaces.
+4. Which other modules it depends on.
+5. Key behaviors that must be preserved.
+6. If the module is too large, identify points where it can be split further.
 
-**重要**：
-- 职责必须能用一句话说清楚
-- 输入输出必须明确
-- 核心接口必须列出
-- 依赖关系必须清晰
-- 如果做不到以上几点，说明模块划分不合理，需要继续拆分"""
+**Important**:
+- The responsibility must be explainable in one sentence.
+- Inputs and outputs must be clear.
+- Core interfaces must be listed.
+- Dependencies must be clear.
+- If the above cannot be done, state that the module split is unreasonable and needs further splitting."""
     
     @staticmethod
     def generate_module_summary_system_prompt() -> str:
         """生成模块摘要的系统 prompt"""
-        return '你是一个 C 模块化设计专家，擅长识别高内聚低耦合的模块边界。'
+        return 'You are a C modular design expert skilled at identifying high-cohesion, low-coupling module boundaries.'
     
     @staticmethod
     def generate_module_spec(project_name: str, module_name: str, 
@@ -1331,49 +1331,49 @@ Rust 项目分支：{branch_name}
         """为单个模块生成 spec 文档的 prompt"""
         files_list = "\n".join(files[:20])
         
-        return f"""请基于以下 C 项目模块分析结果，生成一个 spec-kit 格式的功能规格文档 (spec.md)，用于指导将该模块重写为 Rust 版本。
+        return f"""Based on the following C project module analysis results, generate a spec-kit functional specification document (spec.md) to guide rewriting this module in Rust.
 
-项目名称：{project_name}
-模块名称：{module_name}
-模块类别：{module_category}
-Rust 项目分支：{branch_name}
-生成日期：{today}
+Project name: {project_name}
+Module name: {module_name}
+Module category: {module_category}
+Rust project branch: {branch_name}
+Generation date: {today}
 
-## 模块文件
+## Module Files
 {files_list}
 
-## 主要函数
+## Main Functions
 {functions_info}
 
-## 核心数据结构
+## Core Data Structures
 {structs_info}
 
-请生成一个完整的 spec.md 文档，包含以下内容：
+Generate a complete spec.md document containing:
 
-1. **Feature Specification**: 描述这个模块的功能，以及 Rust 版本需要实现的功能
-2. **User Scenarios & Testing**: 描述模块的使用场景，Rust 版本需要支持这些场景
+1. **Feature Specification**: Describe this module's functionality and the functionality the Rust version must implement.
+2. **User Scenarios & Testing**: Describe module usage scenarios. The Rust version must support these scenarios.
 3. **Requirements**: 
-   - Functional Requirements: 模块实现的功能需求
-   - Key Entities: 模块中的关键数据结构和它们的关系
-4. **Success Criteria**: Rust 版本需要达到的成功标准
+   - Functional Requirements: The functional requirements implemented by the module.
+   - Key Entities: The key data structures in the module and their relationships.
+4. **Success Criteria**: The success criteria the Rust version must meet.
 
-**重要指导原则**：
-- 专注于模块的**功能**和**行为**，而不是实现细节
-- 使用场景应该描述如何使用这个模块
-- 功能需求应该列出模块提供的所有主要功能
-- 关键实体应该描述模块中的核心数据结构
-- 成功标准应该是可测量的
-- 使用 spec-kit 的 spec-template.md 格式
-- 不要把函数清单、文件清单、类型清单在每个章节反复重写；同一事实只保留一次
-- 每条 requirement 和 success criteria 都必须能回溯到输入中的模块文件、函数或类型
-- 不要扩写本模块没有证据支持的新能力、新公共 API、线程安全承诺、序列化、恢复机制、FFI 或 benchmark
+**Important guidelines**:
+- Focus on the module's **functionality** and **behavior**, not implementation details.
+- Usage scenarios should describe how this module is used.
+- Functional requirements should list all major functionality provided by the module.
+- Key entities should describe the module's core data structures.
+- Success criteria should be measurable.
+- Use spec-kit's spec-template.md format.
+- Do not repeatedly rewrite function lists, file lists, or type lists in every section; keep the same fact only once.
+- Every requirement and success criterion must be traceable to module files, functions, or types in the input.
+- Do not expand new capabilities, new public APIs, thread-safety promises, serialization, recovery mechanisms, FFI, or benchmarks that are not evidenced for this module.
 
-**输出格式**：使用标准的 spec-kit spec 文档格式，但标题和正文统一使用简体中文。"""
+**Output format**: Use the standard spec-kit spec document format, but use Simplified Chinese consistently for titles and body text."""
     
     @staticmethod
     def generate_module_spec_system_prompt() -> str:
         """生成模块 spec 文档的系统 prompt"""
-        return '你是一个严格的模块规格作者。模块 spec 只描述证据充分的功能边界，禁止重复罗列和臆造扩展能力。输出必须统一使用简体中文。'
+        return 'You are a strict module specification writer. Module specs describe only well-evidenced functional boundaries; repeated listing and invented extended capabilities are forbidden. Output must consistently use Simplified Chinese.'
     
     @staticmethod
     def generate_module_plan(project_name: str, module_name: str,
@@ -1395,49 +1395,49 @@ Rust 项目分支：{branch_name}
             elif isinstance(struct, str):
                 structs_list += f"- {struct}\n"
         
-        return f"""请基于以下 C 模块分析结果，生成一个 spec-kit 格式的实现计划文档 (plan.md)。
+        return f"""Based on the following C module analysis results, generate a spec-kit implementation plan document (plan.md).
 
-项目名称：{project_name}
-模块名称：{module_name}
-模块类别：{module_category}
-Rust 项目分支：{branch_name}
+Project name: {project_name}
+Module name: {module_name}
+Module category: {module_category}
+Rust project branch: {branch_name}
 
-## 模块文件
+## Module Files
 {files_list}
 
-## 函数列表
+## Function List
 {functions_list}
 
-## 数据结构
+## Data Structures
 {structs_list}
 
-请生成一个完整的 plan.md 文档，包含：
+Generate a complete plan.md document containing:
 
-1. **Summary**: 模块的主要功能和 Rust 实现的技术方法
+1. **Summary**: The module's main functionality and the technical approach for the Rust implementation.
 2. **Technical Context**: 
-   - Language/Version: Rust (指定版本)
-   - Primary Dependencies: 推荐的 Rust crates
+   - Language/Version: Rust (specify version)
+   - Primary Dependencies: Recommended Rust crates.
    - Testing: cargo test
-   - Performance Goals: 性能目标
-3. **Module Mapping**: C 模块到 Rust 模块的映射
-4. **Data Model**: 数据结构映射（C struct → Rust struct/enum）
-5. **Implementation Phases**: 分阶段实现计划
+   - Performance Goals: Performance goals.
+3. **Module Mapping**: Mapping from the C module to the Rust module.
+4. **Data Model**: Data-structure mapping (C struct -> Rust struct/enum).
+5. **Implementation Phases**: Phased implementation plan.
 
-**重要指导原则**：
-- 技术选型默认使用 Rust 标准库；只有在输入中有明确证据时才建议第三方 crate
-- 项目结构符合 Rust 标准约定，但不要为“更优雅”而扩写更多模块或配套设施
-- 考虑 C 到 Rust 的映射
-- 特别注意内存管理、错误处理
-- 不要把 spec 中的功能描述整段搬运到 plan；plan 只保留技术决策、文件映射和迁移顺序
-- Phase 数量保持克制，优先 3-5 个阶段
-- 不要规划线程安全封装、恢复机制、序列化、FFI、benchmark、发布流程等无证据工作项
+**Important guidelines**:
+- Use the Rust standard library by default for technical choices; suggest third-party crates only when there is explicit evidence in the input.
+- The project structure should follow Rust standard conventions, but do not expand more modules or supporting facilities for "elegance".
+- Consider C-to-Rust mappings.
+- Pay special attention to memory management and error handling.
+- Do not copy the spec's functional descriptions wholesale into the plan; the plan should keep only technical decisions, file mappings, and migration order.
+- Keep the number of phases restrained, preferably 3-5 phases.
+- Do not plan thread-safety wrappers, recovery mechanisms, serialization, FFI, benchmarks, release flows, or other unevidenced work items.
 
-**输出格式**：使用 spec-kit 的 plan-template.md 格式，但标题和正文统一使用简体中文。"""
+**Output format**: Use spec-kit's plan-template.md format, but use Simplified Chinese consistently for titles and body text."""
     
     @staticmethod
     def generate_module_plan_system_prompt() -> str:
         """生成模块 plan 文档的系统 prompt"""
-        return '你是一个克制的 Rust 架构师。模块 plan 必须围绕现有文件和函数迁移，不得扩写额外能力。输出必须统一使用简体中文。'
+        return 'You are a restrained Rust architect. Module plans must focus on migrating existing files and functions and must not expand extra capabilities. Output must consistently use Simplified Chinese.'
     
     @staticmethod
     def generate_module_tasks(project_name: str, module_name: str,
@@ -1447,49 +1447,49 @@ Rust 项目分支：{branch_name}
         """为单个模块生成 tasks 文档的 prompt"""
         files_list = "\n".join(files[:20])
         
-        return f"""请基于以下 C 模块分析，生成一个 spec-kit 格式的任务列表文档 (tasks.md)。
+        return f"""Based on the following C module analysis, generate a spec-kit task-list document (tasks.md).
 
-项目名称：{project_name}
-模块名称：{module_name}
-模块类别：{module_category}
-Rust 项目分支：{branch_name}
+Project name: {project_name}
+Module name: {module_name}
+Module category: {module_category}
+Rust project branch: {branch_name}
 
-## 模块文件
+## Module Files
 {files_list}
 
-## 函数
-{len(functions)} 个
+## Functions
+{len(functions)}
 
-## 数据结构
-{len(structs)} 个
+## Data Structures
+{len(structs)}
 
-请生成一个完整的 tasks.md 文档，包含以下任务阶段：
+Generate a complete tasks.md document containing the following task phases:
 
-1. **Phase 1: Setup** - Rust 项目初始化
-2. **Phase 2: Foundational** - 基础数据结构实现
-3. **Phase 3-N: Functions** - 按功能分组实现各个函数
-4. **Final Phase: Polish** - 优化和完善
+1. **Phase 1: Setup** - Rust project initialization.
+2. **Phase 2: Foundational** - Foundational data-structure implementation.
+3. **Phase 3-N: Functions** - Implement functions grouped by functionality.
+4. **Final Phase: Polish** - Optimization and refinement.
 
-**任务格式**：使用 `[ID] [P?] [Story] Description` 格式
-- 包含具体的文件路径
-- 标记任务依赖关系
+**Task format**: Use the `[ID] [P?] [Story] Description` format.
+- Include concrete file paths.
+- Mark task dependencies.
 
-**重要指导原则**：
-- 先实现数据结构，再实现函数
-- 相关函数分组实现
-- 仅在输入明确需要时包含测试任务
-- 标记可并行的任务
-- 不要重复拆分同一项工作，也不要把一个函数在多个阶段反复安排
-- 文件路径只允许使用从输入文件可直接推导出的 Rust 目标文件
-- Phase 数量保持克制，避免出现与当前模块无关的后期工程化阶段
-- 不要加入线程安全、恢复机制、序列化、FFI、benchmark、发布流程等无证据任务
+**Important guidelines**:
+- Implement data structures first, then functions.
+- Implement related functions in groups.
+- Include test tasks only when explicitly required by the input.
+- Mark tasks that can be parallelized.
+- Do not repeatedly split the same work, and do not schedule one function repeatedly across multiple phases.
+- File paths may only use Rust target files directly inferable from input files.
+- Keep the number of phases restrained and avoid late engineering phases unrelated to the current module.
+- Do not add tasks for unevidenced thread safety, recovery mechanisms, serialization, FFI, benchmarks, or release flows.
 
-**输出格式**：使用 spec-kit 的 tasks-template.md 格式，但标题和正文统一使用简体中文。"""
+**Output format**: Use spec-kit's tasks-template.md format, but use Simplified Chinese consistently for titles and body text."""
     
     @staticmethod
     def generate_module_tasks_system_prompt() -> str:
         """生成模块 tasks 文档的系统 prompt"""
-        return '你是一个严格控制范围的 Rust 开发专家。模块 tasks 必须去重、贴近文件迁移动作，并且不得扩展出无证据任务。输出必须统一使用简体中文。'
+        return 'You are a Rust development expert who strictly controls scope. Module tasks must be deduplicated, stay close to file migration actions, and must not expand unevidenced tasks. Output must consistently use Simplified Chinese.'
 
 
 # ============================================================================
@@ -1508,53 +1508,53 @@ class UnfinishedCodeAgentPrompts:
         documentation_context: str = "",
     ) -> str:
         """为包含占位实现的 Rust 文件生成续写 prompt"""
-        prompt = f"""下面这个 Rust 文件中仍然存在“未完成实现”的占位，需要你直接把它补成可工作的正式实现。
+        prompt = f"""The following Rust file still contains "unfinished implementation" placeholders. Complete them directly into working production implementations.
 
-目标文件：
+Target file:
 {file_path}
 
-检测到的未完成占位：
+Detected unfinished placeholders:
 {findings_summary}
 
-当前文件代码：
+Current file code:
 ```rust
 {current_code}
 ```
 
-项目上下文：
+Project context:
 {project_context}
 """
         if documentation_context:
             prompt += f"""
-补充文档上下文：
+Additional documentation context:
 {documentation_context}
 """
 
         prompt += """
-请严格遵守以下要求：
-1. 只输出修复后的完整单文件 Rust 代码，不要输出解释
-2. 保留当前文件中已经正确的结构、命名、公开接口和模块组织
-3. 重点补全 todo!()、unimplemented!()、以及明显表示“尚未实现”的 panic!/unreachable! 占位
-4. 优先实现真实逻辑，不要继续保留新的 todo!() / unimplemented!()
-5. 如果某处确实无法完整恢复，也要给出最小但语义合理的可运行实现，避免直接留空占位
-6. 不要随意删除已经存在的类型定义、字段、trait 实现和公共函数
-7. 保持 Rust 惯用法、类型设计、所有权和错误处理风格一致
+Strictly follow these requirements:
+1. Output only the complete repaired single-file Rust code, with no explanation.
+2. Preserve the structures, names, public interfaces, and module organization that are already correct in the current file.
+3. Focus on completing todo!(), unimplemented!(), and panic!/unreachable! placeholders that clearly indicate "not implemented yet".
+4. Prefer implementing real logic; do not keep adding new todo!() / unimplemented!().
+5. If some part truly cannot be fully recovered, still provide the smallest semantically reasonable runnable implementation and avoid leaving an empty placeholder.
+6. Do not arbitrarily delete existing type definitions, fields, trait implementations, or public functions.
+7. Keep Rust idioms, type design, ownership, and error-handling style consistent.
 
-请直接输出最终代码内容，并使用 ```rust 代码块包裹。"""
+Output the final code content directly and wrap it in a ```rust code block."""
         return prompt
 
     @staticmethod
     def continue_unfinished_file_system_prompt() -> str:
         """补全未完成 Rust 文件的系统 prompt"""
-        return """你是一个专门负责补全 Rust 未实现代码的专家。
+        return """You are an expert dedicated to completing unimplemented Rust code.
 
-你的任务不是重写整个项目，而是在现有文件基础上定点补齐未完成实现。
+Your task is not to rewrite the entire project, but to complete unfinished implementations precisely within the existing file.
 
-工作原则：
-1. 优先补齐真实逻辑，不保留 todo!() / unimplemented!() 占位
-2. 尽量保持现有接口和数据结构稳定
-3. 输出必须是完整、可替换原文件的单文件 Rust 代码
-4. 不输出解释，只输出代码"""
+Working principles:
+1. Prefer completing real logic and do not keep todo!() / unimplemented!() placeholders.
+2. Keep existing interfaces and data structures as stable as possible.
+3. The output must be complete single-file Rust code that can replace the original file.
+4. Do not output explanations; output only code."""
 
 
 unfinished_code_prompt_manager = UnfinishedCodeAgentPrompts()

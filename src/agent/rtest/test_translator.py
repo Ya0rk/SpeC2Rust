@@ -111,8 +111,8 @@ def _translate_one(
             {
                 "role": "system",
                 "content": (
-                    "你是 shell 测试脚本翻译助手。给你一段 C 项目原生 sh 测试，"
-                    "请把它改写为可被 rtest 框架直接运行的等价测试，不能改变测试意图。"
+                    "You are a shell test script translation assistant. Given a native sh test from a C project, "
+                    "rewrite it into an equivalent test that can run directly under the rtest framework without changing the test intent."
                 ),
             },
             {"role": "user", "content": prompt},
@@ -160,50 +160,50 @@ def _build_prompt(
     c_binary_available: bool,
 ) -> str:
     if c_binary_available:
-        c_reference_rules = f"""2. 环境变量 `$C_BIN` 指向 C 参考可执行文件的绝对路径。
-3. 测试 shell 内提供 `{project_name}-rust`（Rust）和 `{project_name}`（C）两个函数；
-   这只是调用便利，不会把 wrapper 目录注入 PATH。"""
-        comparison_rules = f"""7. 测试目的：验证 Rust 实现与 C 参考的行为一致。**优先**用：
+        c_reference_rules = f"""2. The `$C_BIN` environment variable points to the absolute path of the C reference executable.
+3. The test shell provides two functions, `{project_name}-rust` (Rust) and `{project_name}` (C);
+   these are only convenience wrappers and do not inject the wrapper directory into PATH."""
+        comparison_rules = f"""7. Test purpose: verify behavioral consistency between the Rust implementation and the C reference. **Prefer**:
    - `diff -u <("$C_BIN" args...) <("$RUST_BIN" args...)`
    - 或 `"$RUST_BIN" args... > out.txt` 后用 `grep -q` / `diff` 对比已知期望。
-   如果被测程序本身会读取 PATH（例如 which / env / shell 类工具），必须确保 C 和
-   Rust 在相同 PATH 下运行，禁止因为测试框架便利命令改变被测 PATH。
-   对 usage/help/version 这类会打印 argv[0] 的输出，禁止直接比较 `$C_BIN --help`
-   和 `$RUST_BIN --help` 的原始绝对路径；应使用上面的同名 `./{project_name}` wrapper
-   运行，或对 C/Rust 输出做完全对称的 argv[0] 归一化。"""
-        c_bin_output_rule = "- 禁止使用 `\\$RUST_BIN`、`\\$C_BIN` 这种转义，直接用 `\"$RUST_BIN\"` / `\"$C_BIN\"`。"
+   If the program under test reads PATH itself (for example, which / env / shell-like tools), make sure C and
+   Rust run under the same PATH and do not change the tested PATH for convenience of the test framework.
+   For usage/help/version outputs that print argv[0], do not compare the raw absolute paths from `$C_BIN --help`
+   and `$RUST_BIN --help` directly; use the same-named `./{project_name}` wrapper above
+   or normalize argv[0] symmetrically for both C and Rust outputs. """
+        c_bin_output_rule = '- Do not escape `$RUST_BIN` or `$C_BIN`; use `"$RUST_BIN"` / `"$C_BIN"` directly.'
     else:
-        c_reference_rules = f"""2. 当前没有可用的 C 参考可执行文件；运行时不会提供 `$C_BIN`，也不会提供 `{project_name}` C wrapper。
-3. 禁止在翻译结果里引用 `$C_BIN`、`{project_name}` C wrapper 或其它 C 对照命令。"""
-        comparison_rules = """7. 测试目的：验证 Rust 实现是否满足原脚本中的显式行为要求。
-   因为没有 C 参考可执行文件，必须删除或改写 C 对照段，不能生成 `diff "$C_BIN"...`。
-   优先保留原脚本里的 fixture、here-doc、固定期望文件、grep/case 断言、已知状态码检查；
-   如果原脚本某一段只是在比较 C/Rust 输出且没有显式期望，可删除那一段 C 对照，
-   但不能删除同一段对 Rust 行为的检查。"""
-        c_bin_output_rule = "- 禁止使用 `\\$RUST_BIN` 这种转义，直接用 `\"$RUST_BIN\"`；本次禁止使用 `$C_BIN`。"
-    return f"""把下面这段 C 项目原生 sh 测试脚本，翻译为可被 rtest 框架直接 `bash` 执行的版本。
+        c_reference_rules = f"""2. No C reference executable is available; runtime will not provide `$C_BIN`, nor the `{project_name}` C wrapper.
+3. Do not reference `$C_BIN`, the `{project_name}` C wrapper, or other C comparison commands in the translated result."""
+        comparison_rules = """7. Test purpose: verify that the Rust implementation satisfies the explicit behavioral requirements from the original script.
+   Because no C reference executable is available, C comparison sections must be removed or rewritten, and `diff "$C_BIN"...` must not be generated.
+   Prefer keeping fixtures, here-docs, fixed expected files, grep/case assertions, and known exit-code checks from the original script;
+   if a section only compares C/Rust output and has no explicit expectation, that C comparison section may be removed,
+   but checks for Rust behavior in the same section must not be removed. """
+        c_bin_output_rule = '- Do not escape `$RUST_BIN`; use `"$RUST_BIN"` directly; `$C_BIN` is forbidden in this case.'
+    return f"""Translate the following native sh test script from a C project into a version that can be executed directly by `bash` under the rtest framework.
 
-rtest 运行约定（必须严格遵守）：
-1. 环境变量 `$RUST_BIN` 指向 Rust 可执行文件的绝对路径（你的待测对象）。
+rtest runtime conventions (must be followed strictly):
+1. The `$RUST_BIN` environment variable points to the absolute path of the Rust executable (your target under test).
 {c_reference_rules}
-4. 脚本启动时 cwd 是测试临时目录，已自动把原测试目录里所有非 `.sh` 文件作为 fixture 拷进来。
-5. 你**不能**使用 `make` / `cc` / `gcc` 这类本地编译命令。
-6. 一般不要写 `cd "$(dirname "$0")"` 之类——cwd 已经正确；但如果原测试依赖
-   cwd / argv[0] / PATH 语义，可以在临时子目录里 symlink/copy `$RUST_BIN`
-   为 `./{project_name}`，再用 `(cd "$rust_dir" && ./{project_name} args...)`
-   保留 Rust 侧 argv[0] 语义。
+4. When the script starts, the cwd is the test temporary directory, and all non-`.sh` files from the original test directory have already been copied in as fixtures.
+5. You **must not** use local compilation commands such as `make` / `cc` / `gcc`.
+6. In general, do not write `cd "$(dirname "$0")"` or similar because the cwd is already correct; but if the original test depends on
+   cwd / argv[0] / PATH semantics, you may symlink/copy `$RUST_BIN`
+   to `./{project_name}` inside a temporary subdirectory and then run `(cd "$rust_dir" && ./{project_name} args...)`
+   to preserve Rust-side argv[0] semantics.
 {comparison_rules}
-8. 如果原脚本里有 `./test_<name>` 这种 C 单元测试可执行的调用，**直接删除**该步骤
-   （rtest 只验证 Rust 行为，C 单元测试与我们无关）。
-9. 保留 here-doc 形式的 fixture 写入（如 `cat > foo.txt <<EOF ... EOF`），它们对测试是必要的。
-10. 输出结尾打印一行明显的 success 标志（如 `echo "all <name> tests passed"`）。
+8. If the original script contains calls like `./test_<name>` to C unit-test executables, **delete** those steps directly
+   (rtest only verifies Rust behavior; C unit tests are not relevant here).
+9. Keep fixture writes in here-doc form (such as `cat > foo.txt <<EOF ... EOF`) because they are necessary for the test.
+10. Print an obvious success marker at the end of the output (for example, `echo "all <name> tests passed"`).
 
-输出要求：
-- 只输出可直接 `bash` 执行的脚本正文，不要任何解释、不要 markdown 包裹。
-- 必须以 `#!/usr/bin/env bash` 开头，第二行 `set -euo pipefail`。
+Output requirements:
+- Output only the script body that can be run directly by `bash`; do not provide explanations or markdown wrappers.
+- Must start with `#!/usr/bin/env bash`, and the second line must be `set -euo pipefail`.
 {c_bin_output_rule}
 
-原脚本（文件名：{script_name}）：
+Original script (file name: {script_name}):
 ```bash
 {original}
 ```

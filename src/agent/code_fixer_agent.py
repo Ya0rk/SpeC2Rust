@@ -167,7 +167,7 @@ class Fixer:
             except Exception as e:
                 print(f"读取接口契约失败：{e}")
 
-        parts = ["当前 Rust 接口契约摘要："]
+        parts = ["Current Rust interface contract summary:"]
         for rel_path, info in contract.get("files", {}).items():
             file_contract = info.get("contract", {})
             if not file_contract:
@@ -178,7 +178,7 @@ class Fixer:
                     f"{f['name']}({'pub' if f['public'] else 'private'}:{f.get('type', '?')})"
                     for f in struct.get("fields", [])
                 )
-                parts.append(f"- struct {struct['name']}: {fields or '无字段信息'}")
+                parts.append(f"- struct {struct['name']}: {fields or 'no field information'}")
             for enum in file_contract.get("public_enums", []):
                 parts.append(f"- enum {enum['name']}: {', '.join(enum.get('variants', []))}")
             if file_contract.get("constructors"):
@@ -189,17 +189,17 @@ class Fixer:
                 parts.append(f"- public_functions: {', '.join(file_contract['public_functions'])}")
             references = file_contract.get("references") or info.get("references") or []
             if references:
-                parts.append("- references (完整引用表；调用和字段访问必须以这里为准):")
+                parts.append("- references (complete reference table; calls and field accesses must follow this):")
                 parts.extend(self._format_reference_summary(references, default_path=rel_path))
 
         live_reference_summary = self._build_live_reference_summary(max_chars=max_chars)
         if live_reference_summary:
-            parts.append("\n### 当前 src/*.rs 实时引用表")
+            parts.append("\n### Current live reference table for src/*.rs")
             parts.append(live_reference_summary)
 
         text = "\n".join(parts).strip()
         if len(text) > max_chars:
-            return text[:max_chars] + "\n\n[接口契约摘要已截断]"
+            return text[:max_chars] + "\n\n[Interface contract summary truncated]"
         return text
 
     def _is_secondary_rustc_location(self, text: str, match_start: int) -> bool:
@@ -319,7 +319,7 @@ class Fixer:
         api_contract_summary = self._load_api_contract_summary()
         if api_contract_summary:
             prompt += (
-                "\n\n接口契约摘要（跨文件接口请优先遵循，不要自行发明另一套字段、构造器或枚举分支）：\n"
+                "\n\nInterface contract summary (for cross-file interfaces, follow this first; do not invent another set of fields, constructors, or enum variants):\n"
                 f"```text\n{api_contract_summary}\n```"
             )
         
@@ -528,12 +528,12 @@ class Fixer:
         normalized_error = file_group.get("normalized_error", "")
 
         if not locations:
-            return f"目标文件：{rel_path}\n\n{normalized_error}"
+            return f"Target file: {rel_path}\n\n{normalized_error}"
 
         location_text = ", ".join(f"{line}:{col}" for line, col in locations[:8])
         return (
-            f"目标文件：{rel_path}\n"
-            f"重点错误位置：{location_text}\n\n"
+            f"Target file: {rel_path}\n"
+            f"Key error locations: {location_text}\n\n"
             f"{normalized_error}"
         )
 
@@ -613,40 +613,40 @@ class Fixer:
         生成函数级修复提示。
         """
         relative_path = os.path.relpath(file_path, self.project_path).replace("\\", "/")
-        return f"""你是一个 Rust 代码修复专家。请只修复下面这个文件中的一个函数。
+        return f"""You are a Rust code repair expert. Repair only one function in the file below.
 
-错误类型：
+Error type:
 {error_type}
 
-错误信息：
+Error message:
 {error_message}
 
-文件路径：
+File path:
 {relative_path}
 
-目标函数代码：
+Target function code:
 ```rust
 {function_code}
 ```
 
-相关文件上下文：
+Relevant file context:
 ```rust
 {file_context}
 ```
 
-接口契约摘要：
+Interface contract summary:
 ```text
 {api_contract_summary}
 ```
 
-要求：
-1. 只返回修复后的“目标函数完整代码”，不要返回整个文件
-2. 不要输出解释
-3. 保持函数签名与周边结构尽量稳定，优先修复报错本身
-4. 如果函数依赖同文件中的结构体、类型别名或辅助函数，请以当前文件上下文为准
-5. 如果错误明显涉及跨文件接口，请优先遵循接口契约摘要，不要重新发明新的字段名、构造器名或枚举分支
+Requirements:
+1. Return only the complete repaired target function code; do not return the whole file.
+2. Do not output explanations.
+3. Keep the function signature and surrounding structure as stable as possible, and prioritize fixing the reported error itself.
+4. If the function depends on structs, type aliases, or helper functions in the same file, follow the current file context.
+5. If the error clearly involves a cross-file interface, follow the interface contract summary first and do not reinvent field names, constructor names, or enum variants.
 
-请把结果放在 ```rust 代码块中返回。
+Return the result in a ```rust code block.
 """
 
     def _extract_rust_supporting_context(
@@ -1599,12 +1599,12 @@ class CodeFixer(Fixer):
         normalized_error = file_group.get("normalized_error", "")
 
         if not locations:
-            return f"目标文件：{rel_path}\n\n{normalized_error}"
+            return f"Target file: {rel_path}\n\n{normalized_error}"
 
         location_text = ", ".join(f"{line}:{col}" for line, col in locations[:8])
         return (
-            f"目标文件：{rel_path}\n"
-            f"重点错误位置：{location_text}\n\n"
+            f"Target file: {rel_path}\n"
+            f"Key error locations: {location_text}\n\n"
             f"{normalized_error}"
         )
 
@@ -1650,7 +1650,7 @@ class CodeFixer(Fixer):
                 continue
             rel_path = os.path.relpath(path, self.project_path).replace("\\", "/")
             candidate_blocks.append(
-                f"=== 候选文件：{rel_path} ===\n{content}\n"
+                f"=== Candidate file: {rel_path} ===\n{content}\n"
             )
 
         if not candidate_blocks:
@@ -1660,35 +1660,35 @@ class CodeFixer(Fixer):
         contract_block = ""
         if api_contract_summary:
             contract_block = (
-                "\n\n接口契约与完整引用表：\n"
+                "\n\nInterface contract and complete reference table:\n"
                 "```text\n"
                 f"{api_contract_summary}\n"
                 "```\n"
             )
 
-        prompt = f"""下面是一次 Rust 项目修复任务。
+        prompt = f"""Below is a Rust project repair task.
 
-错误类型：
+Error type:
 {error_type}
 
-编译器/格式化器报错：
+Compiler/formatter error:
 {error_message}
 {contract_block}
 
-候选文件内容：
+Candidate file content:
 {chr(10).join(candidate_blocks)}
 
-请你判断最应该优先修改哪个文件。
+Decide which file should be modified first.
 
-输出格式必须严格如下：
-<target_file>相对路径</target_file>
+The output format must be exactly:
+<target_file>relative/path</target_file>
 
-要求：
-1. 只能选择上面给出的候选文件之一
-2. 不要输出解释
-3. 如果错误是 E0061 / no field / no method / 参数数量不匹配，优先选择“发生错误的调用方文件”，不要因为 `note: associated function defined here` 选择被调用方定义文件
-4. 判断调用是否合法时必须读取完整引用表中的 `params`、`return_type`、`owner_type`、`visibility`、`signature`
-5. 如果候选文件中的调用违反引用表签名，例如 `Bounds::new` 的 `params=[]` 却传入参数，应选择该候选文件修调用
+Requirements:
+1. Select only one of the candidate files given above.
+2. Do not output explanations.
+3. If the error is E0061 / no field / no method / argument count mismatch, prioritize the caller file where the error occurs; do not choose the callee definition file because of `note: associated function defined here`.
+4. When judging whether a call is legal, you must read `params`, `return_type`, `owner_type`, `visibility`, and `signature` from the complete reference table.
+5. If a call in a candidate file violates the reference-table signature, for example `Bounds::new` has `params=[]` but arguments are passed, select that candidate file to fix the call.
 """
 
         messages = [

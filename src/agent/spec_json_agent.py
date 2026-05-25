@@ -117,21 +117,21 @@ class SpecJsonAgent:
             # 对单个文档做轻量截断，控制上下文体积，但保留开头结构信息。
             clipped = doc["content"][:6000]
             docs_text.append(
-                f"=== 文档路径：{doc['path']} ===\n"
-                f"文档类别：{doc['category']}\n"
+                f"=== Document path: {doc['path']} ===\n"
+                f"Document category: {doc['category']}\n"
                 f"{clipped}\n"
             )
 
         project_name = Path(spec_output_dir).name
-        prompt = f"""请把下面这些由 C 项目分析阶段产出的 Spec 文档，压缩整理为一个“机器友好的 JSON”。
+        prompt = f"""Compress and organize the Spec documents produced by the C project analysis stage below into a "machine-friendly JSON".
 
-目标：
-1. 这个 JSON 将直接提供给 Rust 代码生成阶段使用
-2. 要尽量保留对代码生成真正重要的信息，减少冗长自然语言
-3. 输出必须是严格合法的 JSON，不要输出 markdown，不要输出解释
-4. 如果某类信息缺失，请使用空字符串、空数组或空对象，不要编造
+Goals:
+1. This JSON will be passed directly to the Rust code generation stage.
+2. Preserve the information that is truly important for code generation as much as possible, while reducing verbose natural language.
+3. The output must be strictly valid JSON; do not output markdown or explanations.
+4. If a category of information is missing, use an empty string, empty array, or empty object, and do not invent anything.
 
-请严格使用以下 JSON 结构：
+Strictly use the following JSON structure:
 {{
   "project_name": "",
   "global_summary": "",
@@ -182,23 +182,23 @@ class SpecJsonAgent:
   ]
 }}
 
-补充要求：
-1. 尽量把类型、接口、约束、错误场景抽成短列表
-2. 尽量把对 Rust 生成最关键的结构体、类型别名、错误类型、模块边界提炼出来
-3. `source_docs` 只保留简短摘要，不要重复全文
-4. `global_summary` 控制在 200 字以内
+Additional requirements:
+1. Try to compress types, interfaces, constraints, and error scenarios into short lists.
+2. Extract the structs, type aliases, error types, and module boundaries that are most critical for Rust generation.
+3. Keep only short summaries in `source_docs`; do not repeat the full text.
+4. Keep `global_summary` within 200 Chinese characters.
 
-项目名称：
+Project name:
 {project_name}
 
-原始 Spec 文档：
+Original Spec documents:
 {chr(10).join(docs_text)}
 """
 
         messages = [
             {
                 "role": "system",
-                "content": "你是一个擅长把程序分析文档压缩成机器可消费 JSON 的代码助手。请严格输出 JSON。"
+                "content": "You are a code assistant skilled at compressing program analysis documents into machine-consumable JSON. Output strictly JSON."
             },
             {"role": "user", "content": prompt},
         ]

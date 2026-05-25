@@ -146,7 +146,7 @@ class CDocAgent:
         # 收集当前分析结果
         current_analysis = ""
         for analysis in module_analyses:
-            current_analysis += f"### {analysis['module_name']} 模块\n"
+            current_analysis += f"### Module {analysis['module_name']}\n"
             current_analysis += analysis['analysis']
             current_analysis += "\n\n"
         
@@ -214,7 +214,7 @@ class CDocAgent:
         # 收集所有分析结果和迭代历史
         all_analyses = ""
         for analysis in module_analyses:
-            all_analyses += f"### {analysis['module_name']} 模块\n"
+            all_analyses += f"### Module {analysis['module_name']}\n"
             all_analyses += analysis['analysis']
             all_analyses += "\n\n"
         
@@ -222,7 +222,7 @@ class CDocAgent:
         iteration_history = ""
         for item in self.history:
             if item['type'] == 'iteration':
-                iteration_history += f"### 第 {item['round']} 轮迭代\n"
+                iteration_history += f"### Iteration Round {item['round']}\n"
                 iteration_history += item['content']
                 iteration_history += "\n\n"
         
@@ -280,7 +280,7 @@ class CDocAgent:
         
         all_analyses = ""
         for analysis in module_analyses:
-            all_analyses += f"### {analysis['module_name']} 模块\n"
+            all_analyses += f"### Module {analysis['module_name']}\n"
             all_analyses += analysis['analysis']
             all_analyses += "\n\n"
         

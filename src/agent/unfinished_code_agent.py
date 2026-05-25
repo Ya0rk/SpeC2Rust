@@ -78,7 +78,7 @@ class UnfinishedCodeAgent:
     def _format_findings_summary(self, findings: List[Dict[str, str]]) -> str:
         lines = []
         for item in findings:
-            lines.append(f"- 第 {item['line']} 行，{item['marker']}：{item['snippet']}")
+            lines.append(f"- Line {item['line']}, {item['marker']}: {item['snippet']}")
         return "\n".join(lines)
 
     def _build_documentation_context(self, max_chars: int = 12000) -> str:
@@ -88,7 +88,7 @@ class UnfinishedCodeAgent:
         parts = []
         current_len = 0
         for path, content in self.rust_agent.doc_contents.items():
-            chunk = f"\n=== 文档：{path} ===\n{content}\n"
+            chunk = f"\n=== Documentation: {path} ===\n{content}\n"
             if current_len + len(chunk) > max_chars:
                 remaining = max_chars - current_len
                 if remaining > 0:
@@ -116,7 +116,7 @@ class UnfinishedCodeAgent:
             file_path=rel_path,
             findings_summary=findings_summary,
             current_code=current_code,
-            project_context=project_context or "无额外项目结构上下文，请以当前文件和检测到的占位为主完成实现。",
+            project_context=project_context or "No additional project-structure context is available; complete the implementation based mainly on the current file and the detected placeholders.",
             documentation_context=documentation_context,
         )
 

@@ -825,16 +825,16 @@ class RustProjectRegistry:
                 continue
             method_ref = methods.get(method_name)
             if not method_ref:
-                findings.append(f"引用表中不存在方法 `{owner_type}::{method_name}`，请不要发明跨文件方法")
+                findings.append(f"The reference table does not contain method `{owner_type}::{method_name}`; do not invent cross-file methods")
                 continue
             if not method_ref.is_public and method_ref.path != normalized_path:
-                findings.append(f"跨文件引用了 private 方法 `{owner_type}::{method_name}`，定义于 {method_ref.path}")
+                findings.append(f"Cross-file reference to private method `{owner_type}::{method_name}`, defined in {method_ref.path}")
                 continue
             expected_params = [param for param in method_ref.params if param not in {"self", "&self", "&mut self"}]
             if len(args) != len(expected_params):
                 findings.append(
-                    f"方法调用参数不匹配 `{owner_type}::{method_name}`："
-                    f"引用表签名为 `{method_ref.display_signature()}`，实际传入 {len(args)} 个参数"
+                    f"Method call argument mismatch for `{owner_type}::{method_name}`: "
+                    f"the reference-table signature is `{method_ref.display_signature()}`, but {len(args)} arguments were passed"
                 )
 
         variable_types = self._infer_variable_types(content or "", known_fields)
@@ -851,10 +851,10 @@ class RustProjectRegistry:
             field_ref = known_fields[owner_type].get(field_name)
             owner_path = type_paths.get(owner_type, "")
             if not field_ref:
-                findings.append(f"引用表中 `{owner_type}` 不存在字段 `{field_name}`，请不要发明跨文件字段")
+                findings.append(f"The reference table does not contain field `{owner_type}::{field_name}`; do not invent cross-file fields")
                 continue
             if not field_ref.is_public and owner_path and owner_path != normalized_path:
-                findings.append(f"跨文件引用了 private 字段 `{owner_type}::{field_name}`，定义于 {owner_path}")
+                findings.append(f"Cross-file reference to private field `{owner_type}::{field_name}`, defined in {owner_path}")
 
         return _dedupe_keep_order(findings)
 
@@ -866,13 +866,13 @@ class RustProjectRegistry:
                 continue
             for symbol in candidate.types:
                 if symbol in other.types:
-                    findings.append(f"重复定义类型 `{symbol}`，已存在于 {other_path}")
+                    findings.append(f"Duplicate type definition `{symbol}`; it already exists in {other_path}")
             for symbol in candidate.functions:
                 if symbol in other.functions:
-                    findings.append(f"重复定义自由函数 `{symbol}`，已存在于 {other_path}")
+                    findings.append(f"Duplicate free function definition `{symbol}`; it already exists in {other_path}")
             for symbol in candidate.constants:
                 if symbol in other.constants:
-                    findings.append(f"重复定义常量或静态项 `{symbol}`，已存在于 {other_path}")
+                    findings.append(f"Duplicate const or static item `{symbol}`; it already exists in {other_path}")
         return _dedupe_keep_order(findings)
 
     def reference_findings(self, rel_path: str, content: str, planned_files: Sequence[str]) -> List[str]:
@@ -886,9 +886,9 @@ class RustProjectRegistry:
             if module in generated_modules:
                 continue
             if module in planned_modules:
-                findings.append(f"引用了尚未生成的计划模块 `crate::{module}`")
+                findings.append(f"Reference to planned module `crate::{module}` before it has been generated")
             else:
-                findings.append(f"引用了未规划模块 `crate::{module}`")
+                findings.append(f"Reference to unplanned module `crate::{module}`")
         findings.extend(self._reference_member_findings(rel_path, content))
         return findings
 
@@ -925,7 +925,7 @@ class RustProjectRegistry:
                 lines.append("  references:")
                 for ref in symbols.references:
                     lines.append(f"    - {ref.detail_line()}")
-        return "\n".join(lines) if lines else "(当前还没有已生成 Rust 符号)"
+        return "\n".join(lines) if lines else "(no generated Rust symbols yet)"
 
 
 class ContextualRustAgent(RustAgent):
@@ -1045,16 +1045,16 @@ class ContextualRustAgent(RustAgent):
         requested = self._requested_entry_kind()
         if entry_kind == "main":
             return (
-                "Rust crate 入口策略：生成可执行项目。\n"
-                f"- 用户选择：{requested}\n"
-                "- `src/main.rs` 是 crate 入口，必须承载 CLI/main 流程。\n"
-                "- 不要规划、生成或依赖 `src/lib.rs`；不要把 `main.rs` 当作库模块再由 lib re-export。"
+                "Rust crate entry strategy: generate an executable project.\n"
+                f"- User choice: {requested}\n"
+                "- `src/main.rs` is the crate entry point and must carry the CLI/main flow.\n"
+                "- Do not plan, generate, or depend on `src/lib.rs`; do not treat `main.rs` as a library module and re-export it from lib."
             )
         return (
-            "Rust crate 入口策略：生成库项目。\n"
-            f"- 用户选择：{requested}\n"
-            "- `src/lib.rs` 是 crate 入口，负责声明模块和必要 re-export。\n"
-            "- 不要规划、生成或依赖 `src/main.rs`，除非用户显式切换为 main。"
+            "Rust crate entry strategy: generate a library project.\n"
+            f"- User choice: {requested}\n"
+            "- `src/lib.rs` is the crate entry point and is responsible for declaring modules and necessary re-exports.\n"
+            "- Do not plan, generate, or depend on `src/main.rs` unless the user explicitly switches to main."
         )
 
     def _filter_entry_files(self, files: Sequence[str]) -> List[str]:
@@ -1089,58 +1089,58 @@ class ContextualRustAgent(RustAgent):
         functions = self.translation_contract.get("functions", [])
         types = self.translation_contract.get("types", [])
         parts = [
-            "迁移契约（最高优先级）：",
-            f"- 项目类型：{self.translation_contract.get('project', {}).get('kind', 'unknown')}",
-            f"- 允许生成文件：{', '.join(self.allowed_rust_files) if self.allowed_rust_files else '未限制'}",
-            f"- 依赖策略：{boundary.get('dependency_policy', 'unspecified')}",
-            f"- 允许测试文件：{bool(boundary.get('allow_tests', False))}",
-            f"- 允许示例文件：{bool(boundary.get('allow_examples', False))}",
-            f"- 允许 benchmark：{bool(boundary.get('allow_benches', False))}",
-            f"- 允许 FFI：{bool(boundary.get('allow_ffi', False))}",
+            "Migration contract (highest priority):",
+            f"- Project type: {self.translation_contract.get('project', {}).get('kind', 'unknown')}",
+            f"- Allowed generated files: {', '.join(self.allowed_rust_files) if self.allowed_rust_files else 'unrestricted'}",
+            f"- Dependency policy: {boundary.get('dependency_policy', 'unspecified')}",
+            f"- Test files allowed: {bool(boundary.get('allow_tests', False))}",
+            f"- Example files allowed: {bool(boundary.get('allow_examples', False))}",
+            f"- Benchmarks allowed: {bool(boundary.get('allow_benches', False))}",
+            f"- FFI allowed: {bool(boundary.get('allow_ffi', False))}",
             "",
-            "函数角色摘要：",
+            "Function role summary:",
         ]
         for item in functions:
             parts.append(
                 f"- {item.get('id', '')} {item.get('name', 'unknown')} "
                 f"[{item.get('role', 'unknown')}] {item.get('source', '')}"
-            )
+        )
         if types:
             parts.append("")
-            parts.append("类型事实摘要：")
+            parts.append("Type fact summary:")
             for item in types:
                 field_names = ", ".join(field.get("name", "") for field in item.get("fields", []) if field.get("name"))
-                parts.append(f"- {item.get('id', '')} {item.get('name', 'unknown')} {item.get('source', '')}: {field_names or '字段待回查'}")
+                parts.append(f"- {item.get('id', '')} {item.get('name', 'unknown')} {item.get('source', '')}: {field_names or 'fields require source lookup'}")
         forbidden = self.translation_contract.get("forbidden_without_evidence", [])
         if forbidden:
             parts.append("")
-            parts.append(f"未获证据禁止生成：{', '.join(str(item) for item in forbidden)}")
+            parts.append(f"Forbidden without evidence: {', '.join(str(item) for item in forbidden)}")
         return "\n".join(parts).strip()
 
     def _build_static_project_context(self) -> str:
         parts = [
-            f"项目名称：{self.project_name}",
-            "目标：把 C 项目按 spec 重写为结构化、惯用、可编译的 Rust 项目。",
-            "上下文策略：不要默认展开全部文档；需要更多信息时使用 <CGR_READ> 请求。",
-            "生成边界：只实现输入 C 项目和 spec 中已有的能力，不主动扩写线程安全、序列化、网络、CLI、恢复机制等无证据功能。",
-            "Rust 化迁移契约（最高优先级）：\n" + self._rust_rewrite_contract(),
+            f"Project name: {self.project_name}",
+            "Goal: rewrite the C project according to the spec into a structured, idiomatic, compilable Rust project.",
+            "Context strategy: do not expand all documents by default; use `<CGR_READ>` to request more information when needed.",
+            "Generation boundary: implement only the capabilities already present in the input C project and spec; do not proactively expand into unsupported threading, serialization, networking, CLI, recovery mechanisms, or similar features.",
+            "Rust migration contract (highest priority):\n" + self._rust_rewrite_contract(),
         ]
 
         contract_context = self._build_translation_contract_context()
         if contract_context:
-            parts.append("迁移契约（最高优先级）：\n" + contract_context)
+            parts.append("Migration contract (highest priority):\n" + contract_context)
             scope = self._contract_scope_instructions()
             if scope:
                 parts.append(scope)
         parts.append(self._entry_kind_context())
 
         if self.source_interface_summary:
-            parts.append("原始 C 对外接口事实：\n" + self.source_interface_summary)
+            parts.append("Original C external interface facts:\n" + self.source_interface_summary)
         if self.tool_interface_constraints:
-            parts.append("工具/CLI 接口保持约束：\n" + self.tool_interface_constraints)
+            parts.append("Tool/CLI interface preservation constraints:\n" + self.tool_interface_constraints)
         if self.spec_index.slices:
             overview = self._spec_overview()
-            parts.append("可用 spec 文档索引（只有索引，不是全文）：\n" + overview)
+            parts.append("Available spec document index (index only, not full text):\n" + overview)
         return "\n\n".join(part for part in parts if part).strip()
 
     def _rust_rewrite_contract(self, planned: Optional[PlannedFile] = None) -> str:
@@ -1236,7 +1236,7 @@ class ContextualRustAgent(RustAgent):
             elif kind in {"plan", "project_plan"}:
                 content = self._format_plan_summary()
             else:
-                content = f"不支持的读取类型：{kind}"
+                content = f"Unsupported read type: {kind}"
 
             block = f"\n\n=== READ {kind or 'unknown'}: {query or '(empty)'} ===\n{content}\n"
             if max_chars and total + len(block) > max_chars:
@@ -1279,7 +1279,7 @@ class ContextualRustAgent(RustAgent):
             try:
                 return Path(direct).read_text(encoding="utf-8", errors="ignore")
             except Exception as exc:
-                return f"读取源文件失败：{exc}"
+                return f"Failed to read source file: {exc}"
 
         query_tokens = _tokenize_text(normalized_query)
         scored = []
@@ -1293,7 +1293,7 @@ class ContextualRustAgent(RustAgent):
         scored.sort(key=lambda item: -item[0])
         if scored:
             return self._format_source_records([r for _, r in scored[:6]], max_chars)
-        return "没有找到匹配的 C 源码材料。可尝试按函数名或文件名请求，例如 {\"kind\":\"source\",\"query\":\"function_name\"}"
+        return "No matching C source material was found. Try requesting by function name or file name, for example {\"kind\":\"source\",\"query\":\"function_name\"}"
 
     def _format_source_records(self, records: Sequence[Dict], max_chars: int = 8000) -> str:
         parts = []
@@ -1310,7 +1310,7 @@ class ContextualRustAgent(RustAgent):
                     for c in calls if c.get("caller")
                 )
                 if caller_lines:
-                    block_lines.append(f"被调用于：{caller_lines}")
+                    block_lines.append(f"Called by: {caller_lines}")
             block_lines.append(record.get("source", ""))
             block = "\n".join(block_lines) + "\n"
             if max_chars and total + len(block) > max_chars and parts:
@@ -1323,11 +1323,11 @@ class ContextualRustAgent(RustAgent):
         normalized = (query or "").replace("\\", "/").strip()
         path = self._safe_join_existing_file(self.project_path, normalized)
         if not path:
-            return f"生成项目中不存在该 Rust 文件：{normalized}"
+            return f"The generated project does not contain this Rust file: {normalized}"
         try:
             return Path(path).read_text(encoding="utf-8", errors="ignore")
         except Exception as exc:
-            return f"读取 Rust 文件失败：{exc}"
+            return f"Failed to read Rust file: {exc}"
 
     def _extract_json_payload(self, text: str):
         source = text or ""
@@ -1490,19 +1490,19 @@ class ContextualRustAgent(RustAgent):
     def _fallback_planned_file(self, path: str) -> PlannedFile:
         normalized = path.replace("\\", "/")
         stem = os.path.splitext(os.path.basename(normalized))[0]
-        role = "Rust 项目文件"
+        role = "Rust project file"
         owns: List[str] = []
         spec_queries = [stem]
         if normalized == "Cargo.toml":
-            role = "Cargo package manifest，本地生成最小配置"
+            role = "Cargo package manifest; locally generate the minimal configuration"
         elif normalized == "README.md":
-            role = "项目说明文档"
+            role = "Project README"
         elif normalized == "src/main.rs":
-            role = "可执行 crate 入口，负责 CLI/main 流程并调用内部模块；不要作为库模块被 lib.rs re-export"
+            role = "Executable crate entry point responsible for the CLI/main flow and for calling internal modules; do not re-export it from lib.rs as a library module"
         elif normalized == "src/lib.rs":
-            role = "crate 入口，本地根据已生成模块重建"
+            role = "Crate entry point, locally rebuilt from generated modules"
         elif normalized.endswith(".rs"):
-            role = f"实现与 `{stem}` 相关的核心 Rust 类型、函数和算法"
+            role = f"Implement the core Rust types, functions, and algorithms related to `{stem}`"
             pascal = _pascal_case(stem)
             if pascal:
                 owns = [pascal]
@@ -1686,7 +1686,7 @@ class ContextualRustAgent(RustAgent):
         if not lines:
             return self._format_plan_summary()
 
-        global_index = ["\n--- 全局文件索引（仅路径+符号归属） ---"]
+        global_index = ["\n--- Global File Index (paths and symbol ownership only) ---"]
         for item in self.contextual_plan:
             item_path = item.path.replace("\\", "/")
             if item_path in relevant_paths:
@@ -1764,7 +1764,7 @@ class ContextualRustAgent(RustAgent):
             docs = self._module_spec_docs.get(module_name)
             if not docs:
                 continue
-            parts.append(f"\n--- 所属模块: {module_name} ---")
+            parts.append(f"\n--- Owning Module: {module_name} ---")
             for doc_key in ["tasks.md", "plan.md", "spec.md"]:
                 content = docs.get(doc_key, "")
                 if not content:
@@ -1808,7 +1808,7 @@ class ContextualRustAgent(RustAgent):
         if len(lines) <= 1:
             return self.registry.summary()
 
-        global_type_index = ["\n--- 全局已生成类型索引（禁止重复定义） ---"]
+        global_type_index = ["\n--- Global Generated Type Index (duplicate definitions forbidden) ---"]
         for path in sorted(self.registry.files.keys()):
             normalized = path.replace("\\", "/")
             if normalized in dep_paths:
@@ -1879,10 +1879,10 @@ class ContextualRustAgent(RustAgent):
             else:
                 index_records.append(record)
 
-        parts = [f"与 Rust 文件 `{planned.path}` 相关的 C 源码："]
+        parts = [f"C source related to Rust file `{planned.path}`:"]
 
         if inline_records:
-            parts.append("\n## 关键 C 源码（已内联）")
+            parts.append("\n## Key C Source (Inlined)")
             for record in inline_records:
                 calls = record.get("calls", [])[:3]
                 block_lines = [f"### {record['name']} [{record['file']} {record['span']}] ({record.get('num_lines', '?')} lines)"]
@@ -1891,14 +1891,14 @@ class ContextualRustAgent(RustAgent):
                         f"{call.get('caller', '?').rsplit(':', 1)[-1]}()"
                         for call in calls
                     )
-                    block_lines.append(f"被调用于：{call_lines}")
+                    block_lines.append(f"Called by: {call_lines}")
                 snippet = record.get("source", "").strip()
                 block_lines.append(f"```c\n{snippet}\n```")
                 block = "\n".join(block_lines)
                 parts.append(block)
 
         if index_records:
-            parts.append("\n## C 源码索引（需要详情请用 <CGR_READ> 请求）")
+            parts.append("\n## C Source Index (Request details with <CGR_READ>)")
             for record in index_records:
                 sig = self._extract_c_signature(record)
                 callers = record.get("calls", [])[:3]
@@ -1906,7 +1906,7 @@ class ContextualRustAgent(RustAgent):
                 if callers:
                     caller_names = [c.get("caller", "").rsplit(":", 1)[-1] for c in callers if c.get("caller")]
                     if caller_names:
-                        caller_hint = f" | 被调用于: {', '.join(caller_names)}"
+                        caller_hint = f" | called by: {', '.join(caller_names)}"
                 line = f"- `{record['name']}` [{record['file']}] ({record.get('num_lines', '?')} lines) | {sig}{caller_hint}"
                 parts.append(line)
 
@@ -1965,11 +1965,11 @@ class ContextualRustAgent(RustAgent):
         accumulated = content
         for cont_round in range(1, max_continuation_rounds + 1):
             continuation_user = (
-                f"你上一次输出在 max_tokens 处被截断了。"
-                f"下面是你已经输出的全部代码：\n"
+                f"Your previous output was truncated at max_tokens."
+                f"Here is all code you have already output:\n"
                 f"```{code_lang}\n{accumulated}\n```\n\n"
-                f"请从截断处继续输出（不要重复已有代码），完成后在末尾追加 `<CGR_DONE>`。\n"
-                f"只输出代码续写部分和 `<CGR_DONE>`，不需要解释。"
+                f"Continue from the truncation point without repeating existing code, and append `<CGR_DONE>` at the end when finished.\n"
+                f"Only output the code continuation and `<CGR_DONE>`; do not explain."
             )
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -2123,21 +2123,21 @@ class ContextualRustAgent(RustAgent):
         ]
         for pattern, label in forbidden_patterns:
             if re.search(pattern, lowered):
-                findings.append(f"Rust 风格违规：{rel_path} 使用了 C 风格/FFI 构造 {label}")
+                findings.append(f"Rust style violation: {rel_path} uses C-style/FFI construct {label}")
 
         c_type_defs = re.findall(
             r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?(?:struct|enum|trait|type)\s+([A-Za-z_][A-Za-z0-9_]*_t)\b",
             text,
         )
         for type_name in c_type_defs:
-            findings.append(f"C ABI 泄漏：{rel_path} 定义了 C 风格类型 `{type_name}`，应重构为 CamelCase Rust 类型")
+            findings.append(f"C ABI leak: {rel_path} defines C-style type `{type_name}`; refactor it into a CamelCase Rust type")
 
         c_free_functions = re.findall(
             r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*_(?:free|destroy|delete|new|create|init))\s*\(",
             text,
         )
         for function_name in c_free_functions:
-            findings.append(f"C ABI 泄漏：{rel_path} 暴露了 C 风格生命周期函数 `{function_name}`，应改为构造器/Drop/所有权")
+            findings.append(f"C ABI leak: {rel_path} exposes C-style lifecycle function `{function_name}`; convert it to a constructor, Drop, or ownership semantics")
 
         source_functions = planned.source_functions if planned else []
         _skip_names = {
@@ -2163,21 +2163,29 @@ class ContextualRustAgent(RustAgent):
                 text,
             ):
                 continue
-            findings.append(f"C ABI 泄漏：{rel_path} 照抄了 C 函数名 `{function_name}`，应改为 Rust 类型方法或 Rust 命名自由函数")
+            findings.append(f"C ABI leak: {rel_path} copied C function name `{function_name}`; convert it to a Rust type method or Rust-named free function")
 
         return findings
 
     def _fatal_contextual_findings(self, findings: Sequence[str]) -> List[str]:
         fatal_markers = [
+            "Duplicate",
+            "unauthorized",
+            "not authorized",
+            "unsupported",
+            "without evidence",
+            "unplanned module",
+            "FFI",
+            "Rust style violation",
+            "C ABI leak",
+            "raw pointer",
+            "Cargo.toml contains unauthorized dependency",
             "重复定义",
             "未授权",
             "未获证据",
             "未规划模块",
-            "FFI",
             "Rust 风格违规",
             "C ABI 泄漏",
-            "raw pointer",
-            "Cargo.toml 出现未授权依赖",
         ]
         return [item for item in findings if any(marker in item for marker in fatal_markers)]
 
@@ -2235,32 +2243,32 @@ class ContextualRustAgent(RustAgent):
 
         findings_text = "\n".join(f"- {f}" for f in findings)
         path = getattr(planned, "path", "unknown")
-        prompt = f"""你在修复已生成的 `{path}` 中的违规项。**不要重写整个文件**，只做最小局部编辑。
+        prompt = f"""You are fixing violations in the generated `{path}`. **Do not rewrite the entire file**; make only minimal local edits.
 
-违规项：
+Violations:
 {findings_text}
 
-当前文件（带行号）：
+Current file (with line numbers):
 ```rust
 {numbered_content}
 ```
 
-要求：
-1. 只返回 JSON，不要解释。
-2. 只允许局部编辑：replace_range / delete_range / insert_before / insert_after。
-3. **不允许**返回整个文件。每个 edit 只修改需要修改的行范围。
-4. 行号必须基于上面带行号的文件内容。
-5. 如果某个违规项只需要删除一行或改函数名，就只改那几行。
+Requirements:
+1. Return only JSON; do not explain.
+2. Only local edit modes are allowed: replace_range / delete_range / insert_before / insert_after.
+3. **Do not** return the entire file. Each edit must modify only the line range that needs changing.
+4. Line numbers must be based on the numbered file content above.
+5. If a violation only requires deleting one line or changing a function name, edit only those lines.
 
-返回 JSON：
+Return JSON:
 {{
-  "summary": "一句话修复摘要",
+  "summary": "One-sentence repair summary",
   "edits": [
     {{
       "mode": "replace_range",
       "start_line": 10,
       "end_line": 12,
-      "content": "替换后的代码片段（不带行号前缀）"
+      "content": "Replacement code snippet without line-number prefixes"
     }},
     {{
       "mode": "delete_range",
@@ -2270,14 +2278,14 @@ class ContextualRustAgent(RustAgent):
     {{
       "mode": "insert_before",
       "before_line": 5,
-      "content": "要插入的新代码"
+      "content": "New code to insert"
     }}
   ]
 }}
 """
         system_prompt = (
-            "你是严格的 Rust 文件局部修复助手。只做最小编辑修正违规项，不要重写整个文件。"
-            "只返回 JSON 格式的结构化编辑指令。"
+            "You are a strict local Rust file repair assistant. Make only minimal edits to correct violations; do not rewrite the entire file."
+            "Return only structured edit instructions in JSON format."
         )
         response = self._read_llm(
             [

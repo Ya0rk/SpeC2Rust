@@ -35,7 +35,7 @@ class DocumentGenerator:
         # with open(readme_path, 'w', encoding='utf-8') as f:
         #     f.write(readme_content)
         
-        print(f"项目文档已生成，保存在: {project_doc_dir}")
+        print(f"Project documentation has been generated and saved at: {project_doc_dir}")
     
     def _generate_module_doc(self, analysis):
         """生成模块文档"""
@@ -43,13 +43,13 @@ class DocumentGenerator:
         analysis_result = analysis['analysis']
         
         # 构建模块文档
-        doc = f"# {module_name} 模块文档\n\n"
-        doc += "## 模块分析\n\n"
+        doc = f"# {module_name} Module Documentation\n\n"
+        doc += "## Module Analysis\n\n"
         doc += analysis_result
         doc += "\n"
         
         # 添加文件列表
-        doc += "## 文件列表\n\n"
+        doc += "## File List\n\n"
         for file in analysis['files']:
             doc += f"- {file['path']}\n"
         doc += "\n"
@@ -61,32 +61,32 @@ class DocumentGenerator:
         # 收集所有模块的分析结果
         module_analyses_text = ""
         for analysis in module_analyses:
-            module_analyses_text += f"### {analysis['module_name']} 模块\n"
+            module_analyses_text += f"### Module {analysis['module_name']}\n"
             module_analyses_text += analysis['analysis']
             module_analyses_text += "\n\n"
         
         # 构建项目总文档提示
-        prompt = f"请根据以下C项目各个模块的分析结果，生成一个完整的项目总文档，包括项目的整体功能、设计意图、模块间的关系等。\n\n"
-        prompt += "项目名称: " + project_name + "\n\n"
-        prompt += "模块分析结果:\n"
+        prompt = f"Based on the analysis results of each module in the following C project, generate a complete project overview document, including the project's overall functionality, design intent, and relationships between modules.\n\n"
+        prompt += "Project name: " + project_name + "\n\n"
+        prompt += "Module analysis results:\n"
         prompt += module_analyses_text
-        prompt += "\n请生成一个详细的项目总文档，包括：\n"
-        prompt += "1. 项目概述\n"
-        prompt += "2. 项目功能\n"
-        prompt += "3. 项目架构\n"
-        prompt += "4. 模块关系\n"
-        prompt += "5. 技术特点\n"
+        prompt += "\nPlease generate a detailed project overview document that includes:\n"
+        prompt += "1. Project overview\n"
+        prompt += "2. Project functionality\n"
+        prompt += "3. Project architecture\n"
+        prompt += "4. Module relationships\n"
+        prompt += "5. Technical characteristics\n"
         # prompt += "6. 使用说明\n"
         prompt += "\n"
-        prompt += "请在文档中为每个函数和数据结构添加源代码位置信息，格式为：[文件路径:行号]。\n"
-        prompt += "例如：函数 foo() 定义在 [src/foo.c:42]。\n"
-        prompt += "这样可以为以后的代码生成提供更加清晰的理解。\n"
+        prompt += "Please add source location information for each function and data structure in the document, in the format: [file_path:line_number].\n"
+        prompt += "For example: function foo() is defined at [src/foo.c:42].\n"
+        prompt += "This will provide clearer understanding for future code generation.\n"
         prompt += "\n"
-        prompt += "不需要生成'总结与展望'模块，因为这对接下来的工作意义不大。\n"
+        prompt += "Do not generate a 'summary and outlook' section, because it is not useful for the next steps.\n"
         
         # 调用LLM生成项目总文档
         messages = [
-            {'role': 'system', 'content': '你是一个C项目分析专家，擅长生成详细的项目文档。'},
+            {'role': 'system', 'content': 'You are an expert in C project analysis, skilled at generating detailed project documentation.'},
             {'role': 'user', 'content': prompt}
         ]
         

@@ -214,11 +214,11 @@ class ContextualSpecAgent:
         accumulated = ""
         initial_prompt = (
             user_prompt
-            + "\n\n额外要求：\n"
-            + "1. 如果一次无法写完，请先输出前半部分，并且只有在真正完成时才在末尾追加 <CGR_DONE>\n"
-            + "2. 如果尚未完成，不要输出 <CGR_DONE>\n"
-            + "3. 续写时不要重复前文，要从上一次结尾处直接继续\n"
-            + "4. 只输出 markdown 正文和可能的 <CGR_DONE>，不要输出解释\n"
+            + "\n\nAdditional requirements:\n"
+            + "1. If you cannot finish in one pass, output the first half first, and append <CGR_DONE> only when truly complete.\n"
+            + "2. If not finished yet, do not output <CGR_DONE>.\n"
+            + "3. Do not repeat earlier text when continuing; continue directly from the last ending.\n"
+            + "4. Output only the markdown body and an optional <CGR_DONE>; do not output explanations.\n"
         )
 
         messages = [
@@ -246,7 +246,7 @@ class ContextualSpecAgent:
                 {'role': 'assistant', 'content': accumulated},
                 {
                     'role': 'user',
-                    'content': '上一次输出尚未完成，请从刚才最后位置继续，不要重复前文；完成时仅在末尾追加 <CGR_DONE>。'
+                    'content': 'The previous output is not complete yet. Continue from the last position without repeating earlier text; append <CGR_DONE> only at the end when complete.'
                 }
             ]
 
