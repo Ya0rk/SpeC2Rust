@@ -38,9 +38,11 @@ EXPECTED_OUTPUT_DISPLAY_COUNT = 3
 
 # --------- Prompt 整体 token 预算（按字符近似） ---------
 
-# provided_c_records + provided_rust_files 合计字符上限。
+# provided_c_records + provided_rust_files + provided_test_artifacts 合计字符上限。
 # 超过后启动 LRU 淘汰最早注入的材料。
-PROMPT_MATERIAL_BUDGET_CHARS = 60000
+# 这里按字符近似 token。256k chars 通常可容纳约 64k token 级别的材料，
+# 足以保留一个 60k chars 左右的大 Rust 文件以及必要的 C 片段。
+PROMPT_MATERIAL_BUDGET_CHARS = 256000
 
 # --------- 反作弊检测 ---------
 

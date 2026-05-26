@@ -213,6 +213,70 @@ benchmark runner and top-level driver only.
         self.assertIn("quadtree_node_new", node_context)
         self.assertNotIn("quadtree_bounds_extend", node_context)
 
+    def test_rust_generation_spec_agent_selects_pointer_macro_evidence_only_for_own_module(self):
+        interface = self._write_doc(
+            "docs/rewrite-context/02_interfaces/001_module_src.md",
+            """
+# interfaces
+### `quadtree_bounds_new`
+- source: `src/bounds.c`
+""",
+        )
+        pointer_bounds = self._write_doc(
+            "specs/001-bounds-rust-port/pointer.md",
+            """
+# bounds pointer facts
+- `src/bounds.c` owns nullable bounds storage and should become `Option<Bounds>`.
+""",
+        )
+        macro_bounds = self._write_doc(
+            "specs/001-bounds-rust-port/macro.md",
+            """
+# bounds macro facts
+- `src/bounds.c` defines `BOUND_EPSILON` for bounds comparisons.
+""",
+        )
+        pointer_node = self._write_doc(
+            "specs/002-node-rust-port/pointer.md",
+            """
+# node pointer facts
+- `src/node.c` owns child links and should become `Option<Box<Node>>`.
+""",
+        )
+        spec_agent = RustGenerationSpecAgent(
+            {
+                str(interface): interface.read_text(encoding="utf-8"),
+                str(pointer_bounds): pointer_bounds.read_text(encoding="utf-8"),
+                str(macro_bounds): macro_bounds.read_text(encoding="utf-8"),
+                str(pointer_node): pointer_node.read_text(encoding="utf-8"),
+            }
+        )
+        plan = spec_agent.build_file_plan(["src/bounds.rs"])[0]
+
+        context = spec_agent.context_for_file(plan)
+
+        self.assertIn("bounds pointer facts", context)
+        self.assertIn("bounds macro facts", context)
+        self.assertNotIn("node pointer facts", context)
+
+    def test_contextual_agent_filters_disabled_optional_evidence_before_generation(self):
+        pointer = self._write_doc("specs/001-bounds-rust-port/pointer.md", "# pointer")
+        macro = self._write_doc("specs/001-bounds-rust-port/macro.md", "# macro")
+        base = self._write_doc("specs/001-bounds-rust-port/spec.md", "# base")
+        agent = ContextualRustAgent(Config(config_path=None, model_name="qwen32"))
+        agent.doc_contents = {
+            str(pointer): "pointer",
+            str(macro): "macro",
+            str(base): "base",
+        }
+        agent.configure_optional_evidence(use_pointer_agent=True, use_macro_agent=False)
+
+        agent._filter_optional_evidence_documents()
+
+        self.assertIn(str(pointer), agent.doc_contents)
+        self.assertIn(str(base), agent.doc_contents)
+        self.assertNotIn(str(macro), agent.doc_contents)
+
     def test_rust_generation_spec_agent_context_includes_generation_prompt_guide(self):
         interface = self._write_doc(
             "docs/rewrite-context/02_interfaces/001_module_src.md",

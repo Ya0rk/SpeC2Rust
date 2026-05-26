@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from collections import OrderedDict
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 from .constants import (
     BUILD_ERROR_TAIL_CHARS,
@@ -22,12 +22,14 @@ from .constants import (
 from .models import TestCaseResult
 
 
-def _with_line_numbers(content: str) -> str:
+def _with_line_numbers(content: str, start_line: int = 1) -> str:
     lines = (content or "").splitlines()
     if not lines:
         return ""
-    width = max(4, len(str(len(lines))))
-    return "\n".join(f"{idx:>{width}} | {line}" for idx, line in enumerate(lines, start=1))
+    start = max(1, int(start_line or 1))
+    end = start + len(lines) - 1
+    width = max(4, len(str(end)))
+    return "\n".join(f"{idx:>{width}} | {line}" for idx, line in enumerate(lines, start=start))
 
 
 class MaterialBudget:
@@ -43,8 +45,15 @@ class MaterialBudget:
     def __init__(self, budget_chars: int = PROMPT_MATERIAL_BUDGET_CHARS):
         self.budget_chars = budget_chars
         self._c_records: "OrderedDict[str, Dict]" = OrderedDict()  # key -> rec
-        self._rust_files: "OrderedDict[str, str]" = OrderedDict()
-        self._test_artifacts: "OrderedDict[str, str]" = OrderedDict()
+        self._rust_files: "OrderedDict[str, Dict]" = OrderedDict()
+        self._test_artifacts: "OrderedDict[str, Dict]" = OrderedDict()
+        self._lru: "OrderedDict[Tuple[str, str], None]" = OrderedDict()
+        self._eviction_events: List[Dict[str, object]] = []
+
+    def _touch(self, kind: str, key: str) -> None:
+        marker = (kind, key)
+        self._lru[marker] = None
+        self._lru.move_to_end(marker)
 
     # ---------------- C records ----------------
 
@@ -61,10 +70,12 @@ class MaterialBudget:
         key = self._c_key(rec)
         if key in self._c_records:
             self._c_records.move_to_end(key)
+            self._touch("c", key)
             return False
         self._c_records[key] = rec
-        self._evict_if_needed()
-        return True
+        self._touch("c", key)
+        self._evict_if_needed(protected=("c", key))
+        return key in self._c_records
 
     def has_c_record(self, rec: Dict) -> bool:
         return self._c_key(rec) in self._c_records
@@ -74,41 +85,116 @@ class MaterialBudget:
 
     # ---------------- Rust files ----------------
 
-    def add_rust_file(self, path: str, content: str) -> bool:
+    @staticmethod
+    def _range_key(path: str, start_line: Optional[int] = None, end_line: Optional[int] = None) -> str:
+        normalized = (path or "").replace("\\", "/")
+        if isinstance(start_line, int) and isinstance(end_line, int):
+            return f"{normalized}:{start_line}-{end_line}"
+        return normalized
+
+    def add_rust_file(
+        self,
+        path: str,
+        content: str,
+        *,
+        start_line: Optional[int] = None,
+        end_line: Optional[int] = None,
+        mode: str = "whole_file",
+    ) -> bool:
         if not path or not content:
             return False
-        if path in self._rust_files and self._rust_files[path] == content:
-            self._rust_files.move_to_end(path)
+        key = self._range_key(path, start_line, end_line) if mode == "line_range" else self._range_key(path)
+        if key in self._rust_files and self._rust_files[key].get("content") == content:
+            self._rust_files.move_to_end(key)
+            self._touch("rust", key)
             return False
-        self._rust_files[path] = content
-        self._rust_files.move_to_end(path)
-        self._evict_if_needed()
-        return True
+        self._rust_files[key] = {
+            "path": path.replace("\\", "/"),
+            "display_path": key,
+            "content": content,
+            "mode": mode,
+            "start_line": start_line,
+            "end_line": end_line,
+        }
+        self._rust_files.move_to_end(key)
+        self._touch("rust", key)
+        self._evict_if_needed(protected=("rust", key))
+        return key in self._rust_files
 
-    def has_rust_file(self, path: str) -> bool:
-        return path in self._rust_files
+    def has_rust_file(
+        self,
+        path: str,
+        start_line: Optional[int] = None,
+        end_line: Optional[int] = None,
+    ) -> bool:
+        normalized = (path or "").replace("\\", "/")
+        if self._range_key(normalized) in self._rust_files:
+            return True
+        if isinstance(start_line, int) and isinstance(end_line, int):
+            return self._range_key(normalized, start_line, end_line) in self._rust_files
+        return False
 
     def rust_files(self) -> Dict[str, str]:
-        return dict(self._rust_files)
+        return {
+            str(entry.get("display_path") or key): str(entry.get("content") or "")
+            for key, entry in self._rust_files.items()
+        }
+
+    def rust_file_entries(self) -> List[Dict]:
+        return list(self._rust_files.values())
 
     # ---------------- Test artifacts ----------------
 
-    def add_test_artifact(self, path: str, content: str) -> bool:
+    def add_test_artifact(
+        self,
+        path: str,
+        content: str,
+        *,
+        start_line: Optional[int] = None,
+        end_line: Optional[int] = None,
+        mode: str = "whole_file",
+    ) -> bool:
         if not path or not content:
             return False
-        if path in self._test_artifacts and self._test_artifacts[path] == content:
-            self._test_artifacts.move_to_end(path)
+        key = self._range_key(path, start_line, end_line) if mode == "line_range" else self._range_key(path)
+        if key in self._test_artifacts and self._test_artifacts[key].get("content") == content:
+            self._test_artifacts.move_to_end(key)
+            self._touch("test", key)
             return False
-        self._test_artifacts[path] = content
-        self._test_artifacts.move_to_end(path)
-        self._evict_if_needed()
-        return True
+        self._test_artifacts[key] = {
+            "path": path.replace("\\", "/"),
+            "display_path": key,
+            "content": content,
+            "mode": mode,
+            "start_line": start_line,
+            "end_line": end_line,
+        }
+        self._test_artifacts.move_to_end(key)
+        self._touch("test", key)
+        self._evict_if_needed(protected=("test", key))
+        return key in self._test_artifacts
 
-    def has_test_artifact(self, path: str) -> bool:
-        return path in self._test_artifacts
+    def has_test_artifact(
+        self,
+        path: str,
+        start_line: Optional[int] = None,
+        end_line: Optional[int] = None,
+    ) -> bool:
+        normalized = (path or "").replace("\\", "/")
+        if self._range_key(normalized) in self._test_artifacts:
+            return True
+        if isinstance(start_line, int) and isinstance(end_line, int):
+            return self._range_key(normalized, start_line, end_line) in self._test_artifacts
+        return False
 
     def test_artifacts(self) -> Dict[str, str]:
-        return dict(self._test_artifacts)
+        return {
+            str(entry.get("display_path") or key): str(entry.get("content") or "")
+            for key, entry in self._test_artifacts.items()
+        }
+
+    def test_artifact_entries(self) -> List[Dict]:
+        return list(self._test_artifacts.values())
 
     # ---------------- 预算维护 ----------------
 
@@ -116,28 +202,87 @@ class MaterialBudget:
         total = 0
         for rec in self._c_records.values():
             total += len(str(rec.get("source", "")))
-        for content in self._rust_files.values():
-            total += len(content)
-        for content in self._test_artifacts.values():
-            total += len(content)
+        for entry in self._rust_files.values():
+            total += len(str(entry.get("content", "")))
+        for entry in self._test_artifacts.values():
+            total += len(str(entry.get("content", "")))
         return total
 
-    def _evict_if_needed(self) -> None:
+    def _evict_if_needed(self, protected: Optional[Tuple[str, str]] = None) -> None:
         while self.total_chars() > self.budget_chars:
-            if self._c_records and (
-                not self._rust_files
-                or len(self._c_records) >= len(self._rust_files)
-            ):
-                key, _ = self._c_records.popitem(last=False)
-                print(f"    [rtest] prompt 预算超限，淘汰 C 源码：{key}")
-            elif self._rust_files:
-                path, _ = self._rust_files.popitem(last=False)
-                print(f"    [rtest] prompt 预算超限，淘汰 Rust 文件：{path}")
-            elif self._test_artifacts:
-                path, _ = self._test_artifacts.popitem(last=False)
-                print(f"    [rtest] prompt 预算超限，淘汰测试产物：{path}")
-            else:
+            victim = self._pop_oldest_unprotected(protected)
+            if not victim:
+                self._record_over_budget_without_victim(protected)
                 break
+
+    def _pop_oldest_unprotected(self, protected: Optional[Tuple[str, str]]) -> bool:
+        for marker in list(self._lru.keys()):
+            kind, key = marker
+            if protected and marker == protected:
+                continue
+            if kind == "c" and key in self._c_records:
+                rec = self._c_records.pop(key)
+                self._lru.pop(marker, None)
+                size = len(str(rec.get("source", "")))
+                self._record_eviction("C 源码", key, size, "prompt budget exceeded")
+                return True
+            if kind == "rust" and key in self._rust_files:
+                entry = self._rust_files.pop(key)
+                self._lru.pop(marker, None)
+                size = len(str(entry.get("content", "")))
+                self._record_eviction("Rust 文件", key, size, "prompt budget exceeded")
+                return True
+            if kind == "test" and key in self._test_artifacts:
+                entry = self._test_artifacts.pop(key)
+                self._lru.pop(marker, None)
+                size = len(str(entry.get("content", "")))
+                self._record_eviction("测试产物", key, size, "prompt budget exceeded")
+                return True
+            self._lru.pop(marker, None)
+        return False
+
+    def _record_eviction(self, label: str, key: str, size: int, reason: str) -> None:
+        print(f"    [rtest] prompt 预算超限，淘汰 {label}：{key}")
+        self._eviction_events.append({
+            "kind": label,
+            "key": key,
+            "chars": size,
+            "reason": reason,
+        })
+        self._eviction_events = self._eviction_events[-12:]
+
+    def _record_over_budget_without_victim(self, protected: Optional[Tuple[str, str]]) -> None:
+        if not protected:
+            return
+        kind, key = protected
+        self._eviction_events.append({
+            "kind": kind,
+            "key": key,
+            "chars": self.total_chars(),
+            "reason": "single protected material exceeds the soft budget and is kept for this round",
+        })
+        self._eviction_events = self._eviction_events[-12:]
+
+    def budget_pressure_summary(self) -> str:
+        lines = [
+            f"- material_budget_chars: {self.budget_chars}",
+            f"- current_material_chars: {self.total_chars()}",
+        ]
+        if not self._eviction_events:
+            return "\n".join(lines)
+        lines.append("- evicted_or_over_budget_materials:")
+        for event in self._eviction_events[-8:]:
+            lines.append(
+                f"  - {event.get('kind')}: {event.get('key')} "
+                f"({event.get('chars')} chars) reason={event.get('reason')}"
+            )
+        lines.append(
+            "- If required whole files were evicted or too large, request smaller line_range snippets instead of repeating the same whole_file request."
+        )
+        lines.append(
+            "- If old history is no longer useful, return `history_control: {\"drop_history\": true}` with a concise updated_summary."
+        )
+        return "\n".join(lines)
 
 
 # ---------------------------------------------------------------- prompt
@@ -172,15 +317,20 @@ def build_repair_prompt(
             f"\n```c\n{rec.get('source','')}\n```"
         )
     rust_blocks: List[str] = []
-    for path, content in material.rust_files().items():
+    for entry in material.rust_file_entries():
+        path = str(entry.get("display_path") or entry.get("path") or "")
+        content = str(entry.get("content") or "")
+        start_line = entry.get("start_line") if entry.get("mode") == "line_range" else 1
         rust_blocks.append(
             f"### {path}\n"
             "The left side of the code block, `NNNN |`, is the real file line number; edit start_line/end_line must use these line numbers; "
             "do not write the line-number prefix into content.\n"
-            f"```text\n{_with_line_numbers(content)}\n```"
+            f"```text\n{_with_line_numbers(content, int(start_line or 1))}\n```"
         )
     artifact_blocks: List[str] = []
-    for path, content in material.test_artifacts().items():
+    for entry in material.test_artifact_entries():
+        path = str(entry.get("display_path") or entry.get("path") or "")
+        content = str(entry.get("content") or "")
         artifact_blocks.append(f"### {path}\n```text\n{content}\n```")
 
     build_error_block = ""
@@ -237,6 +387,7 @@ def build_repair_prompt(
     artifact_block_text = "\n".join(artifact_blocks) if artifact_blocks else "(none)"
     focused_failure_block = focused_failure or "(failed to extract a structured failure block; refer to the most recent run result and trace)"
     artifact_index_block = test_artifact_index or "(no readable test artifacts found)"
+    budget_block = material.budget_pressure_summary()
 
     return f"""You are fixing a Rust project translated from a C project so that it passes sh functional tests.
 The current case failed (repair round {attempt}/{max_attempts}).
@@ -297,9 +448,14 @@ C source index (request as needed; mimic ContextualRustAgent semantics by functi
 {source_records_index}
 
 Readable test-run artifacts (via test_artifact_read requests; paths are relative to the current test run directory.
-If stdout only shows a diff summary, prioritize the corresponding `.raw` / `.out` / `.log` files):
+If stdout only shows a diff summary, prioritize the corresponding `.raw` / `.out` / `.log` files. Large artifacts may also be requested with `mode="line_range"`):
 ```text
 {artifact_index_block}
+```
+
+Prompt material budget status:
+```text
+{budget_block}
 ```
 
 Provided C source code (the first round already injected the relevant functions based on the tested features; inspect this first):
@@ -319,13 +475,14 @@ Return JSON only, with no explanation. Use the following structure:
   "summary": "This round's analysis (must clearly explain how the tested feature is implemented/handled in C, and which part of Rust is missing or wrong)",
   "cgr_read": [
     {{"kind": "function", "query": "C function name"}},
-    {{"kind": "file", "query": "C file name or relative path"}}
+    {{"kind": "file", "query": "C file name or relative path", "mode": "line_range", "start_line": 120, "end_line": 220}}
   ],
   "rust_read_requests": [
-    {{"path": "src/<your_module>.rs"}}
+    {{"path": "src/<your_module>.rs", "mode": "line_range", "start_line": 120, "end_line": 220}},
+    {{"path": "src/<small_module>.rs", "mode": "whole_file"}}
   ],
   "test_artifact_read": [
-    {{"path": "results/test6_fail.log"}},
+    {{"path": "results/test6_fail.log", "mode": "line_range", "start_line": 1, "end_line": 120}},
     {{"path": "results/test6_c.out"}},
     {{"path": "results/test6_rust.out"}}
   ],
@@ -338,6 +495,7 @@ Return JSON only, with no explanation. Use the following structure:
       "content": "Replacement valid Rust snippet"
     }}
   ],
+  "history_control": {{"drop_history": false}},
 {instrumentation_json}
   "complete": false,
   "updated_summary": "Updated brief memory"
@@ -349,7 +507,8 @@ Requirements:
    read it with rust_read_requests first; this round may return no edits.
    Provided Rust files are shown as `NNNN | code`; `NNNN` is the real line number to use in edits.
 3. If you need more C source context, use cgr_read (kind is "function" or "file",
-   query by name or relative path), and I will provide the C source in the next round.
+   query by name or relative path). For large C/Rust files, prefer mode="line_range" with start_line/end_line.
+   Whole-file requests are allowed when the whole file is genuinely necessary and fits the budget.
 4. Only edit the translated Rust project (`*.rs` / `Cargo.toml`, etc.). Every test shell script and fixture is read-only,
    including the currently failing script. Do not edit the original C project or the target directory.
 5. **No fake implementations**: do not use placeholder styles such as `unimplemented!()` / `todo!()` / `panic!("not implemented")` /
@@ -358,8 +517,10 @@ Requirements:
 6. If your change makes this case pass but causes other previously passing cases to fail (a regression), the whole change will be rolled back,
    so prefer minimal changes / only fix the code path related to this case's features.
 7. If the current materials are not enough to edit safely, you may request materials only; you will see the response in the next round.
+   For large Rust/C/test files that were evicted or are too large to fit, prefer `mode="line_range"` with `start_line` / `end_line`.
 8. If the target Rust file is already in "provided Rust files" and the key C functions have also been provided,
    this round must provide edits or explicitly set complete=true; do not request the same provided file again, and do not just repeat the problem.
+   If the full file was evicted because of prompt budget pressure, request a focused line_range for the exact area you need.
 9. If you have determined that a Rust file is missing the corresponding C logic (for example main.rs only prints a placeholder output),
    you must fix that file directly with replace_range / insert_before / insert_after.
 10. If cargo reports a private field / private method, do not continue accessing private members from outside the module;
@@ -368,6 +529,8 @@ Requirements:
     `impl Default`, trait impl, or other unrelated impl block.
 12. If the current failing subcase shows the C/Rust outputs differ only by the binary absolute path, and the C source confirms the program prints argv[0],
     do not hardcode the C_BIN path in Rust and do not edit the test script. Report that the preprocessed read-only test baseline needs human review.
+13. You may set `history_control.drop_history=true` when old history is crowding out useful source context. If you do, put only the new concise memory in `updated_summary`.
+13. You may set `history_control.drop_history=true` when old history is crowding out useful source context. If you do, put only the new concise memory in `updated_summary`.
 {instrumentation_requirement}
 """
 
@@ -439,4 +602,5 @@ def _build_instrumentation_requirement(enabled: bool) -> str:
     `add` creates or replaces points, `remove` deletes named points, and `clear` removes all points. Static probes run on temporary project
     copies only. Use valid expressions for the target language; invalid instrumentation may produce a build error in the evidence.
 15. Instrumentation is an evidence-gathering round: do not include `debug_probe` or `static_probe_update` together with non-empty `edits`
-    or new material requests. After evidence appears, analyze it before requesting additional probes."""
+    or new material requests. After evidence appears, analyze it before requesting additional probes.
+16. If the prompt budget is crowded, use `history_control.drop_history=true` and request only the new source lines or test lines needed next."""

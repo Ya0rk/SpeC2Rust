@@ -9,6 +9,7 @@ import uuid
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.config import Config
+from agent.error_organizer_agent import ErrorOrganizerAgent
 from agent.rust_repair_agent import RustRepairAgent
 from agent.rust_repair_agent import RepairRunResult
 
@@ -65,6 +66,114 @@ error[E0507]: cannot move out of `*destroy` which is behind a shared reference
         self.assertIn("src/tree.rs", grouped)
         self.assertIn("unresolved import", grouped["src/lib.rs"])
         self.assertIn("cannot move out", grouped["src/tree.rs"])
+
+    def test_select_repair_error_batch_keeps_original_behavior_when_disabled(self):
+        config = Config(config_path=None, model_name="qwen32")
+        agent = RustRepairAgent(config=config, max_iterations=3)
+        cargo_output = """
+error[E0001]: first issue
+ --> src/a.rs:1:1
+
+error[E0002]: second issue
+ --> src/b.rs:2:1
+"""
+
+        grouped = agent._select_repair_error_batch(cargo_output, ".")
+        prompt = agent._build_diagnosis_prompt(grouped, "project")
+
+        self.assertIn("src/a.rs", grouped)
+        self.assertIn("src/b.rs", grouped)
+        self.assertNotIn("Error organization context", prompt)
+
+    def test_select_repair_error_batch_focuses_one_organized_batch_and_explains_context(self):
+        config = Config(config_path=None, model_name="qwen32")
+        root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
+        root.mkdir()
+        try:
+            (root / "src").mkdir()
+            (root / "src" / "a.rs").write_text("", encoding="utf-8")
+            (root / "src" / "b.rs").write_text("", encoding="utf-8")
+            agent = RustRepairAgent(
+                config=config,
+                max_iterations=3,
+                error_organizer_agent=ErrorOrganizerAgent(batch_size=1),
+            )
+            cargo_output = """
+error[E0001]: first issue
+ --> src/a.rs:1:1
+
+error[E0002]: second issue
+ --> src/b.rs:2:1
+"""
+
+            grouped = agent._select_repair_error_batch(cargo_output, str(root))
+            diagnosis_prompt = agent._build_diagnosis_prompt(grouped, "project")
+            edit_prompt = agent._build_edit_prompt(
+                str(root),
+                {"target_files": list(grouped)},
+                grouped,
+                [],
+                1,
+            )
+
+            self.assertEqual(len(grouped), 1)
+            self.assertIn("Error organization context", diagnosis_prompt)
+            self.assertIn("2 remaining organized batches", diagnosis_prompt)
+            self.assertIn("Error organization context", edit_prompt)
+        finally:
+            if root.exists():
+                try:
+                    shutil.rmtree(root)
+                except PermissionError:
+                    pass
+
+    def test_optional_pointer_macro_evidence_is_advertised_only_when_enabled(self):
+        config = Config(config_path=None, model_name="qwen32")
+        root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
+        root.mkdir()
+        try:
+            c_docs = root / "c_docs"
+            c_docs.mkdir()
+            pointer_doc = c_docs / "specs" / "001-core-rust-port" / "pointer.md"
+            macro_doc = c_docs / "specs" / "001-core-rust-port" / "macro.md"
+            pointer_doc.parent.mkdir(parents=True)
+            pointer_doc.write_text("# pointer evidence\n", encoding="utf-8")
+            macro_doc.write_text("# macro evidence\n", encoding="utf-8")
+            enabled = RustRepairAgent(config=config, max_iterations=3)
+            enabled.configure_context_sources(
+                c_docs_path=str(c_docs),
+                use_pointer_agent=True,
+                use_macro_agent=True,
+            )
+            enabled_prompt = enabled._build_diagnosis_prompt({"src/a.rs": "error"}, "project")
+            enabled_tools = enabled._build_repair_tool_protocol(str(root))
+
+            disabled = RustRepairAgent(config=config, max_iterations=3)
+            disabled.configure_context_sources(c_docs_path=str(c_docs))
+            disabled_prompt = disabled._build_diagnosis_prompt({"src/a.rs": "error"}, "project")
+            disabled_overview = disabled._build_project_overview(str(root))
+
+            self.assertIn("specs/**/pointer.md", enabled_prompt)
+            self.assertIn("specs/**/macro.md", enabled_prompt)
+            self.assertIn("module-local evidence remains authoritative", enabled_tools)
+            self.assertNotIn("specs/**/pointer.md", disabled_prompt)
+            self.assertNotIn("specs/**/macro.md", disabled_prompt)
+            self.assertNotIn("pointer.md", disabled_overview)
+            self.assertNotIn("macro.md", disabled_overview)
+            self.assertEqual(
+                disabled._read_context_file_slice(
+                    str(root),
+                    "spec",
+                    "specs/001-core-rust-port/pointer.md",
+                ),
+                "",
+            )
+        finally:
+            if root.exists():
+                try:
+                    shutil.rmtree(root)
+                except PermissionError:
+                    pass
 
     def test_apply_structured_edits_updates_only_target_range(self):
         config = Config(config_path=None, model_name="qwen32")
@@ -512,6 +621,96 @@ error[E0599]: no method named `foo`
                 except PermissionError:
                     pass
 
+    def test_run_single_iteration_refreshes_diagnosis_when_organized_batch_changes(self):
+        config = Config(config_path=None, model_name="qwen32")
+        root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
+        root.mkdir()
+        try:
+            source = root / "source"
+            source.mkdir()
+            (source / "Cargo.toml").write_text("[package]\nname='demo'\nversion='0.1.0'\n", encoding="utf-8")
+            (source / "src").mkdir()
+            (source / "src" / "a.rs").write_text("pub fn a() {}\n", encoding="utf-8")
+            (source / "src" / "b.rs").write_text("pub fn b() {}\n", encoding="utf-8")
+
+            first_output = """
+error[E0001]: first issue
+ --> src/a.rs:1:1
+
+error[E0002]: second issue
+ --> src/b.rs:1:1
+"""
+            second_output = """
+error[E0002]: second issue
+ --> src/b.rs:1:1
+"""
+            agent = RustRepairAgent(
+                config=config,
+                max_iterations=1,
+                error_organizer_agent=ErrorOrganizerAgent(batch_size=1),
+            )
+            agent._monotonic = lambda: 0
+            agent._cargo_test = lambda *_: (True, "")
+            results = iter([(False, first_output), (False, first_output), (False, second_output)])
+            agent._cargo_check = lambda *_: next(results)
+            diagnosis_calls = []
+
+            def fake_diagnosis(grouped, _overview, _handoff_summary=""):
+                diagnosis_calls.append(dict(grouped))
+                return {
+                    "summary": "diagnose active batch",
+                    "target_files": list(grouped),
+                    "read_requests": [],
+                    "search_requests": [],
+                }
+
+            agent._request_diagnosis_plan = fake_diagnosis
+            actions = iter(
+                [
+                    {
+                        "summary": "fix first batch",
+                        "edits": [
+                            {
+                                "path": "src/a.rs",
+                                "mode": "insert_after",
+                                "start_line": 1,
+                                "content": "// repaired\n",
+                            }
+                        ],
+                        "more_read_requests": [],
+                        "search_requests": [],
+                        "complete": False,
+                    },
+                    {
+                        "summary": "stop after seeing second batch",
+                        "edits": [],
+                        "more_read_requests": [],
+                        "search_requests": [],
+                        "complete": True,
+                    },
+                ]
+            )
+            agent._request_structured_edits = lambda *args, **kwargs: next(actions)
+
+            result = agent._run_single_iteration(str(source), str(root / "runs"), 1)
+
+            self.assertFalse(result.check_passed)
+            self.assertEqual(len(diagnosis_calls), 2)
+            self.assertIn("src/a.rs", diagnosis_calls[0])
+            self.assertIn("src/b.rs", diagnosis_calls[1])
+            records = [
+                json.loads(line)
+                for line in (Path(result.run_dir) / "repair_journal.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            self.assertTrue(any(r.get("stage") == "organized_error_batch_switched" for r in records))
+        finally:
+            if root.exists():
+                try:
+                    shutil.rmtree(root)
+                except PermissionError:
+                    pass
+
     def test_run_single_iteration_records_round_timeout(self):
         config = Config(config_path=None, model_name="qwen32")
         root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
@@ -724,9 +923,11 @@ error[E0599]: no method named `foo`
         args = SimpleNamespace(use_rust_repair_agent=True, rust_repair_max_iterations=7)
         calls = []
 
+        organizer = object()
+
         class FakeRepairAgent:
-            def __init__(self, config, max_iterations):
-                calls.append(("init", config, max_iterations))
+            def __init__(self, config, max_iterations, error_organizer_agent=None):
+                calls.append(("init", config, max_iterations, error_organizer_agent))
 
             def configure_context_sources(self, **kwargs):
                 calls.append(("configure_context_sources", kwargs))
@@ -744,7 +945,12 @@ error[E0599]: no method named `foo`
         original_agent = getattr(main_module, "RustRepairAgent", None)
         try:
             main_module.RustRepairAgent = FakeRepairAgent
-            result = main_module.run_optional_rust_repair_agent(args, config, "target-project")
+            result = main_module.run_optional_rust_repair_agent(
+                args,
+                config,
+                "target-project",
+                error_organizer_agent=organizer,
+            )
         finally:
             if original_agent is None:
                 delattr(main_module, "RustRepairAgent")
@@ -752,7 +958,7 @@ error[E0599]: no method named `foo`
                 main_module.RustRepairAgent = original_agent
 
         self.assertTrue(result.check_passed)
-        self.assertEqual(calls[0], ("init", config, 7))
+        self.assertEqual(calls[0], ("init", config, 7, organizer))
         self.assertEqual(calls[1][0], "configure_context_sources")
         self.assertEqual(calls[2][0], "repair_project")
         self.assertEqual(calls[2][1]["project_path"], "target-project")

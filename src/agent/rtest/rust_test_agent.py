@@ -36,6 +36,7 @@ from agent.rust_repair_agent import RustRepairAgent  # noqa: E402
 from .constants import (  # noqa: E402
     C_SOURCE_INDEX_MAX_ITEMS,
     PROJECT_OVERVIEW_MAX_FILES,
+    PROMPT_MATERIAL_BUDGET_CHARS,
     SEED_C_LIMIT,
     SEED_RUST_LIMIT,
     STALL_SAME_SIGNATURE_ROUNDS,
@@ -83,6 +84,7 @@ class RustTestAgent:
         translate_tests: bool = False,
         enable_log_agent: bool = False,
         max_debug_probes: int = 6,
+        prompt_budget_chars: int = PROMPT_MATERIAL_BUDGET_CHARS,
     ):
         self.config = config or Config()
         self.llm = Model(self.config)
@@ -95,6 +97,7 @@ class RustTestAgent:
         self.translate_tests = translate_tests
         self.enable_log_agent = enable_log_agent
         self.max_debug_probes = max(1, max_debug_probes)
+        self.prompt_budget_chars = max(1, int(prompt_budget_chars or PROMPT_MATERIAL_BUDGET_CHARS))
 
         # 复用 RustRepairAgent 的本地清洗 / 结构化编辑能力，通过 adapter 访问
         # 它的私有方法，避免耦合未来 RustRepairAgent 的重构。
@@ -683,7 +686,13 @@ class RustTestAgent:
         return "\n".join(rows)
 
     @staticmethod
-    def _read_test_artifact(failing_case: TestCaseResult, rel_path: str, max_chars: int = 12000) -> str:
+    def _read_test_artifact(
+        failing_case: TestCaseResult,
+        rel_path: str,
+        max_chars: int = 12000,
+        start_line: Optional[int] = None,
+        end_line: Optional[int] = None,
+    ) -> str:
         run_dir = RustTestAgent._run_dir_for_case(failing_case).resolve()
         rel = (rel_path or "").replace("\\", "/").strip().lstrip("/")
         if not rel or rel.startswith("../") or "/../" in rel:
@@ -700,6 +709,13 @@ class RustTestAgent:
             text = full.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             return ""
+        if isinstance(start_line, int) and isinstance(end_line, int):
+            lines = text.splitlines()
+            start = max(1, start_line)
+            end = min(len(lines), end_line)
+            if end < start:
+                return ""
+            return "\n".join(lines[start - 1:end]) + ("\n" if end >= start else "")
         return text[-max_chars:]
 
     @staticmethod
@@ -787,7 +803,7 @@ class RustTestAgent:
         if keywords:
             print(f"  [rtest] 推断被测关键字：{', '.join(keywords)}")
 
-        material = MaterialBudget()
+        material = MaterialBudget(budget_chars=self.prompt_budget_chars)
 
         # 首轮主动注入
         for rec in seed_c_sources(flags, source_index, keywords=keywords, limit=SEED_C_LIMIT):
@@ -1183,17 +1199,52 @@ class RustTestAgent:
         for req in rust_read_requests:
             if isinstance(req, dict):
                 rel = str(req.get("path") or "").replace("\\", "/")
+                mode = str(req.get("mode") or "whole_file").strip().lower()
+                try:
+                    start_line = int(req.get("start_line"))
+                except Exception:
+                    start_line = None
+                try:
+                    end_line = int(req.get("end_line"))
+                except Exception:
+                    end_line = None
             else:
                 rel = str(req or "").replace("\\", "/")
-            if not rel or material.has_rust_file(rel):
+                mode = "whole_file"
+                start_line = None
+                end_line = None
+            if not rel or material.has_rust_file(rel, start_line=start_line, end_line=end_line):
                 continue
             if not self._is_editable_rust_path(rel):
                 print(f"    [rtest] 拒绝读取非 Rust 源文件：{rel}")
                 continue
-            content = self.adapter.read_file_slice(rust_project_path, rel)
-            if content and material.add_rust_file(rel, content):
+            if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int) and end_line >= start_line:
+                content = self.adapter.read_file_slice(
+                    rust_project_path,
+                    rel,
+                    start_line=start_line,
+                    end_line=end_line,
+                )
+            else:
+                content = self.adapter.read_file_slice(rust_project_path, rel)
+                start_line = None
+                end_line = None
+                mode = "whole_file"
+            if content and material.add_rust_file(
+                rel,
+                content,
+                start_line=start_line,
+                end_line=end_line,
+                mode=mode,
+            ):
                 new_material = True
-                print(f"    [rtest] 提供 Rust 文件：{rel} ({len(content)} chars)")
+                if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int):
+                    print(
+                        f"    [rtest] 提供 Rust 文件片段：{rel} [{start_line}-{end_line}] "
+                        f"({len(content)} chars)"
+                    )
+                else:
+                    print(f"    [rtest] 提供 Rust 文件：{rel} ({len(content)} chars)")
         return new_material
 
     def _absorb_test_artifact_requests(
@@ -1206,14 +1257,49 @@ class RustTestAgent:
         for req in requests or []:
             if isinstance(req, dict):
                 rel = str(req.get("path") or "").replace("\\", "/")
+                mode = str(req.get("mode") or "whole_file").strip().lower()
+                try:
+                    start_line = int(req.get("start_line"))
+                except Exception:
+                    start_line = None
+                try:
+                    end_line = int(req.get("end_line"))
+                except Exception:
+                    end_line = None
             else:
                 rel = str(req or "").replace("\\", "/")
+                mode = "whole_file"
+                start_line = None
+                end_line = None
             rel = rel.strip().lstrip("/")
-            if not rel or material.has_test_artifact(rel):
+            if not rel or material.has_test_artifact(rel, start_line=start_line, end_line=end_line):
                 continue
-            content = self._read_test_artifact(failing_case, rel)
-            if content and material.add_test_artifact(rel, content):
-                print(f"    [rtest] 提供测试产物：{rel} ({len(content)} chars)")
+            if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int) and end_line >= start_line:
+                content = self._read_test_artifact(
+                    failing_case,
+                    rel,
+                    start_line=start_line,
+                    end_line=end_line,
+                )
+            else:
+                content = self._read_test_artifact(failing_case, rel)
+                start_line = None
+                end_line = None
+                mode = "whole_file"
+            if content and material.add_test_artifact(
+                rel,
+                content,
+                start_line=start_line,
+                end_line=end_line,
+                mode=mode,
+            ):
+                if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int):
+                    print(
+                        f"    [rtest] 提供测试产物片段：{rel} [{start_line}-{end_line}] "
+                        f"({len(content)} chars)"
+                    )
+                else:
+                    print(f"    [rtest] 提供测试产物：{rel} ({len(content)} chars)")
                 new_material = True
             elif not content:
                 print(f"    [rtest] 测试产物不存在或不可读：{rel}")
@@ -1634,6 +1720,12 @@ def _build_argparser() -> argparse.ArgumentParser:
     parser.add_argument("--build-timeout-seconds", type=int, default=600)
     parser.add_argument("--test-timeout-seconds", type=int, default=30)
     parser.add_argument(
+        "--prompt-budget-chars",
+        type=int,
+        default=PROMPT_MATERIAL_BUDGET_CHARS,
+        help="提示词材料预算（按字符近似 token，默认 256000，约 64k token 级别）",
+    )
+    parser.add_argument(
         "--source-records",
         default="",
         help="C 源码 JSON 路径；不传则回落到 src/parse/res/<name>.json",
@@ -1671,6 +1763,7 @@ def main() -> int:
         translate_tests=args.translate_tests,
         enable_log_agent=args.use_log_agent,
         max_debug_probes=args.log_agent_max_debug_probes,
+        prompt_budget_chars=args.prompt_budget_chars,
     )
     summary = agent.run(
         rust_project_path=args.rust_project_path,

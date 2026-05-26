@@ -504,7 +504,7 @@ class RustGenerationSpecAgent:
     """
 
     IMPORTANT_KINDS = {"manifest", "constitution", "interface", "behavior", "module-spec"}
-    SECONDARY_KINDS = {"module-plan", "risk", "doc"}
+    SECONDARY_KINDS = {"module-plan", "risk", "pointer", "macro", "doc"}
     GENERIC_ANCHOR_PARTS = {
         "new",
         "get",
@@ -675,6 +675,10 @@ class RustGenerationSpecAgent:
         if "/04_gaps_and_risks/" in normalized:
             return "risk"
         if normalized.startswith("specs/") or "/specs/" in normalized:
+            if normalized.endswith("/pointer.md"):
+                return "pointer"
+            if normalized.endswith("/macro.md"):
+                return "macro"
             if normalized.endswith("/spec.md"):
                 return "module-spec"
             if normalized.endswith("/plan.md"):
@@ -1133,6 +1137,10 @@ class RustGenerationSpecAgent:
             has_source_overlap = self._section_matches_plan_source(section, plan)
             has_symbol_overlap = any(symbol in section.symbols for symbol in plan.owns)
             has_function_overlap = any(fn in section.symbols for fn in plan.source_functions)
+            has_optional_module_overlap = (
+                section.kind in {"pointer", "macro"}
+                and self._optional_section_matches_plan_module(section, plan)
+            )
 
             # 如果 plan 有明确 source_files，只允许：
             # (a) source 重叠的 section
@@ -1142,7 +1150,7 @@ class RustGenerationSpecAgent:
                 if section.kind not in {"manifest", "constitution"}:
                     if section_c_stems and not section_c_stems.issubset(plan_source_stems):
                         continue
-                    if not has_source_overlap and not has_symbol_overlap and not has_function_overlap:
+                    if not has_source_overlap and not has_symbol_overlap and not has_function_overlap and not has_optional_module_overlap:
                         # 没有明确 source 也没有符号重叠 → 检查 module 名
                         if not section.source_files:
                             mapped_stems = {
@@ -1163,12 +1171,16 @@ class RustGenerationSpecAgent:
                 score += 40
             if has_function_overlap:
                 score += 30
+            if has_optional_module_overlap:
+                score += 34
             if section.kind == "interface":
                 score += 20
             elif section.kind == "behavior":
                 score += 14
             elif section.kind == "module-spec":
                 score += 10
+            elif section.kind in {"pointer", "macro"}:
+                score += 8
             elif section.kind == "constitution":
                 score += 6
             elif section.kind == "module-plan":
@@ -1460,6 +1472,20 @@ class RustGenerationSpecAgent:
         plan_stems = {_stem(source).lower() for source in plan.source_files if _stem(source)}
         section_stems = {_stem(source).lower() for source in section.source_files if _stem(source)}
         return bool(plan_stems & section_stems)
+
+    def _optional_section_matches_plan_module(self, section: DocSection, plan: RustFilePlan) -> bool:
+        normalized = section.rel_path.replace("\\", "/").lower()
+        match = re.search(r"(?:^|/)specs/\d+-(.+?)-rust-port/(?:pointer|macro)\.md$", normalized)
+        if not match:
+            return False
+        evidence_module = match.group(1).replace("-", "_")
+        target_module = _stem(plan.path).lower().replace("-", "_")
+        source_modules = {
+            _stem(source).lower().replace("-", "_")
+            for source in plan.source_files
+            if _stem(source)
+        }
+        return evidence_module == target_module or evidence_module in source_modules
 
     def _section_score(self, section: DocSection, query_tokens: Set[str], query_text: str) -> int:
         score = len(query_tokens & section.tokens) * 6

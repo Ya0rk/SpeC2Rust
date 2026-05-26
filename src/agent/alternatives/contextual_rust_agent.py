@@ -185,6 +185,10 @@ class SpecDocumentIndex:
         if "/04_gaps_and_risks/" in normalized:
             return "risk"
         in_specs = normalized.startswith("specs/") or "/specs/" in normalized
+        if in_specs and normalized.endswith("/pointer.md"):
+            return "pointer"
+        if in_specs and normalized.endswith("/macro.md"):
+            return "macro"
         if in_specs and normalized.endswith("/spec.md"):
             return "spec"
         if in_specs and normalized.endswith("/plan.md"):
@@ -949,6 +953,37 @@ class ContextualRustAgent(RustAgent):
         self._cfile_to_module: Dict[str, str] = {}
         self._module_spec_docs: Dict[str, Dict[str, str]] = {}
         self.entry_kind = "auto"
+        self.use_pointer_agent = False
+        self.use_macro_agent = False
+
+    def configure_optional_evidence(
+        self,
+        use_pointer_agent: bool = False,
+        use_macro_agent: bool = False,
+    ) -> None:
+        self.use_pointer_agent = bool(use_pointer_agent)
+        self.use_macro_agent = bool(use_macro_agent)
+
+    def _filter_optional_evidence_documents(self) -> None:
+        """Keep stale optional evidence out of prompts unless its switch is enabled."""
+        retained: Dict[str, str] = {}
+        for path, content in self.doc_contents.items():
+            normalized = path.replace("\\", "/").lower()
+            basename = os.path.basename(normalized)
+            is_pointer = basename in {"pointer.md", "pointer_guidance.md"}
+            is_macro = basename in {"macro.md", "macro_guidance.md"}
+            is_combined_summary = normalized.endswith(
+                "/04_gaps_and_risks/001_pointer_macro_summary.md"
+            )
+
+            if is_pointer and not self.use_pointer_agent:
+                continue
+            if is_macro and not self.use_macro_agent:
+                continue
+            if is_combined_summary and not (self.use_pointer_agent and self.use_macro_agent):
+                continue
+            retained[path] = content
+        self.doc_contents = retained
 
     def _set_request_label(self, label: str):
         if hasattr(self.llm, "set_request_label"):
@@ -2686,6 +2721,7 @@ Return JSON:
         print("=" * 60)
         self.create_rust_project(project_name, output_dir)
         self.load_documents(doc_paths)
+        self._filter_optional_evidence_documents()
         self.configure_source_context(c_project_path=c_project_path, source_json_path=source_json_path)
         if self.source_json_path:
             print(f"已加载源码 JSON：{self.source_json_path}")

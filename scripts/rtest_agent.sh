@@ -19,6 +19,7 @@ Environment overrides:
   RUST_PROJECT_PATH=/abs/or/relative/rust/project
   BINARY_NAME=which
   MAX_REPAIR_ITERATIONS=20
+  CGR_RTEST_PROMPT_BUDGET_CHARS=256000
   BUILD_TIMEOUT_SECONDS=600
   TEST_TIMEOUT_SECONDS=30
   CONFIG_FILE=local_config.json
@@ -55,6 +56,7 @@ C_PROJECT="${C_PROJECT_PATH:-datasets/${PROJECT_NAME}}"
 RUST_PROJECT="${RUST_PROJECT_PATH:-output/${PROJECT_NAME}/${PROJECT_NAME}-rust}"
 BIN_NAME="${BINARY_NAME:-${PROJECT_NAME}}"
 MAX_ITERS="${MAX_REPAIR_ITERATIONS:-20}"
+PROMPT_BUDGET="${CGR_RTEST_PROMPT_BUDGET_CHARS:-256000}"
 BUILD_TIMEOUT="${BUILD_TIMEOUT_SECONDS:-600}"
 TEST_TIMEOUT="${TEST_TIMEOUT_SECONDS:-30}"
 CONFIG="${CONFIG_FILE:-${WORKSPACE}/local_config.json}"
@@ -168,6 +170,7 @@ agent_args=(
   --binary-name "$BIN_NAME"
   --config-file "$CONFIG"
   --max-repair-iterations "$MAX_ITERS"
+  --prompt-budget-chars "$PROMPT_BUDGET"
   --build-timeout-seconds "$BUILD_TIMEOUT"
   --test-timeout-seconds "$TEST_TIMEOUT"
 )
@@ -192,6 +195,7 @@ echo "C project    : $C_PROJECT"
 echo "Rust project : $RUST_PROJECT"
 echo "Binary name  : $BIN_NAME"
 echo "Max repairs  : $MAX_ITERS"
+echo "Prompt budget: $PROMPT_BUDGET chars"
 echo "Workspace    : $WORKSPACE"
 echo "Temp dir     : $TMP_DIR"
 echo "Log          : $LOG_FILE"

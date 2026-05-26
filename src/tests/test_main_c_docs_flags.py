@@ -1,4 +1,5 @@
 import sys
+import tempfile
 import unittest
 from argparse import Namespace
 from pathlib import Path
@@ -59,6 +60,31 @@ class MainCDocsFlagTests(unittest.TestCase):
             freeze_c_docs=True,
         )
         self.assertFalse(main_module.should_run_spec_json_stage(args))
+
+    def test_existing_spec_auxiliary_doc_paths_include_only_enabled_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            module = root / "specs" / "001-node-rust-port"
+            module.mkdir(parents=True)
+            pointer = module / "pointer.md"
+            macro = module / "macro.md"
+            pointer.write_text("# pointer\n", encoding="utf-8")
+            macro.write_text("# macro\n", encoding="utf-8")
+            summary = root / "docs" / "rewrite-context" / "04_gaps_and_risks" / "001_pointer_macro_summary.md"
+            summary.parent.mkdir(parents=True)
+            summary.write_text("# summary\n", encoding="utf-8")
+
+            pointer_only = main_module.existing_spec_auxiliary_doc_paths(str(root), use_pointer_agent=True)
+            both = main_module.existing_spec_auxiliary_doc_paths(
+                str(root),
+                use_pointer_agent=True,
+                use_macro_agent=True,
+            )
+
+            self.assertEqual(pointer_only, [str(pointer)])
+            self.assertIn(str(pointer), both)
+            self.assertIn(str(macro), both)
+            self.assertIn(str(summary), both)
 
     def test_rust_repair_stage_is_controlled_by_optional_flag(self):
         self.assertFalse(main_module.should_run_rust_repair_stage(self.make_args()))

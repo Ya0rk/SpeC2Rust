@@ -32,6 +32,7 @@ from agent.alternatives.contextual_rust_agent import ContextualRustAgent
 from agent.code_fixer_agent import CodeFixer, TestFixer
 from agent.rust_repair_agent import RustRepairAgent
 from agent.rtest import RustTestAgent
+from agent.rtest.constants import PROMPT_MATERIAL_BUDGET_CHARS
 from agent.rtest.c_project_builder import CProjectBuilder
 from agent.unfinished_code_agent import UnfinishedCodeAgent
 from config.config import Config
@@ -57,6 +58,29 @@ def should_run_pointer_stage(args) -> bool:
 
 def should_run_macro_stage(args) -> bool:
     return args.use_macro_agent and not args.use_spec_agent and c_docs_writable(args)
+
+
+def existing_spec_auxiliary_doc_paths(
+    c_doc_dir: str,
+    use_pointer_agent: bool = False,
+    use_macro_agent: bool = False,
+) -> list[str]:
+    """Return only enabled, existing SpecAgent Pointer/Macro evidence files."""
+    root = Path(c_doc_dir)
+    paths: list[str] = []
+    specs_dir = root / "specs"
+
+    if use_pointer_agent and specs_dir.is_dir():
+        paths.extend(str(path) for path in sorted(specs_dir.rglob("pointer.md")))
+    if use_macro_agent and specs_dir.is_dir():
+        paths.extend(str(path) for path in sorted(specs_dir.rglob("macro.md")))
+
+    if use_pointer_agent and use_macro_agent:
+        summary = root / "docs" / "rewrite-context" / "04_gaps_and_risks" / "001_pointer_macro_summary.md"
+        if summary.is_file():
+            paths.append(str(summary))
+
+    return list(dict.fromkeys(paths))
 
 
 def should_run_rust_repair_stage(args) -> bool:
@@ -130,6 +154,11 @@ def run_optional_rust_test_agent(args, config: Config, rust_project_path: str):
         translate_tests=getattr(args, "rust_test_agent_translate_tests", False),
         enable_log_agent=getattr(args, "use_log_agent", False),
         max_debug_probes=getattr(args, "log_agent_max_debug_probes", 6),
+        prompt_budget_chars=getattr(
+            args,
+            "rust_test_agent_prompt_budget_chars",
+            PROMPT_MATERIAL_BUDGET_CHARS,
+        ),
     )
     summary = test_agent.run(
         rust_project_path=rust_project_path,
@@ -184,7 +213,12 @@ def selected_rust_agent_mode(args) -> str:
     return "RustAgent"
 
 
-def run_optional_rust_repair_agent(args, config: Config, rust_project_path: str):
+def run_optional_rust_repair_agent(
+    args,
+    config: Config,
+    rust_project_path: str,
+    error_organizer_agent=None,
+):
     """
     可选运行 RustRepairAgent。
     开启后替代默认 CodeFixer/TestFixer，并原地修复当前 Rust 项目。
@@ -196,14 +230,19 @@ def run_optional_rust_repair_agent(args, config: Config, rust_project_path: str)
     prYellow("步骤 3: RustRepairAgent 深度修复")
     prBlue("=" * 80)
 
-    repair_agent = RustRepairAgent(
-        config=config,
-        max_iterations=getattr(args, "rust_repair_max_iterations", 15),
-    )
+    repair_kwargs = {
+        "config": config,
+        "max_iterations": getattr(args, "rust_repair_max_iterations", 15),
+    }
+    if error_organizer_agent is not None:
+        repair_kwargs["error_organizer_agent"] = error_organizer_agent
+    repair_agent = RustRepairAgent(**repair_kwargs)
     c_docs_path = os.path.join(args.output_dir, "c_docs") if getattr(args, "output_dir", "") else ""
     repair_agent.configure_context_sources(
         c_project_path=getattr(args, "c_project_path", "") or "",
         c_docs_path=c_docs_path,
+        use_pointer_agent=getattr(args, "use_pointer_agent", False),
+        use_macro_agent=getattr(args, "use_macro_agent", False),
     )
     result = repair_agent.repair_project(
         project_path=rust_project_path,
@@ -352,6 +391,12 @@ def main():
         type=int,
         default=30,
         help="RustTestAgent 单个 sh 测试脚本超时时间（默认：30 秒）"
+    )
+    parser.add_argument(
+        "--rust-test-agent-prompt-budget-chars",
+        type=int,
+        default=PROMPT_MATERIAL_BUDGET_CHARS,
+        help="RustTestAgent 提示词材料预算（按字符近似 token，默认：256000，约 64k token 级别）"
     )
     parser.add_argument(
         "--rust-test-agent-translate-tests",
@@ -528,6 +573,13 @@ def main():
         if args.use_spec_agent:
             if args.use_spec_json_agent and os.path.exists(spec_json_path):
                 doc_paths.append(spec_json_path)
+                doc_paths.extend(
+                    existing_spec_auxiliary_doc_paths(
+                        c_doc_dir,
+                        use_pointer_agent=args.use_pointer_agent,
+                        use_macro_agent=args.use_macro_agent,
+                    )
+                )
             else:
                 candidate_paths = [
                     os.path.join(c_doc_dir, ".specify", "memory"),
@@ -537,19 +589,6 @@ def main():
                 for doc_path in candidate_paths:
                     if os.path.exists(doc_path):
                         doc_paths.append(doc_path)
-
-            # SpecAgent 路径下，PointerAgent / MacroAgent 会先写入各模块目录，
-            # 再由 rewrite-context/04_gaps_and_risks/ 下的汇总文件提供给 RustAgent。
-            # 这样可以避免把所有模块的 pointer.md / macro.md 全部塞进上下文。
-            auxiliary_summary_path = os.path.join(
-                c_doc_dir,
-                "docs",
-                "rewrite-context",
-                "04_gaps_and_risks",
-                "001_pointer_macro_summary.md",
-            )
-            if os.path.exists(auxiliary_summary_path):
-                doc_paths.append(auxiliary_summary_path)
         else:
             target_doc_name = ["final_project_overview.md"]
             for doc_file in target_doc_name:
@@ -589,6 +628,10 @@ def main():
         if args.use_contextual_rust_agent:
             rust_agent = ContextualRustAgent(config=config)
             rust_agent.entry_kind = args.rust_entry_kind
+            rust_agent.configure_optional_evidence(
+                use_pointer_agent=args.use_pointer_agent,
+                use_macro_agent=args.use_macro_agent,
+            )
         elif args.use_growth_rust_agent:
             rust_agent = GrowthRustAgent(config=config)
         elif args.use_stable_rust_agent:
@@ -649,7 +692,12 @@ def main():
             # =========================================================================
             # 步骤 3: 使用 RustRepairAgent 替代默认编译/测试修复链路
             # =========================================================================
-            repair_result = run_optional_rust_repair_agent(args, config, rust_project_path)
+            repair_result = run_optional_rust_repair_agent(
+                args,
+                config,
+                rust_project_path,
+                error_organizer_agent=error_organizer_agent,
+            )
             compile_ready = bool(repair_result and repair_result.check_passed and repair_result.test_passed)
         else:
             # =========================================================================

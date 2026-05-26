@@ -24,6 +24,7 @@ class CSourceIndex:
     records: List[Dict] = field(default_factory=list)
     _by_name: Dict[str, Dict] = field(default_factory=dict)
     _by_file: Dict[str, List[Dict]] = field(default_factory=dict)
+    source_root: str = ""
 
     def _register(self, rec: Dict) -> None:
         name = str(rec.get("name") or "").strip()
@@ -73,11 +74,14 @@ class CSourceIndex:
             return None
 
         kind = str(request.get("kind") or "function").lower()
-        query = str(request.get("query") or "").strip()
+        query = str(request.get("query") or request.get("path") or request.get("file") or "").strip()
         if not query:
             return None
 
         if kind == "file":
+            ranged = self._fulfill_file_range(query, request)
+            if ranged:
+                return ranged
             recs = self.find_file(query)
             if not recs:
                 # 兜底：query 可能是函数名，但用户标成了 file
@@ -97,6 +101,64 @@ class CSourceIndex:
             if lowered == name or lowered in file_path or lowered in name:
                 return rec
         return None
+
+    def _fulfill_file_range(self, query: str, request: Dict) -> Optional[Dict]:
+        mode = str(request.get("mode") or "").strip().lower()
+        if mode not in {"line_range", "range"}:
+            return None
+        try:
+            start_line = int(request.get("start_line"))
+            end_line = int(request.get("end_line"))
+        except Exception:
+            return None
+        if start_line <= 0 or end_line < start_line:
+            return None
+        source = self._read_source_file_range(query, start_line, end_line)
+        if source is None:
+            return None
+        rel = self._canonical_file_path(query) or query
+        return {
+            "name": f"<file:{rel}:{start_line}-{end_line}>",
+            "file": rel,
+            "span": f"{start_line}-{end_line}",
+            "source": source,
+            "num_lines": len(source.splitlines()),
+            "func_defid": f"{rel}:<file:{start_line}-{end_line}>",
+            "is_file_aggregate": True,
+            "is_line_range": True,
+            "start_line": start_line,
+            "end_line": end_line,
+        }
+
+    def _canonical_file_path(self, query: str) -> str:
+        matches = self.find_file(query)
+        if matches:
+            return str(matches[0].get("file") or "").replace("\\", "/")
+        return query.replace("\\", "/").strip()
+
+    def _read_source_file_range(self, query: str, start_line: int, end_line: int) -> Optional[str]:
+        if not self.source_root:
+            return None
+        rel = self._canonical_file_path(query)
+        normalized = rel.replace("\\", "/").strip().lstrip("/")
+        if not normalized or normalized.startswith("../") or "/../" in f"/{normalized}/":
+            return None
+        root = Path(self.source_root).resolve()
+        full = (root / normalized).resolve()
+        try:
+            if root not in full.parents and full != root:
+                return None
+        except Exception:
+            return None
+        if not full.is_file():
+            return None
+        text = full.read_text(encoding="utf-8", errors="ignore")
+        lines = text.splitlines()
+        start = max(1, start_line)
+        end = min(len(lines), end_line)
+        if end < start:
+            return ""
+        return "\n".join(lines[start - 1:end]) + "\n"
 
 
 def _aggregate_file_record(records: List[Dict]) -> Dict:
@@ -143,7 +205,7 @@ def load_source_records(
     """
     if explicit_path:
         candidate = Path(explicit_path).expanduser().resolve()
-        return _load_from_path(candidate)
+        return _load_from_path(candidate, source_root=c_project_path)
 
     if not c_project_path:
         return CSourceIndex()
@@ -154,10 +216,10 @@ def load_source_records(
     if not candidate.exists():
         print(f"[rtest] 未找到源码 JSON：{candidate}（修复时无法提供 C 源码上下文）")
         return CSourceIndex()
-    return _load_from_path(candidate)
+    return _load_from_path(candidate, source_root=c_project_path)
 
 
-def _load_from_path(path: Path) -> CSourceIndex:
+def _load_from_path(path: Path, source_root: str = "") -> CSourceIndex:
     if not path.exists():
         print(f"[rtest] 源码 JSON 不存在：{path}")
         return CSourceIndex()
@@ -179,7 +241,7 @@ def _load_from_path(path: Path) -> CSourceIndex:
         if not raw:
             raw = [payload]
 
-    index = CSourceIndex()
+    index = CSourceIndex(source_root=str(Path(source_root).resolve()) if source_root else "")
     for item in raw:
         func_defid = item.get("func_defid", "") or ""
         name = item.get("name") or (

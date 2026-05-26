@@ -162,13 +162,23 @@ if [[ "${CGR_NO_DEFAULT_FLAGS:-0}" != "1" ]]; then
     --use-rust-test-agent
     --use-spec-agent
     # --freeze-c-docs
+    --use-error-organizer-agent --error-batch-size 10
     --rust-entry-kind main
     --rust-repair-max-iterations "${CGR_RUST_REPAIR_MAX_ITERATIONS:-64}"
     --rust-test-agent-max-iterations "${CGR_RUST_TEST_MAX_ITERATIONS:-64}"
+    --rust-test-agent-prompt-budget-chars "${CGR_RUST_TEST_PROMPT_BUDGET_CHARS:-256000}"
   )
   if [[ "${CGR_USE_LOG_AGENT:-0}" == "1" ]]; then
     default_flags+=(--use-log-agent --log-agent-max-debug-probes "${CGR_LOG_AGENT_MAX_DEBUG_PROBES:-6}")
   fi
+fi
+
+optional_analysis_flags=()
+if [[ "${CGR_USE_POINTER_AGENT:-0}" == "1" ]]; then
+  optional_analysis_flags+=(--use-pointer-agent)
+fi
+if [[ "${CGR_USE_MACRO_AGENT:-0}" == "1" ]]; then
+  optional_analysis_flags+=(--use-macro-agent)
 fi
 
 main_args=(
@@ -177,6 +187,7 @@ main_args=(
   --output_dir "$OUTPUT_DIR"
   --rust-project-name "$RUST_PROJECT_NAME"
   "${default_flags[@]}"
+  "${optional_analysis_flags[@]}"
   "$@"
 )
 

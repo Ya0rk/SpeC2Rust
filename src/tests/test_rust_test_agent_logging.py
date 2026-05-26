@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from agent.rtest.repair_prompt import MaterialBudget, build_repair_prompt  # noqa: E402
 from agent.rtest.models import TestCaseResult, TestRunSummary  # noqa: E402
 from agent.rtest.rust_test_agent import RustTestAgent, _RepairLoopState  # noqa: E402
+from agent.rtest.source_loader import CSourceIndex  # noqa: E402
 from agent.rtest.test_runner import TestRunner  # noqa: E402
 
 
@@ -895,6 +896,113 @@ class TestRunnerLoggingTests(unittest.TestCase):
             self.assertTrue(result.all_passed)
             self.assertEqual(run_all_mock.call_count, 2)
             self.assertEqual(repair_mock.call_count, 3)
+
+    def test_material_budget_keeps_single_large_requested_file(self) -> None:
+        material = MaterialBudget(budget_chars=100)
+        self.assertTrue(
+            material.add_c_record(
+                {"name": "main", "file": "c4.c", "source": "c" * 80, "span": ""}
+            )
+        )
+
+        self.assertTrue(material.add_rust_file("src/c4.rs", "r" * 160))
+
+        self.assertIn("src/c4.rs", material.rust_files())
+        self.assertEqual(material.c_records(), [])
+        self.assertGreater(material.total_chars(), 100)
+        self.assertIn(
+            "single protected material exceeds",
+            material.budget_pressure_summary(),
+        )
+
+    def test_absorb_rust_line_range_request_keeps_real_line_numbers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            src = project / "src"
+            src.mkdir(parents=True)
+            (src / "c4.rs").write_text(
+                "\n".join(f"line {idx}" for idx in range(1, 11)) + "\n",
+                encoding="utf-8",
+            )
+            agent = RustTestAgent(max_repair_iterations=1)
+            material = MaterialBudget()
+
+            added = agent._absorb_material_requests(
+                str(project),
+                CSourceIndex(),
+                [],
+                [
+                    {
+                        "path": "src/c4.rs",
+                        "mode": "line_range",
+                        "start_line": 4,
+                        "end_line": 6,
+                    }
+                ],
+                material,
+            )
+
+            self.assertTrue(added)
+            entry = material.rust_file_entries()[0]
+            self.assertEqual(entry["display_path"], "src/c4.rs:4-6")
+            self.assertEqual(entry["start_line"], 4)
+            self.assertIn("line 4", entry["content"])
+            self.assertNotIn("line 3", entry["content"])
+
+            failing_case = TestCaseResult(
+                name="case.sh",
+                script_path=str(Path(tmp) / "case.sh"),
+                passed=False,
+                exit_code=1,
+                stdout="",
+                stderr="",
+            )
+            prompt = build_repair_prompt(
+                failing_case=failing_case,
+                script_content="echo hi\n",
+                project_structure="",
+                rust_overview="",
+                material=material,
+                history_summary="",
+                source_records_index="",
+                attempt=1,
+                max_attempts=2,
+            )
+
+            self.assertIn("src/c4.rs:4-6", prompt)
+            self.assertIn("   4 | line 4", prompt)
+
+    def test_c_source_index_can_read_file_line_range_from_original_project(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "c4.c").write_text(
+                "\n".join(f"c line {idx}" for idx in range(1, 9)) + "\n",
+                encoding="utf-8",
+            )
+            index = CSourceIndex(source_root=str(root))
+            index.add(
+                {
+                    "name": "main",
+                    "file": "c4.c",
+                    "source": "int main(void) { return 0; }",
+                }
+            )
+
+            rec = index.fulfill_request(
+                {
+                    "kind": "file",
+                    "query": "c4.c",
+                    "mode": "line_range",
+                    "start_line": 3,
+                    "end_line": 5,
+                }
+            )
+
+            self.assertIsNotNone(rec)
+            self.assertEqual(rec["name"], "<file:c4.c:3-5>")
+            self.assertIn("c line 3", rec["source"])
+            self.assertIn("c line 5", rec["source"])
+            self.assertNotIn("c line 2", rec["source"])
 
 
 if __name__ == "__main__":

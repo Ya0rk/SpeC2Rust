@@ -91,7 +91,12 @@ class RustRepairAgent:
 
 
 
-    def __init__(self, config: Optional[Config] = None, max_iterations: int = 15):
+    def __init__(
+        self,
+        config: Optional[Config] = None,
+        max_iterations: int = 15,
+        error_organizer_agent=None,
+    ):
 
         self.config = config or Config()
 
@@ -106,6 +111,14 @@ class RustRepairAgent:
         self.c_project_path: str = ""
 
         self.c_docs_path: str = ""
+
+        self.error_organizer_agent = error_organizer_agent
+
+        self._current_error_batch_context: str = ""
+
+        self.use_pointer_agent = False
+
+        self.use_macro_agent = False
 
 
 
@@ -773,6 +786,72 @@ class RustRepairAgent:
 
 
 
+    def _select_repair_error_batch(self, output: str, project_dir: str) -> Dict[str, str]:
+
+        """Select the compile-error subset supplied to the LLM in this cycle."""
+
+        self._current_error_batch_context = ""
+
+        if self.error_organizer_agent is None:
+
+            return self._group_rust_errors_by_file(output)
+
+        batches = self.error_organizer_agent.organize_errors(output, project_dir)
+
+        if not batches:
+
+            return self._group_rust_errors_by_file(output)
+
+        active = batches[0]
+
+        diagnostics = [
+
+            str(item).strip()
+
+            for item in active.get("diagnostics", [])
+
+            if str(item).strip()
+
+        ]
+
+        focused_output = "\n\n".join(diagnostics)
+
+        grouped = self._group_rust_errors_by_file(focused_output)
+
+        if not grouped and focused_output:
+
+            grouped = {"__organized_batch__": focused_output}
+
+        total_diagnostics = sum(len(batch.get("diagnostics", [])) for batch in batches)
+
+        self._current_error_batch_context = (
+
+            "ErrorOrganizerAgent is enabled. "
+
+            f"This prompt contains one active batch with {len(diagnostics)} diagnostics "
+
+            f"from {len(batches)} remaining organized batches ({total_diagnostics} diagnostics total). "
+
+            "Fix or invalidate the active batch first; after recompilation the remaining errors "
+
+            "will be reorganized and the next active batch selected.\n"
+
+            f"Active batch summary: {active.get('summary', '')}"
+
+        )
+
+        print(
+
+            f"  ErrorOrganizerAgent：当前处理 1/{len(batches)} 批，"
+
+            f"包含 {len(diagnostics)}/{total_diagnostics} 条诊断"
+
+        )
+
+        return grouped
+
+
+
     def _choose_target_files(self, grouped_errors: Dict[str, str], limit: int = 2) -> List[str]:
 
         if not grouped_errors:
@@ -873,11 +952,77 @@ class RustRepairAgent:
 
 
 
-    def configure_context_sources(self, c_project_path: str = "", c_docs_path: str = "") -> None:
+    def configure_context_sources(
+        self,
+        c_project_path: str = "",
+        c_docs_path: str = "",
+        use_pointer_agent: bool = False,
+        use_macro_agent: bool = False,
+    ) -> None:
 
         self.c_project_path = str(Path(c_project_path).resolve()) if c_project_path and os.path.isdir(c_project_path) else ""
 
         self.c_docs_path = str(Path(c_docs_path).resolve()) if c_docs_path and os.path.isdir(c_docs_path) else ""
+
+        self.use_pointer_agent = bool(use_pointer_agent)
+
+        self.use_macro_agent = bool(use_macro_agent)
+
+
+
+    def _optional_evidence_protocol(self) -> str:
+
+        lines = []
+
+        if self.use_pointer_agent:
+
+            lines.append(
+                "- PointerAgent evidence is enabled. For ownership, nullable state, callbacks, aliasing, lifetime, or data-layout errors, search/read matching `specs/**/pointer.md` under kind=spec before designing a translation-level fix."
+            )
+
+        if self.use_macro_agent:
+
+            lines.append(
+                "- MacroAgent evidence is enabled. For constants, bit flags, feature branches, configuration, macro-expanded APIs, or conditional behavior errors, search/read matching `specs/**/macro.md` under kind=spec before designing a translation-level fix."
+            )
+
+        if self.use_pointer_agent and self.use_macro_agent:
+
+            lines.append(
+                "- The optional summary `docs/rewrite-context/04_gaps_and_risks/001_pointer_macro_summary.md` may locate the relevant module; module-local evidence remains authoritative."
+            )
+
+        if not lines:
+
+            return ""
+
+        return "\nOptional migration evidence interfaces:\n" + "\n".join(lines) + "\n"
+
+
+
+    def _context_evidence_enabled(self, kind: str, rel_path: str) -> bool:
+
+        if kind != "spec":
+
+            return True
+
+        normalized = (rel_path or "").replace("\\", "/").lower()
+
+        basename = os.path.basename(normalized)
+
+        if basename in {"pointer.md", "pointer_guidance.md"}:
+
+            return self.use_pointer_agent
+
+        if basename in {"macro.md", "macro_guidance.md"}:
+
+            return self.use_macro_agent
+
+        if normalized.endswith("/04_gaps_and_risks/001_pointer_macro_summary.md"):
+
+            return self.use_pointer_agent and self.use_macro_agent
+
+        return True
 
 
 
@@ -978,6 +1123,10 @@ class RustRepairAgent:
         end_line: Optional[int] = None,
 
     ) -> str:
+
+        if not self._context_evidence_enabled(kind, rel_path):
+
+            return ""
 
         full_path, _, _ = self._resolve_context_path(project_dir, kind, rel_path)
 
@@ -1265,6 +1414,14 @@ class RustRepairAgent:
 
                 entries.append(f"- spec:{rel_path}")
 
+            optional_protocol = self._optional_evidence_protocol().strip()
+
+            if optional_protocol:
+
+                entries.append("")
+
+                entries.append(optional_protocol)
+
         return "\n".join(entries).strip()
 
 
@@ -1294,6 +1451,10 @@ class RustRepairAgent:
                 rel_path = os.path.relpath(os.path.join(current_root, name), root).replace("\\", "/")
 
                 if not self._allowed_context_file(rel_path):
+
+                    continue
+
+                if not self._context_evidence_enabled(kind, rel_path):
 
                     continue
 
@@ -1391,6 +1552,24 @@ Previous round experience summary:
 
 """
 
+        organizer_block = ""
+
+        if self._current_error_batch_context.strip():
+
+            organizer_block = f"""
+
+Error organization context:
+
+```text
+
+{self._current_error_batch_context}
+
+```
+
+"""
+
+        optional_evidence_block = self._optional_evidence_protocol()
+
         return f"""You are performing Rust compile-repair diagnosis. Do not output code yet.
 
 
@@ -1431,6 +1610,8 @@ Key constraints:
 
 - If you do not know the corresponding C/spec file path, first use search_requests in kind=all to search for module names, function names, and type names.
 
+{optional_evidence_block}
+
 
 
 Project overview:
@@ -1442,6 +1623,8 @@ Project overview:
 ```
 
 {handoff_block}
+
+{organizer_block}
 
 
 
@@ -1707,6 +1890,10 @@ Return JSON only, in the following object format:
 
                     continue
 
+                if not self._context_evidence_enabled(kind, rel_path):
+
+                    continue
+
                 if normalized_glob and not self._path_matches_glob(rel_path, normalized_glob):
 
                     continue
@@ -1915,6 +2102,12 @@ Return JSON only, in the following object format:
 
         ]
 
+        optional_evidence = self._optional_evidence_protocol().strip()
+
+        if optional_evidence:
+
+            lines.extend(["", optional_evidence])
+
         return "\n".join(lines)
 
 
@@ -2079,6 +2272,22 @@ Cross-round handoff summary:
 
         material_inventory = self._format_material_inventory(materials)
 
+        organizer_block = ""
+
+        if self._current_error_batch_context.strip():
+
+            organizer_block = f"""
+
+Error organization context:
+
+```text
+
+{self._current_error_batch_context}
+
+```
+
+"""
+
         return f"""You are now generating the real repair plan.
 
 
@@ -2136,6 +2345,8 @@ Diagnosis plan:
 ```
 
 {summary_block}
+
+{organizer_block}
 
 
 
@@ -3207,7 +3418,7 @@ Relevant context:
 
 
 
-        grouped_errors = self._group_rust_errors_by_file(check_output)
+        grouped_errors = self._select_repair_error_batch(check_output, run_dir)
 
         project_overview = self._build_project_overview(run_dir)
 
@@ -3218,6 +3429,8 @@ Relevant context:
         diagnosis_search_materials = self._materialize_search_requests(run_dir, diagnosis_plan.get("search_requests", []), max_chars=None)
 
         materials.extend(diagnosis_search_materials)
+
+        active_batch_signature = self._error_signature("\n\n".join(grouped_errors.values()))
 
         if diagnosis_search_materials:
 
@@ -3303,7 +3516,52 @@ Relevant context:
 
             cycle_index += 1
 
-            grouped_errors = self._group_rust_errors_by_file(current_check_output)
+            grouped_errors = self._select_repair_error_batch(current_check_output, run_dir)
+
+            selected_batch_signature = self._error_signature("\n\n".join(grouped_errors.values()))
+
+            if (
+                self.error_organizer_agent is not None
+                and selected_batch_signature != active_batch_signature
+            ):
+
+                diagnosis_plan = self._request_diagnosis_plan(
+                    grouped_errors,
+                    project_overview,
+                    current_summary or handoff_summary,
+                )
+
+                materials.extend(
+                    self._materialize_read_requests(
+                        run_dir,
+                        diagnosis_plan.get("read_requests", []),
+                        max_chars=None,
+                    )
+                )
+
+                materials.extend(
+                    self._materialize_search_requests(
+                        run_dir,
+                        diagnosis_plan.get("search_requests", []),
+                        max_chars=None,
+                    )
+                )
+
+                active_batch_signature = selected_batch_signature
+
+                self._append_repair_record(journal_path, {
+
+                    "iteration": iteration,
+
+                    "stage": "organized_error_batch_switched",
+
+                    "cycle_index": cycle_index,
+
+                    "active_batch_context": self._current_error_batch_context,
+
+                    "target_files": diagnosis_plan.get("target_files", []),
+
+                })
 
             structured = self._request_structured_edits(run_dir, diagnosis_plan, grouped_errors, materials, cycle_index, current_summary, handoff_summary)
 
