@@ -166,6 +166,9 @@ if [[ "${CGR_NO_DEFAULT_FLAGS:-0}" != "1" ]]; then
     --rust-repair-max-iterations "${CGR_RUST_REPAIR_MAX_ITERATIONS:-64}"
     --rust-test-agent-max-iterations "${CGR_RUST_TEST_MAX_ITERATIONS:-64}"
   )
+  if [[ "${CGR_USE_LOG_AGENT:-0}" == "1" ]]; then
+    default_flags+=(--use-log-agent --log-agent-max-debug-probes "${CGR_LOG_AGENT_MAX_DEBUG_PROBES:-6}")
+  fi
 fi
 
 main_args=(

@@ -10,7 +10,6 @@ Usage:
 Examples:
   bash scripts/rtest_agent.sh which
   bash scripts/rtest_agent.sh which --max-repair-iterations 20 --verbose
-  bash scripts/rtest_agent.sh which --translate-tests
   PYTHON=/home/unix/miniconda3/envs/tcode/bin/python bash scripts/rtest_agent.sh which
 
 Environment overrides:
@@ -25,6 +24,8 @@ Environment overrides:
   CONFIG_FILE=local_config.json
   SOURCE_RECORDS=/path/to/source_records.json
   VERBOSE=1
+  USE_LOG_AGENT=1
+  LOG_AGENT_MAX_DEBUG_PROBES=6
   CGR_ALLOW_SYSTEM_PYTHON=1
   CGR_PYTHONNOUSERSITE=1
 EOF
@@ -177,6 +178,9 @@ fi
 
 if [[ "${VERBOSE:-0}" == "1" ]]; then
   agent_args+=(--verbose)
+fi
+if [[ "${USE_LOG_AGENT:-0}" == "1" ]]; then
+  agent_args+=(--use-log-agent --log-agent-max-debug-probes "${LOG_AGENT_MAX_DEBUG_PROBES:-6}")
 fi
 
 agent_args+=("$@")

@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import OrderedDict
 from typing import Dict, Iterable, List, Optional
 
@@ -160,6 +161,9 @@ def build_repair_prompt(
     regression_warning: str = "",
     focused_failure: str = "",
     test_artifact_index: str = "",
+    runtime_evidence: Optional[Dict[str, object]] = None,
+    log_agent_enabled: bool = False,
+    active_static_probes: Optional[Iterable[object]] = None,
 ) -> str:
     c_blocks: List[str] = []
     for rec in material.c_records():
@@ -219,6 +223,15 @@ def build_repair_prompt(
             f"```text\n{failing_case.trace[-PROMPT_TRACE_TAIL_CHARS:]}\n```\n"
         )
 
+    runtime_block = (
+        _build_runtime_evidence_block(runtime_evidence) if log_agent_enabled else ""
+    )
+    instrumentation_context = _build_instrumentation_context(
+        log_agent_enabled, active_static_probes
+    )
+    instrumentation_json = _build_instrumentation_json_schema(log_agent_enabled)
+    instrumentation_requirement = _build_instrumentation_requirement(log_agent_enabled)
+
     c_block_text = "\n".join(c_blocks) if c_blocks else "(none)"
     rust_block_text = "\n".join(rust_blocks) if rust_blocks else "(none)"
     artifact_block_text = "\n".join(artifact_blocks) if artifact_blocks else "(none)"
@@ -228,7 +241,8 @@ def build_repair_prompt(
     return f"""You are fixing a Rust project translated from a C project so that it passes sh functional tests.
 The current case failed (repair round {attempt}/{max_attempts}).
 
-Test script runtime conventions (understand first; only change the failing script if you confirm it is a test-migration error):
+Test script runtime conventions (understand first; all test scripts are human-preprocessed read-only inputs):
+- Never edit any test shell script or fixture. The test suite is a fixed validation baseline maintained outside this repair loop.
 - Run the original C project's sh script directly by default, without rewriting it with the LLM first.
 - Commands in the original script that share the project name (for example, the tested program names like `head` / `which`) are mapped by the runner to the Rust executable;
   `$RUST_BIN` and `<bin_name>-rust` also point to the same Rust executable.
@@ -239,9 +253,8 @@ Test script runtime conventions (understand first; only change the failing scrip
 - The original script is usually a fixed-expected-output / fixture test; a failure usually means the Rust implementation disagrees with the original C tool behavior.
   Fix the Rust implementation around the C behavior. Only when the script explicitly uses `$C_BIN` / `<bin_name>-c` is it a Rust-vs-C comparison.
 - But if the diff only comes from differences in the absolute paths / argv[0] / binary names of `$C_BIN` and `$RUST_BIN`,
-  that is usually a test-migration or runtime issue. Prefer editing the current test script `test/{failing_case.name}`,
-  make C/Rust run under the same wrapper/symlink name, or normalize symmetrically in the script's normalize_output;
-  do not keep modifying Rust business logic repeatedly.
+  that indicates the fixed test baseline may require human preprocessing outside this agent. Do not edit the script or hardcode a path in Rust;
+  explain the evidence in `summary`, request further readable artifacts if needed, and set `complete=true` only when no Rust fix is appropriate.
 
 Inferred tested features (from script name / content; may be CLI flags, subcommands, or key strings, and are not tied to any specific project style):
 - Flag candidates: {flags_line}
@@ -269,7 +282,7 @@ Most recent execution result:
 ```
 {failing_case.stderr}
 ```
-{trace_block}{expected_block}{build_error_block}{regression_block}
+    {trace_block}{runtime_block}{instrumentation_context}{expected_block}{build_error_block}{regression_block}
 Project structure design document (output from the spec agent, used as a modification guide):
 ```
 {project_structure or '(not provided; conservatively modify only files related to the failure)'}
@@ -325,6 +338,7 @@ Return JSON only, with no explanation. Use the following structure:
       "content": "Replacement valid Rust snippet"
     }}
   ],
+{instrumentation_json}
   "complete": false,
   "updated_summary": "Updated brief memory"
 }}
@@ -336,10 +350,8 @@ Requirements:
    Provided Rust files are shown as `NNNN | code`; `NNNN` is the real line number to use in edits.
 3. If you need more C source context, use cgr_read (kind is "function" or "file",
    query by name or relative path), and I will provide the C source in the next round.
-4. By default, only edit the translated Rust project (`*.rs` / `Cargo.toml`, etc.). The only exception:
-   if the current failure is a test-migration error (for example argv[0] / `$C_BIN` / `$RUST_BIN` path differences, or the test script
-   uses a non-equivalent runtime cwd/PATH), you may edit only the current failing script `test/{failing_case.name}`.
-   Do not edit other test scripts, fixtures, the original C project, or the target directory.
+4. Only edit the translated Rust project (`*.rs` / `Cargo.toml`, etc.). Every test shell script and fixture is read-only,
+   including the currently failing script. Do not edit the original C project or the target directory.
 5. **No fake implementations**: do not use placeholder styles such as `unimplemented!()` / `todo!()` / `panic!("not implemented")` /
    `panic!("stub")`; also do not paste the expected output literal found in the script directly into Rust source
    as the return value. Both approaches will be automatically rejected. Fixes must be based on the real C source logic.
@@ -355,5 +367,76 @@ Requirements:
 11. When adding methods to an existing impl, insert them before that impl's closing brace; do not insert them into a later
     `impl Default`, trait impl, or other unrelated impl block.
 12. If the current failing subcase shows the C/Rust outputs differ only by the binary absolute path, and the C source confirms the program prints argv[0],
-    do not hardcode the C_BIN path in Rust; instead fix the current test script so the comparison is fair for argv[0].
+    do not hardcode the C_BIN path in Rust and do not edit the test script. Report that the preprocessed read-only test baseline needs human review.
+{instrumentation_requirement}
 """
+
+
+def _build_runtime_evidence_block(runtime_evidence: Optional[Dict[str, object]]) -> str:
+    if not runtime_evidence:
+        return ""
+    return (
+        "\n[Runtime evidence]\n"
+        f"```json\n{json.dumps(runtime_evidence, ensure_ascii=False, indent=2)}\n```\n"
+    )
+
+
+def _build_instrumentation_context(
+    enabled: bool, active_static_probes: Optional[Iterable[object]]
+) -> str:
+    if not enabled:
+        return ""
+    active = []
+    for probe in active_static_probes or []:
+        active.append(
+            {
+                "id": getattr(probe, "probe_id", ""),
+                "target": getattr(probe, "target", ""),
+                "file": getattr(probe, "file", ""),
+                "line": getattr(probe, "line", 0),
+                "expressions": list(getattr(probe, "expressions", []) or []),
+                "label": getattr(probe, "label", ""),
+            }
+        )
+    return (
+        "\nLogAgent: enabled. Dynamic probes and temporary static logging probes are available. "
+        "Static probes are applied only to temporary build copies, never to the source project.\n"
+        f"Active static probes:\n```json\n{json.dumps(active, ensure_ascii=False, indent=2)}\n```\n"
+    )
+
+
+def _build_instrumentation_json_schema(enabled: bool) -> str:
+    if not enabled:
+        return ""
+    return """  "debug_probe": {
+    "target": "rust | c | both",
+    "backend": "lldb",
+    "targets": {
+      "rust": {"breakpoints": [{"file": "src/<your_module>.rs", "line": 42}], "watch_expressions": ["state.len()"]},
+      "c": {"breakpoints": [{"file": "src/source.c", "line": 42}], "watch_expressions": ["state"]}
+    },
+    "program_args": ["--help"],
+    "collect_stack": true,
+    "collect_locals": true
+  },
+  "static_probe_update": {
+    "add": [
+      {"id": "rust_before_branch", "target": "rust", "file": "src/<your_module>.rs", "line": 42, "expressions": ["state.len()"], "label": "before branch"},
+      {"id": "c_before_branch", "target": "c", "file": "src/source.c", "line": 42, "expressions": ["state_len"], "label": "before branch"}
+    ],
+    "remove": ["obsolete_probe_id"],
+    "clear": false,
+    "program_args": ["--help"]
+  },"""
+
+
+def _build_instrumentation_requirement(enabled: bool) -> str:
+    if not enabled:
+        return ""
+    return """13. Use `debug_probe` only when source/test materials cannot explain the failure. It supports `target` = `rust`, `c`, or `both`;
+    when targeting both, provide target-specific breakpoint/watch data under `targets.rust` and `targets.c`.
+14. Use `static_probe_update` when values must be observed across runs or in both C and Rust. Probe IDs persist for this failing case:
+    `add` creates or replaces points, `remove` deletes named points, and `clear` removes all points. Static probes run on temporary project
+    copies only. Use valid expressions for the target language; invalid instrumentation may produce a build error in the evidence.
+15. Instrumentation is an evidence-gathering round: do not include `debug_probe` or `static_probe_update` together with non-empty `edits`
+    or new material requests. After evidence appears, analyze it before requesting additional probes."""

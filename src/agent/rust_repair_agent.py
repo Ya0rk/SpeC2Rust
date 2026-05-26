@@ -1525,7 +1525,7 @@ Return JSON only, in the following object format:
 
 
 
-    def _materialize_read_requests(self, project_dir: str, read_requests: List[Dict], max_chars: int = 24000) -> List[Dict]:
+    def _materialize_read_requests(self, project_dir: str, read_requests: List[Dict], max_chars: Optional[int] = None) -> List[Dict]:
 
         materials: List[Dict] = []
 
@@ -1573,15 +1573,12 @@ Return JSON only, in the following object format:
 
                 continue
 
-            remain = max_chars - total
-
-            if remain <= 0:
-
-                break
-
-            if len(content) > remain:
-
-                content = content[:remain]
+            if max_chars is not None:
+                remain = max_chars - total
+                if remain <= 0:
+                    break
+                if len(content) > remain:
+                    content = content[:remain]
 
             materials.append({
 
@@ -1599,7 +1596,8 @@ Return JSON only, in the following object format:
 
             })
 
-            total += len(content)
+            if max_chars is not None:
+                total += len(content)
 
         return materials
 
@@ -1719,7 +1717,7 @@ Return JSON only, in the following object format:
 
 
 
-    def _materialize_search_requests(self, project_dir: str, search_requests: List[Dict], max_chars: int = 12000) -> List[Dict]:
+    def _materialize_search_requests(self, project_dir: str, search_requests: List[Dict], max_chars: Optional[int] = None) -> List[Dict]:
 
         materials: List[Dict] = []
 
@@ -1759,9 +1757,9 @@ Return JSON only, in the following object format:
 
                 max_results = 8
 
-            context_lines = max(0, min(context_lines, 10))
+            context_lines = max(0, context_lines)
 
-            max_results = max(1, min(max_results, 20))
+            max_results = max(1, max_results)
 
             key = (kind, query, path_glob, context_lines, max_results)
 
@@ -1839,15 +1837,12 @@ Return JSON only, in the following object format:
 
             block += "\n" + "\n\n".join(hits) + "\n"
 
-            remain = max_chars - total
-
-            if remain <= 0:
-
-                break
-
-            if len(block) > remain:
-
-                block = block[:remain]
+            if max_chars is not None:
+                remain = max_chars - total
+                if remain <= 0:
+                    break
+                if len(block) > remain:
+                    block = block[:remain]
 
             materials.append({
 
@@ -1867,7 +1862,8 @@ Return JSON only, in the following object format:
 
             })
 
-            total += len(block)
+            if max_chars is not None:
+                total += len(block)
 
         return materials
 
@@ -1886,6 +1882,8 @@ Return JSON only, in the following object format:
             "- search_requests: search keywords in files. Fields: kind=rust/c/spec/all, query, path_glob, context_lines, max_results.",
 
             "- edits: modify the Rust project only when evidence is sufficient. mode may be replace_range/delete_range/insert_before/insert_after/create_file/create_dir.",
+
+            "- If you need a larger coherent read or a larger coherent patch, request or return it directly; it will not be rejected or shrunk solely because it is large.",
 
             "- kind=rust means the current Rust project, readable and writable; kind=c means the original C project, read-only; kind=spec means c_docs/spec documents, read-only.",
 
@@ -2119,7 +2117,7 @@ Requirements:
 
 15. If the missing part is a core business module, do not create a minimal empty implementation; first use more_read_requests/search_requests to read the corresponding C source, spec, or existing Rust-related modules, then do a real fix.
 
-16. Do not use delete_range/replace_range to drastically shorten an already valid implementation. The fix should preserve existing behavior and only change the smallest range that causes the current error.
+16. Do not use delete_range/replace_range to drastically shorten an already valid implementation. Prefer the smallest coherent range that matches the current error, but if the evidence shows a broader coherent patch is needed, use it.
 
 17. create_file may only be used to "create a real implementation based on already read evidence" or "create a pure module declaration file"; do not create placeholder business modules that return defaults.
 
@@ -2833,36 +2831,6 @@ Was this round accepted as the new baseline: {"yes" if accepted_as_best else "no
 
                 span = end - start + 1 if start and end else 0
 
-                file_imbalance = self._brace_imbalance(lines)
-
-                if file_imbalance >= 4:
-
-                    max_replace_span = len(lines) + 10
-
-                elif file_imbalance >= 2:
-
-                    max_replace_span = 300
-
-                else:
-
-                    max_replace_span = 120
-
-                if mode == "replace_range" and span > max_replace_span:
-
-                    print(f"  跳过过大的 replace_range ({span} 行, 上限 {max_replace_span})：{rel_path}:{start}-{end}")
-
-                    audit_records.append({"path": rel_path, "skipped": True, "reason": f"replace_range too large: {span} > {max_replace_span}", "start": start, "end": end})
-
-                    continue
-
-                if mode == "delete_range" and span > max_replace_span:
-
-                    print(f"  跳过过大的 delete_range ({span} 行, 上限 {max_replace_span})：{rel_path}:{start}-{end}")
-
-                    audit_records.append({"path": rel_path, "skipped": True, "reason": f"delete_range too large: {span} > {max_replace_span}", "start": start, "end": end})
-
-                    continue
-
                 try:
 
                     imbalance_before = self._brace_imbalance(lines)
@@ -3245,9 +3213,9 @@ Relevant context:
 
         diagnosis_plan = self._request_diagnosis_plan(grouped_errors, project_overview, handoff_summary)
 
-        materials = self._materialize_read_requests(run_dir, diagnosis_plan.get("read_requests", []))
+        materials = self._materialize_read_requests(run_dir, diagnosis_plan.get("read_requests", []), max_chars=None)
 
-        diagnosis_search_materials = self._materialize_search_requests(run_dir, diagnosis_plan.get("search_requests", []))
+        diagnosis_search_materials = self._materialize_search_requests(run_dir, diagnosis_plan.get("search_requests", []), max_chars=None)
 
         materials.extend(diagnosis_search_materials)
 
@@ -3353,7 +3321,7 @@ Relevant context:
 
             if more_reads:
 
-                new_materials = self._materialize_read_requests(run_dir, more_reads, max_chars=12000)
+                new_materials = self._materialize_read_requests(run_dir, more_reads, max_chars=None)
 
                 existing_keys = {
 
@@ -3413,7 +3381,7 @@ Relevant context:
 
             if search_requests:
 
-                new_search_materials = self._materialize_search_requests(run_dir, search_requests, max_chars=12000)
+                new_search_materials = self._materialize_search_requests(run_dir, search_requests, max_chars=None)
 
                 existing_keys = {
 

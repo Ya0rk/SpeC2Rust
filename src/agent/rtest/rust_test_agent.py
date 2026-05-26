@@ -20,7 +20,7 @@ import os
 import re
 import shutil
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
@@ -40,9 +40,12 @@ from .constants import (  # noqa: E402
     SEED_RUST_LIMIT,
     STALL_SAME_SIGNATURE_ROUNDS,
 )
+from .c_project_builder import CProjectBuilder  # noqa: E402
+from .log_agent import LogAgent  # noqa: E402
 from .models import TestCaseResult, TestRunSummary  # noqa: E402
 from .repair_adapter import RepairAdapter  # noqa: E402
 from .repair_prompt import MaterialBudget, build_repair_prompt  # noqa: E402
+from .runtime_probe import RuntimeProbeService  # noqa: E402
 from .seeding import seed_c_sources, seed_rust_files  # noqa: E402
 from .signals import (  # noqa: E402
     extract_expected_outputs,
@@ -56,8 +59,8 @@ from .source_loader import (  # noqa: E402
     build_source_index_display,
     load_source_records,
 )
+from .suite_repair_coordinator import SuiteRepairContext, SuiteRepairCoordinator  # noqa: E402
 from .test_runner import TestRunner  # noqa: E402
-from .test_translator import translate_shell_tests  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -72,25 +75,36 @@ class RustTestAgent:
         self,
         config: Optional[Config] = None,
         max_repair_iterations: int = 20,
+        max_suite_repair_cycles: int = 3,
         build_timeout_seconds: int = 600,
         test_timeout_seconds: int = 30,
         verbose: bool = False,
         source_records_path: Optional[str] = None,
         translate_tests: bool = False,
+        enable_log_agent: bool = False,
+        max_debug_probes: int = 6,
     ):
         self.config = config or Config()
         self.llm = Model(self.config)
         self.max_repair_iterations = max_repair_iterations
+        self.max_suite_repair_cycles = max_suite_repair_cycles
         self.build_timeout_seconds = build_timeout_seconds
         self.test_timeout_seconds = test_timeout_seconds
         self.verbose = verbose
         self.source_records_path = source_records_path
         self.translate_tests = translate_tests
+        self.enable_log_agent = enable_log_agent
+        self.max_debug_probes = max(1, max_debug_probes)
 
         # 复用 RustRepairAgent 的本地清洗 / 结构化编辑能力，通过 adapter 访问
         # 它的私有方法，避免耦合未来 RustRepairAgent 的重构。
         self._repair_helper = RustRepairAgent(config=self.config, max_iterations=1)
         self.adapter = RepairAdapter(self._repair_helper)
+        self.runtime_probe_service = RuntimeProbeService(
+            self._locate_release_binary,
+            test_timeout_seconds=self.test_timeout_seconds,
+            build_timeout_seconds=self.build_timeout_seconds,
+        )
 
     # ---------------------------------------------------------------- public
 
@@ -106,44 +120,35 @@ class RustTestAgent:
         if not binary_name:
             print(f"[rtest] 自动推断 bin_name = {bin_name}（C 项目目录 / Cargo.toml）")
 
-        # C 参考可执行文件现在是**可选**的：测试可以纯粹基于 Rust 输出
-        # 与期望输出（grep / diff fixture）做比对，不强依赖 C 对照实现。
-        c_binary = self._locate_c_binary(c_project_path, bin_name) or ""
-        if c_binary:
-            print(f"[rtest] 使用 C 参考可执行文件：{c_binary}")
-        else:
-            project_name = Path(c_project_path).name
-            print(
-                f"[rtest] 未在 {c_project_path} 找到 C 参考可执行文件 "
-                f"（期望 {bin_name} / {project_name} 或带 .exe 后缀），"
-                f"将仅基于 Rust 输出做测试"
-            )
-
-        test_src = self._find_c_test_dir(c_project_path)
-        if not test_src:
-            print(f"[rtest] 未在 C 项目中找到 test/ 目录：{c_project_path}")
+        c_build = CProjectBuilder(timeout_seconds=self.build_timeout_seconds).clean_and_build(
+            c_project_path, expected_bin_name=bin_name
+        )
+        if not c_build.ok:
+            print(f"[rtest] C 项目构建/校验失败：{c_build.error}")
+            if c_build.stdout.strip():
+                print(c_build.stdout[-4000:])
+            if c_build.stderr.strip():
+                print(c_build.stderr[-4000:])
             return TestRunSummary(0, 0, 0, [])
+        c_binary = c_build.binary_path
+        print(f"[rtest] 使用 C 参考可执行文件：{c_binary}")
+        self.runtime_probe_service.configure_c_target(c_project_path, c_binary)
+        print(f"[rtest] LogAgent：{'开启' if self.enable_log_agent else '关闭'}")
+
+        test_src = c_build.test_dir
         test_dst = os.path.join(rust_project_path, "test")
         copied_files = self._copy_test_tree(test_src, test_dst)
         print(f"[rtest] 已整体复制测试目录：{test_src} -> {test_dst} ({copied_files} 个文件)")
         self._ensure_test_framework_shim(test_dst)
 
         if self.translate_tests:
-            print("[rtest] 启用 LLM 测试脚本翻译模式")
-            scripts = translate_shell_tests(
-                src_dir=Path(test_src),
-                dst_dir=Path(test_dst),
-                project_name=bin_name,
-                c_binary_available=bool(c_binary),
-                llm=self.llm,
-                adapter=self.adapter,
-                verbose=self.verbose,
+            print(
+                "[rtest] 忽略 --translate-tests：测试脚本已由人工预处理并作为只读基准，"
+                "不允许 LLM 生成或改写 .sh"
             )
-        else:
-            # 默认不改写测试脚本：先原样复制 C 项目的 sh，由 TestRunner 提供
-            # Rust/C wrapper、srcdir/abs_srcdir 等兼容环境。LLM 修复阶段只在确认为
-            # 测试迁移问题时，才允许局部编辑当前失败脚本。
-            scripts = self._collect_original_test_scripts(test_dst)
+        # 测试脚本只读：始终使用预处理后原样复制的 sh；TestRunner 只负责
+        # Rust/C wrapper、srcdir/abs_srcdir 等执行环境适配。
+        scripts = self._collect_original_test_scripts(test_dst)
         if not scripts:
             print(f"[rtest] {test_src} 内未找到任何 .sh 测试脚本")
             return TestRunSummary(0, 0, 0, [])
@@ -168,6 +173,7 @@ class RustTestAgent:
             test_dir=test_dst,
             bin_name=bin_name,
             timeout_seconds=self.test_timeout_seconds,
+            enable_logging=self.enable_log_agent,
         )
         runner.stage(binary_path, c_binary)
         try:
@@ -180,35 +186,52 @@ class RustTestAgent:
             source_index = load_source_records(
                 c_project_path, explicit_path=self.source_records_path
             )
-
-            baseline_pass_names: Set[str] = {c.name for c in summary.results if c.passed}
-
-            failing_cases = [c for c in summary.results if not c.passed]
-            failing_cases.sort(key=_script_size)
-
-            for case in failing_cases:
-                fixed = self._repair_failing_case(
+            summary = SuiteRepairCoordinator(
+                self,
+                SuiteRepairContext(
                     rust_project_path=rust_project_path,
                     bin_name=bin_name,
                     runner=runner,
                     project_structure=project_structure,
                     source_index=source_index,
-                    failing_case=case,
-                    baseline_pass_names=baseline_pass_names,
-                )
-                if fixed:
-                    baseline_pass_names.add(case.name)
-
-            final_binary = (
-                self._locate_release_binary(rust_project_path, rust_bin_name) or binary_path
-            )
-            if final_binary != binary_path:
-                runner.restage_rust_binary(final_binary)
-            final_summary = runner.run_all(self._discover_shell_scripts(Path(test_dst)))
-            self._print_summary(final_summary, label="最终测试结果")
-            return final_summary
+                    summary=summary,
+                    scripts=scripts,
+                    initial_binary_path=binary_path,
+                    max_suite_repair_cycles=self.max_suite_repair_cycles,
+                ),
+            ).run()
+            self._print_summary(summary, label="最终测试结果")
+            return summary
         finally:
             runner.cleanup()
+
+    def _repair_suite_until_stable(
+        self,
+        *,
+        rust_project_path: str,
+        bin_name: str,
+        runner: TestRunner,
+        project_structure: str,
+        source_index: CSourceIndex,
+        summary: TestRunSummary,
+        scripts: List[Path],
+        test_dst: str,
+        initial_binary_path: str,
+    ) -> TestRunSummary:
+        return SuiteRepairCoordinator(
+            self,
+            SuiteRepairContext(
+                rust_project_path=rust_project_path,
+                bin_name=bin_name,
+                runner=runner,
+                project_structure=project_structure,
+                source_index=source_index,
+                summary=summary,
+                scripts=scripts,
+                initial_binary_path=initial_binary_path,
+                max_suite_repair_cycles=self.max_suite_repair_cycles,
+            ),
+        ).run()
 
     # ----------------------------------------------------- file management
 
@@ -580,43 +603,26 @@ class RustTestAgent:
         allowed_suffixes = (".rs", "cargo.toml", "cargo.lock", "build.rs")
         return any(normalized.endswith(s) for s in allowed_suffixes)
 
-    @staticmethod
-    def _is_current_translated_test_script(rel_path: str, failing_case: TestCaseResult) -> bool:
-        normalized = (rel_path or "").replace("\\", "/").strip().lstrip("/")
-        return normalized == f"test/{Path(failing_case.script_path).name}"
-
-    def _filter_disallowed_edits(self, edits: List[Dict], failing_case: TestCaseResult) -> List[Dict]:
+    def _filter_disallowed_edits(self, edits: List[Dict]) -> List[Dict]:
         clean: List[Dict] = []
         for edit in edits or []:
             if not isinstance(edit, dict):
                 continue
             rel = (edit.get("path") or "").replace("\\", "/")
-            if self._is_editable_rust_path(rel) or self._is_current_translated_test_script(rel, failing_case):
+            if self._is_editable_rust_path(rel):
                 clean.append(edit)
                 continue
-            if rel == Path(failing_case.script_path).name:
-                edit = dict(edit)
-                edit["path"] = f"test/{rel}"
-                clean.append(edit)
-                continue
-            else:
-                print(f"    [rtest] 已拒绝对非 Rust 源文件的编辑请求：{rel or '(空 path)'}")
-                continue
+            print(f"    [rtest] 已拒绝对非 Rust 源文件的编辑请求：{rel or '(空 path)'}")
         return clean
 
     def _filter_fake_impl_edits(
         self,
         edits: List[Dict],
         expected_outputs: List[str],
-        failing_case: TestCaseResult,
     ) -> List[Dict]:
         clean: List[Dict] = []
         for edit in edits:
             if not isinstance(edit, dict):
-                continue
-            rel = (edit.get("path") or "").replace("\\", "/").strip().lstrip("/")
-            if self._is_current_translated_test_script(rel, failing_case):
-                clean.append(edit)
                 continue
             content = edit.get("content") or ""
             reason = violates_no_fake_impl(content, expected_outputs)
@@ -697,6 +703,27 @@ class RustTestAgent:
         return text[-max_chars:]
 
     @staticmethod
+    def _read_runtime_evidence(failing_case: TestCaseResult) -> Dict[str, object]:
+        return RuntimeProbeService.read_runtime_evidence(failing_case)
+
+    def _execute_debug_probe(
+        self,
+        *,
+        rust_project_path: str,
+        bin_name: str,
+        failing_case: TestCaseResult,
+        probe_spec: Dict[str, object],
+        attempt: int,
+    ) -> bool:
+        return self.runtime_probe_service.execute_debug_probe(
+            rust_project_path=rust_project_path,
+            bin_name=bin_name,
+            failing_case=failing_case,
+            probe_spec=probe_spec,
+            attempt=attempt,
+        )
+
+    @staticmethod
     def _focused_failure_block(failing_case: TestCaseResult) -> str:
         text = failing_case.stdout or ""
         lines = text.splitlines()
@@ -725,7 +752,8 @@ class RustTestAgent:
         if _looks_like_argv0_path_diff(block):
             block += (
                 "\n\n[System diagnosis] The current diff appears to mainly come from argv[0] / absolute path differences between C_BIN and RUST_BIN. "
-                "This is usually a test-migration issue; prioritize fixing the current test script's execution/normalization path, and do not hardcode paths in Rust code."
+                "The test scripts are human-preprocessed read-only inputs. Do not edit them or hardcode paths in Rust code; "
+                "report this evidence for human review unless a real Rust behavioral defect can be identified."
             )
         return block
 
@@ -784,8 +812,12 @@ class RustTestAgent:
             regression_warning="",
             last_failure_signature=failing_case.failure_signature(),
             last_edits_fingerprint="",
+            last_debug_probe_fingerprint="",
             stall_count=0,
             dup_edits_count=0,
+            debug_probe_count=0,
+            static_probes={},
+            static_program_args=[],
         )
 
         repaired = False
@@ -851,6 +883,9 @@ class RustTestAgent:
         snapshot: ProjectSnapshot,
     ) -> str:
         """返回 ``passed`` / ``abort`` / ``continue``。"""
+        runtime_evidence = (
+            self._read_runtime_evidence(failing_case) if self.enable_log_agent else {}
+        )
         prompt = build_repair_prompt(
             failing_case=failing_case,
             script_content=script_content,
@@ -868,6 +903,9 @@ class RustTestAgent:
             regression_warning=state.regression_warning,
             focused_failure=self._focused_failure_block(failing_case),
             test_artifact_index=self._list_test_artifacts(failing_case),
+            runtime_evidence=runtime_evidence,
+            log_agent_enabled=self.enable_log_agent,
+            active_static_probes=list(state.static_probes.values()),
         )
         state.regression_warning = ""  # 只提示一次
 
@@ -927,8 +965,17 @@ class RustTestAgent:
             or payload.get("test_artifact_requests")
             or []
         )
-        raw_edits = self._filter_disallowed_edits(payload.get("edits") or [], failing_case)
-        edits = self._filter_fake_impl_edits(raw_edits, expected_outputs, failing_case)
+        submitted_edits = [
+            edit for edit in (payload.get("edits") or []) if isinstance(edit, dict)
+        ]
+        raw_edits = self._filter_disallowed_edits(submitted_edits)
+        if len(raw_edits) < len(submitted_edits):
+            state.history_summary += (
+                "\n[System] One or more edits outside the permitted Rust/Cargo source set were rejected. "
+                "Test scripts and fixtures are human-preprocessed read-only inputs; "
+                "do not propose changes to them in later rounds."
+            )
+        edits = self._filter_fake_impl_edits(raw_edits, expected_outputs)
         if raw_edits and not edits:
             state.history_summary += (
                 "\n[System] All edits submitted in the previous round were rejected by the anti-cheat check; "
@@ -961,6 +1008,117 @@ class RustTestAgent:
         ):
             new_material = True
 
+        debug_probe = payload.get("debug_probe") or payload.get("instrumentation")
+        static_probe_update = payload.get("static_probe_update")
+        if not self.enable_log_agent and (
+            isinstance(debug_probe, dict) or isinstance(static_probe_update, dict)
+        ):
+            state.history_summary += (
+                "\n[System] Unsupported response fields were ignored; "
+                "use source reads or concrete edits."
+            )
+            debug_probe = None
+            static_probe_update = None
+        if edits and isinstance(static_probe_update, dict):
+            print("    [rtest] 本轮包含 edits，忽略同轮 static_probe_update")
+            state.history_summary += (
+                "\n[System] Static instrumentation updates are evidence-gathering actions and "
+                "cannot be combined with implementation edits in one round."
+            )
+            static_probe_update = None
+        if edits and isinstance(debug_probe, dict):
+            print("    [rtest] 本轮包含 edits，忽略同轮 debug_probe")
+            state.history_summary += (
+                "\n[System] The previous round included both edits and debug_probe. "
+                "The probe was ignored because debug_probe is only for evidence-gathering rounds with empty edits."
+            )
+            debug_probe = None
+        if new_material and isinstance(static_probe_update, dict):
+            state.history_summary += (
+                "\n[System] Requested materials have been provided; static instrumentation "
+                "from the same round was skipped until the new source context is reviewed."
+            )
+            return "continue"
+        if new_material and isinstance(debug_probe, dict):
+            state.history_summary += (
+                "\n[System] Source or test materials requested in the previous round have now been provided. "
+                "The debug_probe from that same round was skipped so the next round can use the new materials first."
+            )
+            return "continue"
+
+        if isinstance(static_probe_update, dict):
+            try:
+                update = LogAgent.parse_static_probe_update(static_probe_update)
+            except Exception as exc:  # noqa: BLE001
+                state.history_summary += f"\n[System] Invalid static_probe_update: {exc}."
+                return "continue"
+            if update.clear:
+                state.static_probes.clear()
+            for probe_id in update.remove:
+                state.static_probes.pop(probe_id, None)
+            for probe in update.add:
+                state.static_probes[probe.probe_id] = probe
+            if update.program_args:
+                state.static_program_args = list(update.program_args)
+            if not state.static_probes:
+                state.history_summary += (
+                    "\n[System] Static instrumentation set is now empty; no static run was performed."
+                )
+                return "continue"
+            self.runtime_probe_service.execute_static_probes(
+                rust_project_path=rust_project_path,
+                bin_name=bin_name,
+                failing_case=failing_case,
+                probes=state.static_probes.values(),
+                program_args=state.static_program_args,
+                attempt=attempt,
+            )
+            state.history_summary += (
+                "\n[System] Static probes were applied to temporary Rust/C project copies and executed. "
+                "Inspect the Static probe evidence in the next round; use static_probe_update to add, replace, "
+                "remove, or clear probe points as needed."
+            )
+            return "continue"
+
+        if isinstance(debug_probe, dict):
+            if not _has_meaningful_debug_probe(debug_probe):
+                print("    [rtest] 跳过无效 debug_probe：缺少断点")
+                state.history_summary += (
+                    "\n[System] The previous debug_probe was skipped because it had no breakpoints. "
+                    "A valid debug_probe must include at least one concrete Rust source breakpoint and must not be combined with edits."
+                )
+            else:
+                fp = _debug_probe_fingerprint(debug_probe)
+                if state.debug_probe_count >= self.max_debug_probes:
+                    print("    [rtest] 本用例 debug_probe 已达配置上限，跳过新的请求")
+                    state.history_summary += (
+                        "\n[System] The configured maximum number of dynamic debug probes has been reached. "
+                        "Use the existing evidence, static probes, source reads, or submit concrete edits."
+                    )
+                    return "continue"
+                if fp and fp == state.last_debug_probe_fingerprint:
+                    print("    [rtest] 跳过重复 debug_probe 请求")
+                    state.history_summary += (
+                        "\n[System] The previous debug_probe request was a duplicate and was skipped. "
+                        "Use the available current-round evidence or provide a different repair action."
+                    )
+                    return "continue"
+                state.last_debug_probe_fingerprint = fp
+                state.debug_probe_count += 1
+                if self._execute_debug_probe(
+                    rust_project_path=rust_project_path,
+                    bin_name=bin_name,
+                    failing_case=failing_case,
+                    probe_spec=debug_probe,
+                    attempt=attempt,
+                ):
+                    state.history_summary += (
+                        "\n[System] A runtime debug probe was executed. The next round must use the new probe evidence "
+                        "before changing the implementation again. A later distinct probe is allowed only if the current evidence "
+                        "cannot distinguish the remaining hypotheses."
+                    )
+                return "continue"
+
         if edits:
             applied, _audit = self.adapter.apply_structured_edits(rust_project_path, edits)
             print(f"    [rtest] 应用编辑：applied={applied}, edits={len(edits)}")
@@ -974,12 +1132,9 @@ class RustTestAgent:
                 for rel in edited_paths:
                     if not rel:
                         continue
-                    if self._is_current_translated_test_script(rel, failing_case):
-                        continue
-                    else:
-                        refreshed = self.adapter.read_file_slice(rust_project_path, rel)
-                        if refreshed:
-                            material.add_rust_file(rel, refreshed)
+                    refreshed = self.adapter.read_file_slice(rust_project_path, rel)
+                    if refreshed:
+                        material.add_rust_file(rel, refreshed)
 
                 return self._build_and_verify(
                     rust_project_path=rust_project_path,
@@ -1201,9 +1356,13 @@ class _RepairLoopState:
     regression_warning: str
     last_failure_signature: str
     last_edits_fingerprint: str
+    last_debug_probe_fingerprint: str
     stall_count: int
     dup_edits_count: int
+    debug_probe_count: int
     json_parse_failures: int = 0
+    static_probes: Dict[str, object] = field(default_factory=dict)
+    static_program_args: List[str] = field(default_factory=list)
 
 
 def _script_size(case: TestCaseResult) -> int:
@@ -1220,6 +1379,39 @@ def _edits_fingerprint(edits: List[Dict]) -> str:
     except (TypeError, ValueError):
         payload = repr(edits)
     return hashlib.sha256(payload.encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+
+def _debug_probe_fingerprint(probe: Dict[str, object]) -> str:
+    """对 debug_probe 请求计算稳定指纹，避免同一用例内重复探测。"""
+    try:
+        payload = json.dumps(probe, sort_keys=True, ensure_ascii=False)
+    except (TypeError, ValueError):
+        payload = repr(probe)
+    return hashlib.sha256(payload.encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+
+def _has_meaningful_debug_probe(probe: Dict[str, object]) -> bool:
+    candidate_lists = [probe.get("breakpoints")]
+    targets = probe.get("targets")
+    if isinstance(targets, dict):
+        for target in ("rust", "c"):
+            spec = targets.get(target)
+            if isinstance(spec, dict):
+                candidate_lists.append(spec.get("breakpoints"))
+    for breakpoints in candidate_lists:
+        if not isinstance(breakpoints, list):
+            continue
+        for item in breakpoints:
+            if not isinstance(item, dict):
+                continue
+            file = str(item.get("file") or "").strip()
+            try:
+                line = int(item.get("line"))
+            except (TypeError, ValueError):
+                line = 0
+            if file and line > 0:
+                return True
+    return False
 
 
 def _format_regression_details(regressed: Dict[str, TestCaseResult]) -> str:
@@ -1454,8 +1646,14 @@ def _build_argparser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--translate-tests",
         action="store_true",
-        help="使用旧的 LLM 测试脚本翻译模式；默认原样复制并运行 C 项目 sh",
+        help="兼容旧命令的保留参数；测试脚本现为只读输入，传入后也不会调用 LLM 改写",
     )
+    parser.add_argument(
+        "--use-log-agent",
+        action="store_true",
+        help="启用运行时日志，以及由 LLM 发起的 Rust/C 动态或静态插桩",
+    )
+    parser.add_argument("--log-agent-max-debug-probes", type=int, default=6)
     return parser
 
 
@@ -1471,6 +1669,8 @@ def main() -> int:
         verbose=args.verbose,
         source_records_path=args.source_records or None,
         translate_tests=args.translate_tests,
+        enable_log_agent=args.use_log_agent,
+        max_debug_probes=args.log_agent_max_debug_probes,
     )
     summary = agent.run(
         rust_project_path=args.rust_project_path,

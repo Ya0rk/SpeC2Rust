@@ -32,6 +32,7 @@ from agent.alternatives.contextual_rust_agent import ContextualRustAgent
 from agent.code_fixer_agent import CodeFixer, TestFixer
 from agent.rust_repair_agent import RustRepairAgent
 from agent.rtest import RustTestAgent
+from agent.rtest.c_project_builder import CProjectBuilder
 from agent.unfinished_code_agent import UnfinishedCodeAgent
 from config.config import Config
 from utils.fmtpr import prGreen, prRed, prBlue, prYellow
@@ -127,6 +128,8 @@ def run_optional_rust_test_agent(args, config: Config, rust_project_path: str):
         max_repair_iterations=getattr(args, "rust_test_agent_max_iterations", 20),
         test_timeout_seconds=getattr(args, "rust_test_agent_timeout_seconds", 30),
         translate_tests=getattr(args, "rust_test_agent_translate_tests", False),
+        enable_log_agent=getattr(args, "use_log_agent", False),
+        max_debug_probes=getattr(args, "log_agent_max_debug_probes", 6),
     )
     summary = test_agent.run(
         rust_project_path=rust_project_path,
@@ -143,6 +146,32 @@ def run_optional_rust_test_agent(args, config: Config, rust_project_path: str):
             f"\n⚠ RustTestAgent {summary.failed}/{summary.total} 个用例仍未通过修复"
         )
     return summary
+
+
+def validate_c_project_at_start(args) -> bool:
+    """Build the C project once at translation startup to enforce test assumptions."""
+    if not getattr(args, "c_project_path", ""):
+        return True
+    expected_bin = getattr(args, "rust_test_agent_binary_name", "") or None
+    prBlue("\n" + "=" * 80)
+    prYellow("预检: clean 并编译 C 项目")
+    prBlue("=" * 80)
+    result = CProjectBuilder(timeout_seconds=600).clean_and_build(
+        args.c_project_path,
+        expected_bin_name=expected_bin,
+    )
+    if not result.ok:
+        prRed(f"\n✗ C 项目预检失败：{result.error}")
+        if result.stdout.strip():
+            prYellow(result.stdout[-4000:])
+        if result.stderr.strip():
+            prYellow(result.stderr[-4000:])
+        return False
+    prGreen("\n✓ C 项目预检通过")
+    prGreen(f"  Makefile：{result.makefile_path}")
+    prGreen(f"  test 目录：{result.test_dir}")
+    prGreen(f"  可执行文件：{result.binary_path}")
+    return True
 
 
 def selected_rust_agent_mode(args) -> str:
@@ -327,7 +356,18 @@ def main():
     parser.add_argument(
         "--rust-test-agent-translate-tests",
         action="store_true",
-        help="RustTestAgent 使用旧的 LLM 测试脚本翻译模式；默认原样复制并运行 C 项目 sh"
+        help="兼容旧命令的保留参数；测试脚本现为只读输入，传入后也不会调用 LLM 改写"
+    )
+    parser.add_argument(
+        "--use-log-agent",
+        action="store_true",
+        help="启用 LogAgent：允许 RustTestAgent 写入运行时日志，并由 LLM 请求 Rust/C 动态或静态插桩"
+    )
+    parser.add_argument(
+        "--log-agent-max-debug-probes",
+        type=int,
+        default=6,
+        help="LogAgent 每个失败用例允许执行的动态探针请求上限（默认：6）"
     )
     parser.add_argument(
         "--continue",
@@ -388,6 +428,7 @@ def main():
         prYellow(f"冻结 c_docs：{'开启' if args.freeze_c_docs else '关闭'}")
         prYellow(f"RustRepairAgent：{'开启' if should_run_rust_repair_stage(args) else '关闭'}")
         prYellow(f"RustTestAgent：{'开启' if should_run_rust_test_agent_stage(args) else '关闭'}")
+        prYellow(f"LogAgent：{'开启' if args.use_log_agent else '关闭'}")
         prYellow(f"最大修复迭代次数：{args.max_fix_iterations}")
         prBlue("=" * 80)
 
@@ -409,6 +450,9 @@ def main():
 
         if args.freeze_c_docs:
             prYellow("提示：--freeze-c-docs 已开启，将跳过所有会写入 c_docs 的步骤，只读取已有文档。")
+
+        if not validate_c_project_at_start(args):
+            return 1
 
         # =========================================================================
         # 步骤 1: 分析 C 项目并生成文档

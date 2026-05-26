@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .constants import TEST_OUTPUT_TAIL_CHARS, TRACE_TAIL_CHARS
+from .log_agent import LogAgent
 from .models import TestCaseResult, TestRunSummary
 
 
@@ -59,10 +60,12 @@ class TestRunner:
         test_dir: str,
         bin_name: str,
         timeout_seconds: int = 120,
+        enable_logging: bool = False,
     ):
         self.test_dir = Path(test_dir).resolve()
         self.bin_name = bin_name
         self.timeout_seconds = timeout_seconds
+        self.enable_logging = enable_logging
         self.wrapper_dir = self.test_dir / ".bin"
         self._env: Optional[TestEnvironment] = None
         self._run_dirs: List[Path] = []
@@ -208,6 +211,11 @@ class TestRunner:
             result.trace = f"<测试超时，已终止进程组；跳过 bash -x 复跑，避免二次卡住>"
         elif not passed and capture_trace:
             result.trace = self._capture_trace(script_path, run_dir)
+        if self.enable_logging:
+            try:
+                self.write_runtime_log(run_dir, result)
+            except OSError as exc:
+                print(f"[rtest] 无法写入运行时日志：{exc}")
         return result
 
     def run_all(self, scripts: List[Path]) -> TestRunSummary:
@@ -240,6 +248,11 @@ class TestRunner:
             self._write_bash_env(run_dir)
             self._run_dirs.append(run_dir)
         return self._capture_trace(script_path, run_dir)
+
+    def write_runtime_log(self, run_dir: Path, result: TestCaseResult) -> Path:
+        bundle = LogAgent.bundle_from_result(result)
+        summary = LogAgent.compress(bundle)
+        return LogAgent.write_case_bundle(run_dir / ".cgr_logs", summary)
 
     def _capture_trace(self, script_path: Path, run_dir: Path) -> str:
         try:
@@ -399,9 +412,10 @@ class TestRunner:
     def cleanup(self) -> None:
         if self.wrapper_dir.exists():
             shutil.rmtree(self.wrapper_dir, ignore_errors=True)
-        for run_dir in self._run_dirs:
-            if run_dir.exists():
-                shutil.rmtree(run_dir, ignore_errors=True)
+        if not self.enable_logging:
+            for run_dir in self._run_dirs:
+                if run_dir.exists():
+                    shutil.rmtree(run_dir, ignore_errors=True)
         self._run_dirs.clear()
 
 

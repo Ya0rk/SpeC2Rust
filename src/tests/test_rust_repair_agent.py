@@ -205,6 +205,44 @@ error[E0507]: cannot move out of `*destroy` which is behind a shared reference
                 except PermissionError:
                     pass
 
+    def test_apply_structured_edits_with_audit_allows_large_replace_range(self):
+        config = Config(config_path=None, model_name="qwen32")
+        agent = RustRepairAgent(config=config, max_iterations=3)
+
+        root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
+        root.mkdir()
+        try:
+            target = root / "sample.rs"
+            original = [f"line{i}\n" for i in range(1, 221)]
+            target.write_text("".join(original), encoding="utf-8")
+
+            replacement = "".join(f"new{i}\n" for i in range(1, 171))
+            applied, records = agent._apply_structured_edits_with_audit(
+                str(root),
+                [
+                    {
+                        "path": "sample.rs",
+                        "mode": "replace_range",
+                        "start_line": 21,
+                        "end_line": 190,
+                        "content": replacement,
+                    }
+                ],
+            )
+
+            self.assertTrue(applied)
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["mode"], "replace_range")
+            text = target.read_text(encoding="utf-8")
+            self.assertIn("line20\nnew1\nnew2\n", text)
+            self.assertIn("new170\nline191\n", text)
+        finally:
+            if root.exists():
+                try:
+                    shutil.rmtree(root)
+                except PermissionError:
+                    pass
+
     def test_append_repair_record_writes_jsonl_journal(self):
         config = Config(config_path=None, model_name="qwen32")
         agent = RustRepairAgent(config=config, max_iterations=3)
@@ -266,7 +304,7 @@ error[E0599]: no method named `foo`
 
         accepted, reason = agent._should_accept_result(current, candidate)
         self.assertTrue(accepted)
-        self.assertIn("语法", reason)
+        self.assertIn("syntax blocker", reason)
 
     def test_materialize_search_requests_collects_keyword_hits_with_locations(self):
         config = Config(config_path=None, model_name="qwen32")
@@ -303,6 +341,79 @@ error[E0599]: no method named `foo`
             self.assertEqual(materials[0]["mode"], "search_results")
             self.assertIn("rotate_right", materials[0]["content"])
             self.assertIn("src/lib.rs:1", materials[0]["content"])
+        finally:
+            if root.exists():
+                try:
+                    shutil.rmtree(root)
+                except PermissionError:
+                    pass
+
+    def test_materialize_read_requests_returns_full_file_when_unbounded(self):
+        config = Config(config_path=None, model_name="qwen32")
+        root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
+        root.mkdir()
+        try:
+            project = root / "project"
+            project.mkdir()
+            (project / "Cargo.toml").write_text("[package]\nname='demo'\nversion='0.1.0'\n", encoding="utf-8")
+            (project / "src").mkdir()
+            content = "".join(f"line{i}: {'x' * 80}\n" for i in range(1, 201))
+            (project / "src" / "lib.rs").write_text(content, encoding="utf-8")
+
+            agent = RustRepairAgent(config=config, max_iterations=3)
+            materials = agent._materialize_read_requests(
+                str(project),
+                [
+                    {
+                        "kind": "rust",
+                        "path": "src/lib.rs",
+                        "mode": "whole_file",
+                    }
+                ],
+                max_chars=None,
+            )
+
+            self.assertEqual(len(materials), 1)
+            self.assertEqual(materials[0]["content"], content)
+        finally:
+            if root.exists():
+                try:
+                    shutil.rmtree(root)
+                except PermissionError:
+                    pass
+
+    def test_materialize_search_requests_does_not_clamp_requested_hits(self):
+        config = Config(config_path=None, model_name="qwen32")
+        root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
+        root.mkdir()
+        try:
+            project = root / "project"
+            project.mkdir()
+            (project / "Cargo.toml").write_text("[package]\nname='demo'\nversion='0.1.0'\n", encoding="utf-8")
+            (project / "src").mkdir()
+            needle_lines = "\n".join(f"needle line {i}" for i in range(1, 31)) + "\n"
+            (project / "src" / "lib.rs").write_text(needle_lines, encoding="utf-8")
+
+            agent = RustRepairAgent(config=config, max_iterations=3)
+            materials = agent._materialize_search_requests(
+                str(project),
+                [
+                    {
+                        "kind": "rust",
+                        "query": "needle",
+                        "path_glob": "src/*.rs",
+                        "context_lines": 0,
+                        "max_results": 25,
+                    }
+                ],
+                max_chars=None,
+            )
+
+            self.assertEqual(len(materials), 1)
+            content = materials[0]["content"]
+            self.assertIn(">rust:src/lib.rs:25:", content)
+            self.assertNotIn(">rust:src/lib.rs:26:", content)
+            self.assertEqual(content.count(">rust:src/lib.rs:"), 25)
         finally:
             if root.exists():
                 try:
@@ -375,8 +486,8 @@ error[E0599]: no method named `foo`
                 },
             ])
 
-            def fake_request_structured_edits(diagnosis_plan, grouped_errors, materials, cycle_index, current_summary="", handoff_summary=""):
-                del diagnosis_plan, materials, current_summary, handoff_summary
+            def fake_request_structured_edits(project_dir, diagnosis_plan, grouped_errors, materials, cycle_index, current_summary="", handoff_summary=""):
+                del project_dir, diagnosis_plan, materials, current_summary, handoff_summary
                 seen_grouped_errors.append((cycle_index, dict(grouped_errors)))
                 return next(structured_actions)
 
@@ -617,6 +728,9 @@ error[E0599]: no method named `foo`
             def __init__(self, config, max_iterations):
                 calls.append(("init", config, max_iterations))
 
+            def configure_context_sources(self, **kwargs):
+                calls.append(("configure_context_sources", kwargs))
+
             def repair_project(self, **kwargs):
                 calls.append(("repair_project", kwargs))
                 return RepairRunResult(
@@ -639,10 +753,11 @@ error[E0599]: no method named `foo`
 
         self.assertTrue(result.check_passed)
         self.assertEqual(calls[0], ("init", config, 7))
-        self.assertEqual(calls[1][0], "repair_project")
-        self.assertEqual(calls[1][1]["project_path"], "target-project")
-        self.assertTrue(calls[1][1]["in_place"])
-        self.assertFalse(calls[1][1]["apply_best"])
+        self.assertEqual(calls[1][0], "configure_context_sources")
+        self.assertEqual(calls[2][0], "repair_project")
+        self.assertEqual(calls[2][1]["project_path"], "target-project")
+        self.assertTrue(calls[2][1]["in_place"])
+        self.assertFalse(calls[2][1]["apply_best"])
 
 
 if __name__ == "__main__":
