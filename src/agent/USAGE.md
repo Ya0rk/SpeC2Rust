@@ -288,7 +288,7 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 - `generate_benches`：是否生成 benchmark
 - `skeleton_first`：是否启用骨架优先生成
 - `round_log_enabled`：是否记录每一轮 LLM request/reply，默认开启
-- `round_log_dir`：round log 输出目录，默认写入 `log/round_logs/<运行时间>/`
+- `round_log_dir`：round log 输出目录，默认写入 `log/round_logs/<运行时间>-<项目名>/`
 
 ## Round Log
 
@@ -297,7 +297,7 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 默认位置：
 
 ```text
-log/round_logs/<运行时间>/<轮次>-<目标>.json
+log/round_logs/<运行时间>-<项目名>/<轮次>-<目标>.md
 ```
 
 每个文件包含：
@@ -313,7 +313,8 @@ log/round_logs/<运行时间>/<轮次>-<目标>.json
 ```json
 {
   "round_log_enabled": true,
-  "round_log_dir": "log/round_logs"
+  "round_log_dir": "log/round_logs",
+  "round_log_project_name": "head"
 }
 ```
 

@@ -168,7 +168,7 @@ Generate a complete spec.md document containing:
     @staticmethod
     def generate_spec_system_prompt() -> str:
         """生成 spec 文档的系统 prompt"""
-        return 'You are a spec-kit expert skilled at creating functional specification documents that guide C-to-Rust project conversion. Output must consistently use Simplified Chinese.'
+        return 'You are a spec-kit expert skilled at creating functional specification documents that guide C-to-Rust project conversion.'
     
     @staticmethod
     def generate_plan(project_name: str, branch_name: str, all_analyses: str) -> str:
@@ -210,7 +210,7 @@ Generate a complete plan.md document containing:
     @staticmethod
     def generate_plan_system_prompt() -> str:
         """生成 plan 文档的系统 prompt"""
-        return 'You are a Rust architect skilled at creating detailed implementation plans for C-to-Rust conversion. Output must consistently use Simplified Chinese.'
+        return 'You are a Rust architect skilled at creating detailed implementation plans for C-to-Rust conversion.'
     
     @staticmethod
     def generate_tasks(project_name: str, branch_name: str, all_analyses: str) -> str:
@@ -248,7 +248,7 @@ Generate a complete tasks.md document containing the following task phases:
     @staticmethod
     def generate_tasks_system_prompt() -> str:
         """生成 tasks 文档的系统 prompt"""
-        return 'You are a Rust development expert skilled at creating detailed C-to-Rust conversion task lists. Output must consistently use Simplified Chinese.'
+        return 'You are a Rust development expert skilled at creating detailed C-to-Rust conversion task lists.'
     
     # ============================================================================
     # 分层聚类方法相关 Prompts
@@ -445,7 +445,7 @@ Generate a complete spec.md document containing:
     @staticmethod
     def generate_module_spec_system_prompt() -> str:
         """生成模块 spec 文档的系统 prompt"""
-        return 'You are a spec-kit expert skilled at creating functional specification documents for individual C modules. Output must consistently use Simplified Chinese.'
+        return 'You are a spec-kit expert skilled at creating functional specification documents for individual C modules.'
     
     @staticmethod
     def generate_module_plan(project_name: str, module_name: str,
@@ -505,7 +505,7 @@ Generate a complete plan.md document containing:
     @staticmethod
     def generate_module_plan_system_prompt() -> str:
         """生成模块 plan 文档的系统 prompt"""
-        return 'You are a Rust architect skilled at creating Rust implementation plans for individual C modules. Output must consistently use Simplified Chinese.'
+        return 'You are a Rust architect skilled at creating Rust implementation plans for individual C modules.'
     
     @staticmethod
     def generate_module_tasks(project_name: str, module_name: str,
@@ -554,7 +554,7 @@ Generate a complete tasks.md document containing the following task phases:
     @staticmethod
     def generate_module_tasks_system_prompt() -> str:
         """生成模块 tasks 文档的系统 prompt"""
-        return 'You are a Rust development expert skilled at creating detailed task lists for individual C modules. Output must consistently use Simplified Chinese.'
+        return 'You are a Rust development expert skilled at creating detailed task lists for individual C modules.'
 
 
 # ============================================================================
@@ -1171,7 +1171,7 @@ Generate a complete spec.md document containing:
     @staticmethod
     def generate_spec_system_prompt() -> str:
         """生成 spec 文档的系统 prompt"""
-        return 'You are a strict spec-kit specification writer. Keep only functionality and behavior facts required for migration, and never expand missing information into new requirements. Output must consistently use Simplified Chinese.'
+        return 'You are a strict spec-kit specification writer. Keep only functionality and behavior facts required for migration, and never expand missing information into new requirements.'
     
     @staticmethod
     def generate_plan(project_name: str, branch_name: str, all_analyses: str) -> str:
@@ -1216,7 +1216,7 @@ Generate a complete plan.md document containing:
     @staticmethod
     def generate_plan_system_prompt() -> str:
         """生成 plan 文档的系统 prompt"""
-        return 'You are a restrained Rust architect. Plans must be bounded by the migration scope and must not expand new capabilities in pursuit of completeness. Output must consistently use Simplified Chinese.'
+        return 'You are a restrained Rust architect. Plans must be bounded by the migration scope and must not expand new capabilities in pursuit of completeness.'
     
     @staticmethod
     def generate_tasks(project_name: str, branch_name: str, all_analyses: str) -> str:
@@ -1258,7 +1258,7 @@ Generate a complete tasks.md document containing the following task phases:
     @staticmethod
     def generate_tasks_system_prompt() -> str:
         """生成 tasks 文档的系统 prompt"""
-        return 'You are a Rust development expert who strictly controls scope. The task list must be executable, deduplicated, and must not exceed the migration boundary. Output must consistently use Simplified Chinese.'
+        return 'You are a Rust development expert who strictly controls scope. The task list must be executable, deduplicated, and must not exceed the migration boundary.'
     
     @staticmethod
     def generate_module_summary(module_name: str, module_category: str, 
@@ -1373,7 +1373,7 @@ Generate a complete spec.md document containing:
     @staticmethod
     def generate_module_spec_system_prompt() -> str:
         """生成模块 spec 文档的系统 prompt"""
-        return 'You are a strict module specification writer. Module specs describe only well-evidenced functional boundaries; repeated listing and invented extended capabilities are forbidden. Output must consistently use Simplified Chinese.'
+        return 'You are a strict module specification writer. Module specs describe only well-evidenced functional boundaries; repeated listing and invented extended capabilities are forbidden.'
     
     @staticmethod
     def generate_module_plan(project_name: str, module_name: str,
@@ -1437,7 +1437,7 @@ Generate a complete plan.md document containing:
     @staticmethod
     def generate_module_plan_system_prompt() -> str:
         """生成模块 plan 文档的系统 prompt"""
-        return 'You are a restrained Rust architect. Module plans must focus on migrating existing files and functions and must not expand extra capabilities. Output must consistently use Simplified Chinese.'
+        return 'You are a restrained Rust architect. Module plans must focus on migrating existing files and functions and must not expand extra capabilities.'
     
     @staticmethod
     def generate_module_tasks(project_name: str, module_name: str,
@@ -1489,7 +1489,7 @@ Generate a complete tasks.md document containing the following task phases:
     @staticmethod
     def generate_module_tasks_system_prompt() -> str:
         """生成模块 tasks 文档的系统 prompt"""
-        return 'You are a Rust development expert who strictly controls scope. Module tasks must be deduplicated, stay close to file migration actions, and must not expand unevidenced tasks. Output must consistently use Simplified Chinese.'
+        return 'You are a Rust development expert who strictly controls scope. Module tasks must be deduplicated, stay close to file migration actions, and must not expand unevidenced tasks.'
 
 
 # ============================================================================

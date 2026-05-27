@@ -186,7 +186,7 @@ Additional requirements:
 1. Try to compress types, interfaces, constraints, and error scenarios into short lists.
 2. Extract the structs, type aliases, error types, and module boundaries that are most critical for Rust generation.
 3. Keep only short summaries in `source_docs`; do not repeat the full text.
-4. Keep `global_summary` within 200 Chinese characters.
+4. Keep `global_summary` within 200 characters.
 
 Project name:
 {project_name}

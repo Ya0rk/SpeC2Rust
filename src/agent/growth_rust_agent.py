@@ -44,7 +44,7 @@ One file path per line
 </branch_files>
 
 <growth_strategy>
-Briefly explain in Chinese:
+Briefly explain:
 - What the minimum compilable set is.
 - Why the main trunk is selected this way.
 - Which dependencies may be placeholders first.

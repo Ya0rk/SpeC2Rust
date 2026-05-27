@@ -161,14 +161,14 @@ Generate a complete spec.md document containing:
 - Key entities should describe the core data structures in the C project, their relationships, and their purposes.
 - Success criteria should be measurable, such as "can process the same inputs" and "produces the same outputs".
 - Use spec-kit's spec-template.md format.
-- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
+- Titles, body text, and notes must all use English; do not output English section titles.
 
-**Output format**: Use the standard spec-kit spec document format with all required sections and markers, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use the standard spec-kit spec document format with all required sections and markers, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_spec_system_prompt() -> str:
         """生成 spec 文档的系统 prompt"""
-        return 'You are a spec-kit expert skilled at creating functional specification documents that guide C-to-Rust project conversion. Output must consistently use Simplified Chinese.'
+        return 'You are a spec-kit expert skilled at creating functional specification documents that guide C-to-Rust project conversion.'
     
     @staticmethod
     def generate_plan(project_name: str, branch_name: str, all_analyses: str) -> str:
@@ -203,14 +203,14 @@ Generate a complete plan.md document containing:
 - The implementation plan should be phased from basic to complex.
 - Consider C-to-Rust mappings: C structs -> Rust structs/enums, C functions -> Rust functions, and so on.
 - Pay special attention to converting memory management, error handling, and concurrency models.
-- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
+- Titles, body text, and notes must all use English; do not output English section titles.
 
-**Output format**: Use spec-kit's plan-template.md format, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use spec-kit's plan-template.md format, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_plan_system_prompt() -> str:
         """生成 plan 文档的系统 prompt"""
-        return 'You are a Rust architect skilled at creating detailed implementation plans for C-to-Rust conversion. Output must consistently use Simplified Chinese.'
+        return 'You are a Rust architect skilled at creating detailed implementation plans for C-to-Rust conversion.'
     
     @staticmethod
     def generate_tasks(project_name: str, branch_name: str, all_analyses: str) -> str:
@@ -241,14 +241,13 @@ Generate a complete tasks.md document containing the following task phases:
 - Include test tasks if required by the spec.
 - Consider the C-to-Rust conversion order: data structures first, then core logic, then interfaces.
 - Mark dependencies between tasks.
-- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
 
-**Output format**: Use spec-kit's tasks-template.md format, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use spec-kit's tasks-template.md format."""
     
     @staticmethod
     def generate_tasks_system_prompt() -> str:
         """生成 tasks 文档的系统 prompt"""
-        return 'You are a Rust development expert skilled at creating detailed C-to-Rust conversion task lists. Output must consistently use Simplified Chinese.'
+        return 'You are a Rust development expert skilled at creating detailed C-to-Rust conversion task lists.'
     
     # ============================================================================
     # 分层聚类方法相关 Prompts
@@ -299,7 +298,7 @@ Generate the summary from these aspects:
 4. Dependencies on external components.
 5. Potential risk points or behaviors that need attention.
 
-**Important**: Keep the summary within 300 Chinese characters, focus on functional responsibilities, and do not get lost in implementation details."""
+**Important**: Keep the summary within 300 English characters, focus on functional responsibilities, and do not get lost in implementation details."""
     
     @staticmethod
     def generate_cluster_summary_system_prompt() -> str:
@@ -438,14 +437,14 @@ Generate a complete spec.md document containing:
 - Key entities should describe the module's core data structures.
 - Success criteria should be measurable.
 - Use spec-kit's spec-template.md format.
-- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
+- Titles, body text, and notes must all use English; do not output English section titles.
 
-**Output format**: Use the standard spec-kit spec document format, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use the standard spec-kit spec document format, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_module_spec_system_prompt() -> str:
         """生成模块 spec 文档的系统 prompt"""
-        return 'You are a spec-kit expert skilled at creating functional specification documents for individual C modules. Output must consistently use Simplified Chinese.'
+        return 'You are a spec-kit expert skilled at creating functional specification documents for individual C modules.'
     
     @staticmethod
     def generate_module_plan(project_name: str, module_name: str,
@@ -498,14 +497,14 @@ Generate a complete plan.md document containing:
 - The project structure should follow Rust standard conventions.
 - Consider C-to-Rust mappings.
 - Pay special attention to memory management and error handling.
-- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
+- Titles, body text, and notes must all use English; do not output English section titles.
 
-**Output format**: Use spec-kit's plan-template.md format, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use spec-kit's plan-template.md format, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_module_plan_system_prompt() -> str:
         """生成模块 plan 文档的系统 prompt"""
-        return 'You are a Rust architect skilled at creating Rust implementation plans for individual C modules. Output must consistently use Simplified Chinese.'
+        return 'You are a Rust architect skilled at creating Rust implementation plans for individual C modules.'
     
     @staticmethod
     def generate_module_tasks(project_name: str, module_name: str,
@@ -547,14 +546,14 @@ Generate a complete tasks.md document containing the following task phases:
 - Implement related functions in groups.
 - Include test tasks.
 - Mark tasks that can be parallelized.
-- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
+- Titles, body text, and notes must all use English; do not output English section titles.
 
-**Output format**: Use spec-kit's tasks-template.md format, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use spec-kit's tasks-template.md format, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_module_tasks_system_prompt() -> str:
         """生成模块 tasks 文档的系统 prompt"""
-        return 'You are a Rust development expert skilled at creating detailed task lists for individual C modules. Output must consistently use Simplified Chinese.'
+        return 'You are a Rust development expert skilled at creating detailed task lists for individual C modules.'
 
 
 # ============================================================================
@@ -1160,18 +1159,18 @@ Generate a complete spec.md document containing:
 - Key entities should describe the core data structures in the C project, their relationships, and their purposes.
 - Success criteria should be measurable, such as "can process the same inputs" and "produces the same outputs".
 - Use spec-kit's spec-template.md format.
-- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
+- Titles, body text, and notes must all use English; do not output English section titles.
 - Avoid repeating the "file list/function list/struct list" item by item across multiple sections; keep only facts truly needed for the later Rust migration.
 - Every requirement must be traceable to a file, function, type, or behavior summary in the input. If there is no evidence, mark it as missing.
 - Do not expand capabilities not evidenced in the input, such as thread-safety wrappers, recovery mechanisms, serialization, FFI, benchmarks, or release flows.
 - Do not turn "Rust best practices" into new functional requirements; the spec describes only behavior boundaries that must be migrated.
 
-**Output format**: Use the standard spec-kit spec document format with all required sections and markers, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use the standard spec-kit spec document format with all required sections and markers, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_spec_system_prompt() -> str:
         """生成 spec 文档的系统 prompt"""
-        return 'You are a strict spec-kit specification writer. Keep only functionality and behavior facts required for migration, and never expand missing information into new requirements. Output must consistently use Simplified Chinese.'
+        return 'You are a strict spec-kit specification writer. Keep only functionality and behavior facts required for migration, and never expand missing information into new requirements.'
     
     @staticmethod
     def generate_plan(project_name: str, branch_name: str, all_analyses: str) -> str:
@@ -1206,17 +1205,17 @@ Generate a complete plan.md document containing:
 - The implementation plan should be phased from basic to complex.
 - Consider C-to-Rust mappings: C structs -> Rust structs/enums, C functions -> Rust functions, and so on.
 - Pay special attention to converting memory management, error handling, and concurrency models.
-- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
+- Titles, body text, and notes must all use English; do not output English section titles.
 - Do not plan thread-safety wrappers, recovery mechanisms, serialization, FFI, benchmarks, publishing to crates.io, or other unevidenced extensions.
 - Avoid copying the same batch of function facts from the spec/interface docs; the plan should keep only migration steps, file mappings, and necessary technical decisions.
 - Keep the number of phases restrained, preferably 3-5 phases.
 
-**Output format**: Use spec-kit's plan-template.md format, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use spec-kit's plan-template.md format, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_plan_system_prompt() -> str:
         """生成 plan 文档的系统 prompt"""
-        return 'You are a restrained Rust architect. Plans must be bounded by the migration scope and must not expand new capabilities in pursuit of completeness. Output must consistently use Simplified Chinese.'
+        return 'You are a restrained Rust architect. Plans must be bounded by the migration scope and must not expand new capabilities in pursuit of completeness.'
     
     @staticmethod
     def generate_tasks(project_name: str, branch_name: str, all_analyses: str) -> str:
@@ -1247,18 +1246,18 @@ Generate a complete tasks.md document containing the following task phases:
 - Include test tasks if required by the spec.
 - Consider the C-to-Rust conversion order: data structures first, then core logic, then interfaces.
 - Mark dependencies between tasks.
-- Titles, body text, and notes must all use Simplified Chinese; do not output English section titles.
+- Titles, body text, and notes must all use English; do not output English section titles.
 - Do not create duplicate tasks for the same work; each task should correspond directly to one clear migration action.
 - Keep the number of phases restrained and avoid expanding into tail engineering phases such as Phase 8/9/10.
 - Do not add tasks for unevidenced thread safety, recovery mechanisms, serialization, FFI, benchmarks, or release flows.
 - Write only Rust target file paths that can be inferred from the input; do not invent many support files.
 
-**Output format**: Use spec-kit's tasks-template.md format, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use spec-kit's tasks-template.md format, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_tasks_system_prompt() -> str:
         """生成 tasks 文档的系统 prompt"""
-        return 'You are a Rust development expert who strictly controls scope. The task list must be executable, deduplicated, and must not exceed the migration boundary. Output must consistently use Simplified Chinese.'
+        return 'You are a Rust development expert who strictly controls scope. The task list must be executable, deduplicated, and must not exceed the migration boundary.'
     
     @staticmethod
     def generate_module_summary(module_name: str, module_category: str, 
@@ -1368,12 +1367,12 @@ Generate a complete spec.md document containing:
 - Every requirement and success criterion must be traceable to module files, functions, or types in the input.
 - Do not expand new capabilities, new public APIs, thread-safety promises, serialization, recovery mechanisms, FFI, or benchmarks that are not evidenced for this module.
 
-**Output format**: Use the standard spec-kit spec document format, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use the standard spec-kit spec document format, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_module_spec_system_prompt() -> str:
         """生成模块 spec 文档的系统 prompt"""
-        return 'You are a strict module specification writer. Module specs describe only well-evidenced functional boundaries; repeated listing and invented extended capabilities are forbidden. Output must consistently use Simplified Chinese.'
+        return 'You are a strict module specification writer. Module specs describe only well-evidenced functional boundaries; repeated listing and invented extended capabilities are forbidden.'
     
     @staticmethod
     def generate_module_plan(project_name: str, module_name: str,
@@ -1432,12 +1431,12 @@ Generate a complete plan.md document containing:
 - Keep the number of phases restrained, preferably 3-5 phases.
 - Do not plan thread-safety wrappers, recovery mechanisms, serialization, FFI, benchmarks, release flows, or other unevidenced work items.
 
-**Output format**: Use spec-kit's plan-template.md format, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use spec-kit's plan-template.md format, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_module_plan_system_prompt() -> str:
         """生成模块 plan 文档的系统 prompt"""
-        return 'You are a restrained Rust architect. Module plans must focus on migrating existing files and functions and must not expand extra capabilities. Output must consistently use Simplified Chinese.'
+        return 'You are a restrained Rust architect. Module plans must focus on migrating existing files and functions and must not expand extra capabilities.'
     
     @staticmethod
     def generate_module_tasks(project_name: str, module_name: str,
@@ -1484,12 +1483,12 @@ Generate a complete tasks.md document containing the following task phases:
 - Keep the number of phases restrained and avoid late engineering phases unrelated to the current module.
 - Do not add tasks for unevidenced thread safety, recovery mechanisms, serialization, FFI, benchmarks, or release flows.
 
-**Output format**: Use spec-kit's tasks-template.md format, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use spec-kit's tasks-template.md format, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_module_tasks_system_prompt() -> str:
         """生成模块 tasks 文档的系统 prompt"""
-        return 'You are a Rust development expert who strictly controls scope. Module tasks must be deduplicated, stay close to file migration actions, and must not expand unevidenced tasks. Output must consistently use Simplified Chinese.'
+        return 'You are a Rust development expert who strictly controls scope. Module tasks must be deduplicated, stay close to file migration actions, and must not expand unevidenced tasks.'
 
 
 # ============================================================================

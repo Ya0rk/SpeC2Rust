@@ -1778,6 +1778,12 @@ Requirements:
                 continue
 
             batch_error_message = "\n\n".join(diagnostics)
+            batch_summary = str(batch.get("summary", "")).strip()
+            batch_context = str(batch.get("context_text", "")).strip()
+            if batch_summary:
+                batch_error_message = f"{batch_summary}\n\n{batch_error_message}"
+            if batch_context:
+                batch_error_message = f"{batch_error_message}\n\nOrganized source context:\n{batch_context}"
             print(
                 f"处理错误批次 {batch['batch_index']}/{len(batches)}："
                 f"{len(diagnostics)} 条诊断，{len(candidate_files)} 个候选文件"

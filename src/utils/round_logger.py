@@ -21,11 +21,25 @@ class RoundLogger:
     Model wrapper can log every round without coupling to individual workflows.
     """
 
-    def __init__(self, base_dir: Optional[Path | str] = None, run_name: Optional[str] = None):
+    def __init__(
+        self,
+        base_dir: Optional[Path | str] = None,
+        run_name: Optional[str] = None,
+        project_name: Optional[str] = None,
+    ):
         repo_root = Path(__file__).resolve().parents[2]
         configured_base = base_dir or os.environ.get("CGR_ROUND_LOG_DIR")
         self.base_dir = Path(configured_base) if configured_base else repo_root / "log" / "round_logs"
-        self.run_name = self._sanitize_name(run_name or os.environ.get("CGR_ROUND_LOG_RUN") or _DEFAULT_RUN_NAME)
+        env_project_name = os.environ.get("CGR_ROUND_LOG_PROJECT")
+        project_name = project_name or env_project_name or ""
+        if run_name:
+            self.run_name = self._sanitize_name(run_name)
+        elif project_name:
+            self.run_name = self._sanitize_name(f"{_DEFAULT_RUN_NAME}-{project_name}")
+        elif os.environ.get("CGR_ROUND_LOG_RUN"):
+            self.run_name = self._sanitize_name(os.environ.get("CGR_ROUND_LOG_RUN") or "")
+        else:
+            self.run_name = self._sanitize_name(_DEFAULT_RUN_NAME)
         self.run_dir = self.base_dir / self.run_name
 
     @staticmethod

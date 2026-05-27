@@ -1372,6 +1372,21 @@ class RustTestAgent:
                 )
                 if restored_binary:
                     runner.restage_rust_binary(restored_binary)
+                restored_result = runner.run_single(
+                    Path(failing_case.script_path), capture_trace=True
+                )
+                failing_case.passed = restored_result.passed
+                failing_case.exit_code = restored_result.exit_code
+                failing_case.stdout = restored_result.stdout
+                failing_case.stderr = restored_result.stderr
+                failing_case.trace = restored_result.trace
+                failing_case.duration_seconds = restored_result.duration_seconds
+                if restored_result.passed:
+                    print(
+                        f"    [rtest] 回滚后 {failing_case.name} 已通过，"
+                        "无需继续修复本用例"
+                    )
+                    return "passed"
                 state.regression_warning = (
                     "This round's edits made "
                     f"{failing_case.name} pass, but also caused the following cases to regress: "
@@ -1380,7 +1395,6 @@ class RustTestAgent:
                     + regression_detail
                     + "\nThe next round must keep the current case passing and explain why these regression cases will not be broken again."
                 )
-                failing_case.passed = False
                 # 回归回滚后重置 stall 计数（#29）
                 state.stall_count = 0
                 return "continue"
@@ -1753,6 +1767,7 @@ def main() -> int:
     parser = _build_argparser()
     args = parser.parse_args()
     config = Config(config_path=args.config_file)
+    config.round_log_project_name = Path(args.c_project_path).name or ""
     agent = RustTestAgent(
         config=config,
         max_repair_iterations=args.max_repair_iterations,

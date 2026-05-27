@@ -823,6 +823,8 @@ class RustRepairAgent:
             grouped = {"__organized_batch__": focused_output}
 
         total_diagnostics = sum(len(batch.get("diagnostics", [])) for batch in batches)
+        context_text = str(active.get("context_text", "")).strip()
+        context_block = f"\n\nActive batch source context:\n{context_text}" if context_text else ""
 
         self._current_error_batch_context = (
 
@@ -837,6 +839,7 @@ class RustRepairAgent:
             "will be reorganized and the next active batch selected.\n"
 
             f"Active batch summary: {active.get('summary', '')}"
+            f"{context_block}"
 
         )
 
@@ -4129,6 +4132,14 @@ def main():
 
 
     config = Config(config_path=args.config_file)
+    project_name = ""
+    if args.c_project_path:
+        project_name = Path(args.c_project_path).name
+    elif args.project_path:
+        project_name = Path(args.project_path).name
+        if project_name.endswith("-rust"):
+            project_name = project_name[:-5]
+    config.round_log_project_name = project_name
 
     agent = RustRepairAgent(config=config, max_iterations=args.max_iterations)
 

@@ -69,6 +69,18 @@ class RoundLoggerTests(unittest.TestCase):
         self.assertRegex(text, r"\*\*Request Tokens:\*\* \d+ \(estimated\)")
         self.assertRegex(text, r"\*\*Reply Tokens:\*\* \d+ \(estimated\)")
 
+    def test_log_round_uses_project_name_in_default_run_directory(self):
+        logger = RoundLogger(base_dir=self.root, project_name="head")
+        path = logger.log_round(
+            request="ping",
+            reply="pong",
+            objective="project name",
+        )
+
+        self.assertTrue(path.exists())
+        self.assertTrue(path.parent.name.endswith("-head"))
+        self.assertEqual(path.parent.parent, self.root)
+
 
 if __name__ == "__main__":
     unittest.main()

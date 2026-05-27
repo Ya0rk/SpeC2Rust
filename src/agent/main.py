@@ -444,6 +444,7 @@ def main():
 
         # 加载配置
         config = Config(config_path=args.config_file)
+        config.round_log_project_name = Path(args.c_project_path).name or args.rust_project_name or ""
 
         prBlue("\n" + "=" * 80)
         prYellow("C 到 Rust 项目转换 Agent")

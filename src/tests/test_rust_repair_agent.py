@@ -127,6 +127,42 @@ error[E0002]: second issue
                 except PermissionError:
                     pass
 
+    def test_select_repair_error_batch_includes_source_context_excerpt(self):
+        config = Config(config_path=None, model_name="qwen32")
+        root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
+        root.mkdir()
+        try:
+            src_dir = root / "src"
+            src_dir.mkdir()
+            (src_dir / "a.rs").write_text(
+                "\n".join(f"line {i}" for i in range(1, 41)) + "\n",
+                encoding="utf-8",
+            )
+            agent = RustRepairAgent(
+                config=config,
+                max_iterations=3,
+                error_organizer_agent=ErrorOrganizerAgent(batch_size=1),
+            )
+            cargo_output = """
+error[E0001]: first issue
+ --> src/a.rs:20:1
+"""
+
+            grouped = agent._select_repair_error_batch(cargo_output, str(root))
+            diagnosis_prompt = agent._build_diagnosis_prompt(grouped, "project")
+
+            self.assertIn("Error organization context", diagnosis_prompt)
+            self.assertIn("Active batch source context", diagnosis_prompt)
+            self.assertIn("0005 | line 5", diagnosis_prompt)
+            self.assertIn("0020 | line 20", diagnosis_prompt)
+            self.assertIn("0035 | line 35", diagnosis_prompt)
+        finally:
+            if root.exists():
+                try:
+                    shutil.rmtree(root)
+                except PermissionError:
+                    pass
+
     def test_optional_pointer_macro_evidence_is_advertised_only_when_enabled(self):
         config = Config(config_path=None, model_name="qwen32")
         root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"

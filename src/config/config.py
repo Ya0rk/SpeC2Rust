@@ -21,6 +21,7 @@ class Config:
         skeleton_first=True,
         round_log_enabled=True,
         round_log_dir="",
+        round_log_project_name="",
     ):
         self.api_key = api_key or "tcode-12345"
         self.model_name = model_name
@@ -41,6 +42,7 @@ class Config:
         self.skeleton_first = bool(skeleton_first)
         self.round_log_enabled = bool(round_log_enabled)
         self.round_log_dir = round_log_dir or ""
+        self.round_log_project_name = round_log_project_name or ""
 
         if config_path:
             self._load_config(config_path)
@@ -90,5 +92,7 @@ class Config:
                 self.round_log_enabled = bool(config["round_log_enabled"])
             if "round_log_dir" in config:
                 self.round_log_dir = config["round_log_dir"] or ""
+            if "round_log_project_name" in config:
+                self.round_log_project_name = config["round_log_project_name"] or ""
         except Exception as e:
             print(f"加载本地 API 配置失败: {e}")

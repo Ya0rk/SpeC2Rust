@@ -3,6 +3,7 @@ import sys
 import unittest
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -59,6 +60,19 @@ class ModelRoundLoggingTests(unittest.TestCase):
         self.assertIn("reply text\nsecond line", text)
         self.assertIn("generate", text)
         self.assertIn("test_generate_logs_request_reply_label_and_stack", text)
+
+    def test_model_initializes_round_logger_with_project_name(self):
+        config = type("ConfigLike", (), {
+            "round_log_dir": self.root,
+            "round_log_project_name": "head",
+            "model_name": "dummy",
+        })()
+
+        with patch.object(Model, "_get_model", return_value=DummyBackend()):
+            model = Model(config)
+
+        self.assertTrue(model.round_logger.run_dir.name.endswith("-head"))
+        self.assertEqual(model.round_logger.run_dir.parent, self.root)
 
 
 if __name__ == "__main__":

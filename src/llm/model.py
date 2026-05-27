@@ -19,7 +19,10 @@ class Model:
         self.model_name = config.model_name
         self.llm = self._get_model(config)
         self._current_request_label = ""
-        self.round_logger = RoundLogger(base_dir=getattr(config, "round_log_dir", ""))
+        self.round_logger = RoundLogger(
+            base_dir=getattr(config, "round_log_dir", ""),
+            project_name=getattr(config, "round_log_project_name", ""),
+        )
 
     def generate(self, prompt: str):
         translation_metrics.increment_llm_requests()
