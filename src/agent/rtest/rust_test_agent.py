@@ -873,9 +873,51 @@ class RustTestAgent:
                 try:
                     snapshot.restore()
                     print(f"  [rtest] 未修复 {failing_case.name}，已回滚本用例的 edits")
+                    self._rebuild_and_restage_after_restore(
+                        rust_project_path=rust_project_path,
+                        bin_name=bin_name,
+                        runner=runner,
+                    )
                 except SnapshotError as exc:
                     print(f"  [rtest] 回滚失败，项目可能包含未完成修复：{exc}")
             snapshot.discard()
+
+    def _rebuild_and_restage_after_restore(
+        self,
+        *,
+        rust_project_path: str,
+        bin_name: str,
+        runner: TestRunner,
+    ) -> bool:
+        """After restoring sources, rebuild target/release and refresh wrappers."""
+        self._touch_rebuild_inputs(rust_project_path)
+        if not self._cargo_build_release(rust_project_path):
+            print("  [rtest] 回滚后重新编译失败，后续测试可能仍使用旧二进制")
+            return False
+        restored_binary = self._locate_release_binary(
+            rust_project_path, f"{bin_name}-rust"
+        )
+        if not restored_binary:
+            print("  [rtest] 回滚后找不到 release 二进制，后续测试可能仍使用旧 wrapper")
+            return False
+        runner.restage_rust_binary(restored_binary)
+        print("  [rtest] 回滚后已重新编译并刷新测试 wrapper")
+        return True
+
+    @staticmethod
+    def _touch_rebuild_inputs(rust_project_path: str) -> None:
+        """Bump mtimes after snapshot restore so Cargo cannot reuse stale binaries."""
+        root = Path(rust_project_path)
+        candidates = [root / "Cargo.toml", root / "Cargo.lock", root / "build.rs"]
+        src_dir = root / "src"
+        if src_dir.is_dir():
+            candidates.extend(src_dir.rglob("*.rs"))
+        for path in candidates:
+            try:
+                if path.exists():
+                    os.utime(path, None)
+            except OSError:
+                pass
 
     def _repair_one_round(
         self,
@@ -1163,8 +1205,15 @@ class RustTestAgent:
                 )
 
         if payload.get("complete"):
-            print("    [rtest] LLM 标记 complete=true，但用例仍未通过，终止本用例修复")
-            return "abort"
+            print("    [rtest] LLM 标记 complete=true，但用例仍未通过，继续修复并要求新证据或编辑")
+            state.history_summary += (
+                "\n[System] The previous round set complete=true, but the current test case still fails. "
+                "That signal is not accepted as a stop condition for a failing case. "
+                "If you believe the failure is caused by the runner/environment, request fresh trace or test artifacts "
+                "that prove it for the current run; otherwise provide a focused Rust edit. "
+                "Do not repeat stale diagnoses from earlier runs."
+            )
+            return "continue"
 
         if not new_material and not edits:
             print("    [rtest] LLM 既没请求材料也没产生新编辑，继续下一轮并要求改变策略")
@@ -1366,14 +1415,26 @@ class RustTestAgent:
                     snapshot.restore()
                 except SnapshotError as exc:
                     print(f"    [rtest] 回滚失败，后续结果可能不可靠：{exc}")
-                self._cargo_build_release(rust_project_path)
-                restored_binary = self._locate_release_binary(
-                    rust_project_path, f"{bin_name}-rust"
-                )
-                if restored_binary:
-                    runner.restage_rust_binary(restored_binary)
+                    state.history_summary += (
+                        f"\n[System] Rollback after a regression failed: {exc}. "
+                        "Do not repair the regressed case as a new target; the current case repair state is unsafe."
+                    )
+                    return "abort"
+                if not self._rebuild_and_restage_after_restore(
+                    rust_project_path=rust_project_path,
+                    bin_name=bin_name,
+                    runner=runner,
+                ):
+                    state.history_summary += (
+                        "\n[System] Rollback after a regression restored files, but rebuild/restage failed. "
+                        "Do not proceed to unrelated cases until the restored binary is available."
+                    )
+                    return "abort"
                 restored_result = runner.run_single(
                     Path(failing_case.script_path), capture_trace=True
+                )
+                post_restore_regressed = self._check_regression(
+                    runner, baseline_pass_names, failing_case.name
                 )
                 failing_case.passed = restored_result.passed
                 failing_case.exit_code = restored_result.exit_code
@@ -1381,18 +1442,34 @@ class RustTestAgent:
                 failing_case.stderr = restored_result.stderr
                 failing_case.trace = restored_result.trace
                 failing_case.duration_seconds = restored_result.duration_seconds
-                if restored_result.passed:
+                if restored_result.passed and not post_restore_regressed:
                     print(
                         f"    [rtest] 回滚后 {failing_case.name} 已通过，"
-                        "无需继续修复本用例"
+                        "且回归用例已恢复，无需继续修复本用例"
                     )
                     return "passed"
+                if post_restore_regressed:
+                    restored_regression_detail = _format_regression_details(
+                        post_restore_regressed
+                    )
+                    print(
+                        "    [rtest] 回滚后仍检测到回归，保持当前用例修复上下文，"
+                        "不会切换去修老用例"
+                    )
+                    for line in restored_regression_detail.splitlines():
+                        print(f"      {line}")
                 state.regression_warning = (
                     "This round's edits made "
                     f"{failing_case.name} pass, but also caused the following cases to regress: "
                     + ", ".join(sorted(regressed))
                     + ". These edits have been rolled back. Regression evidence follows:\n"
                     + regression_detail
+                    + (
+                        "\n\nAfter rollback, these baseline cases still failed, so the next round must first account for stale binary or rollback-state issues:\n"
+                        + _format_regression_details(post_restore_regressed)
+                        if post_restore_regressed
+                        else ""
+                    )
                     + "\nThe next round must keep the current case passing and explain why these regression cases will not be broken again."
                 )
                 # 回归回滚后重置 stall 计数（#29）

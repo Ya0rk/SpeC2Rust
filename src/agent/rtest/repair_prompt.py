@@ -344,7 +344,11 @@ def build_repair_prompt(
     if regression_warning:
         regression_block = (
             "\n[Warning] The previous fix made this case pass, but broke other cases that had already passed; "
-            "it has been automatically rolled back. Please try a more focused repair approach:\n"
+            "it has been automatically rolled back. Treat the regressed cases as hard constraints for the same repair target; "
+            "do not switch to repairing the old case, and do not submit a patch that merely flips which case passes. "
+            "Your next edit must explain and preserve the shared invariant that lets the current failing case and the regressed cases pass together. "
+            "For stream-oriented or byte-oriented programs, be especially careful to separate flushable output bytes from unresolved lookahead/state bytes; "
+            "flushing output early must not force ambiguous state to be finalized early.\n"
             f"```text\n{regression_warning[-REGRESSION_WARNING_TAIL_CHARS:]}\n```\n"
         )
 
@@ -405,7 +409,7 @@ Test script runtime conventions (understand first; all test scripts are human-pr
   Fix the Rust implementation around the C behavior. Only when the script explicitly uses `$C_BIN` / `<bin_name>-c` is it a Rust-vs-C comparison.
 - But if the diff only comes from differences in the absolute paths / argv[0] / binary names of `$C_BIN` and `$RUST_BIN`,
   that indicates the fixed test baseline may require human preprocessing outside this agent. Do not edit the script or hardcode a path in Rust;
-  explain the evidence in `summary`, request further readable artifacts if needed, and set `complete=true` only when no Rust fix is appropriate.
+  explain the evidence in `summary` and request further readable artifacts if needed. Do not set `complete=true` just to stop a failing case.
 
 Inferred tested features (from script name / content; may be CLI flags, subcommands, or key strings, and are not tied to any specific project style):
 - Flag candidates: {flags_line}
@@ -519,7 +523,8 @@ Requirements:
 7. If the current materials are not enough to edit safely, you may request materials only; you will see the response in the next round.
    For large Rust/C/test files that were evicted or are too large to fit, prefer `mode="line_range"` with `start_line` / `end_line`.
 8. If the target Rust file is already in "provided Rust files" and the key C functions have also been provided,
-   this round must provide edits or explicitly set complete=true; do not request the same provided file again, and do not just repeat the problem.
+   this round must provide edits or request new focused evidence; do not request the same provided file again, do not set complete=true to stop,
+   and do not just repeat the problem.
    If the full file was evicted because of prompt budget pressure, request a focused line_range for the exact area you need.
 9. If you have determined that a Rust file is missing the corresponding C logic (for example main.rs only prints a placeholder output),
    you must fix that file directly with replace_range / insert_before / insert_after.

@@ -18,12 +18,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
-import signal
 import re
+import signal
 import shlex
 import shutil
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -67,6 +69,9 @@ class TestRunner:
         self.timeout_seconds = timeout_seconds
         self.enable_logging = enable_logging
         self.wrapper_dir = self.test_dir / ".bin"
+        run_key = hashlib.sha1(str(self.test_dir).encode("utf-8")).hexdigest()[:10]
+        run_root_base = Path(os.environ.get("CGR_RTEST_RUN_ROOT") or tempfile.gettempdir())
+        self.run_root = run_root_base / "cgrcode-rtest-runs" / f"{self.bin_name}-{os.getpid()}-{run_key}"
         self._env: Optional[TestEnvironment] = None
         self._run_dirs: List[Path] = []
 
@@ -161,10 +166,10 @@ class TestRunner:
         if self._env is None:
             raise RuntimeError("TestRunner 未 stage，无法运行测试")
 
-        run_dir = self.test_dir / f".run_{script_path.stem}"
+        run_dir = self._run_dir_for(script_path)
         if run_dir.exists():
             shutil.rmtree(run_dir, ignore_errors=True)
-        run_dir.mkdir(exist_ok=True)
+        run_dir.mkdir(parents=True, exist_ok=True)
         self._run_dirs.append(run_dir)
         _copy_fixtures_into(script_path.parent, run_dir)
         self._stage_wrappers_into_run_dir(run_dir)
@@ -240,14 +245,25 @@ class TestRunner:
         """按需捕获单个测试的 bash -x trace。"""
         if self._env is None:
             return ""
-        run_dir = self.test_dir / f".run_{script_path.stem}"
+        run_dir = self._run_dir_for(script_path)
         if not run_dir.exists():
-            run_dir.mkdir()
+            run_dir.mkdir(parents=True, exist_ok=True)
             _copy_fixtures_into(script_path.parent, run_dir)
             self._stage_wrappers_into_run_dir(run_dir)
             self._write_bash_env(run_dir)
             self._run_dirs.append(run_dir)
         return self._capture_trace(script_path, run_dir)
+
+    def _run_dir_for(self, script_path: Path) -> Path:
+        """Use a native POSIX temp location for per-case work dirs.
+
+        Windows-mounted WSL paths such as /mnt/e are often backed by drvfs/9p
+        and do not support FIFOs. Some upstream shell tests create mkfifo,
+        sockets, or other POSIX-only filesystem entries, so case-local scratch
+        directories must not live under the translated project tree.
+        """
+        safe_stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", script_path.stem)
+        return self.run_root / f".run_{safe_stem}"
 
     def write_runtime_log(self, run_dir: Path, result: TestCaseResult) -> Path:
         bundle = LogAgent.bundle_from_result(result)
@@ -416,6 +432,8 @@ class TestRunner:
             for run_dir in self._run_dirs:
                 if run_dir.exists():
                     shutil.rmtree(run_dir, ignore_errors=True)
+            if self.run_root.exists():
+                shutil.rmtree(self.run_root, ignore_errors=True)
         self._run_dirs.clear()
 
 

@@ -314,13 +314,14 @@ class TestRunnerLoggingTests(unittest.TestCase):
             disabled = TestRunner(str(test_dir), "demo", enable_logging=False)
             disabled.stage(str(binary), None)
             disabled.run_single(script)
-            self.assertFalse((test_dir / ".run_case" / ".cgr_logs" / "runtime.json").exists())
+            disabled_log = disabled._run_dir_for(script) / ".cgr_logs" / "runtime.json"  # noqa: SLF001
+            self.assertFalse(disabled_log.exists())
             disabled.cleanup()
 
             enabled = TestRunner(str(test_dir), "demo", enable_logging=True)
             enabled.stage(str(binary), None)
             enabled.run_single(script)
-            runtime_log = test_dir / ".run_case" / ".cgr_logs" / "runtime.json"
+            runtime_log = enabled._run_dir_for(script) / ".cgr_logs" / "runtime.json"  # noqa: SLF001
             self.assertTrue(runtime_log.exists())
             enabled.cleanup()
             self.assertTrue(runtime_log.exists())
@@ -489,8 +490,9 @@ class TestRunnerLoggingTests(unittest.TestCase):
                 snapshot=None,
             )
 
-            self.assertEqual(outcome, "abort")
-            self.assertEqual(state.history_summary, "saw runtime evidence")
+            self.assertEqual(outcome, "continue")
+            self.assertIn("saw runtime evidence", state.history_summary)
+            self.assertIn("complete=true", state.history_summary)
 
     def test_repair_one_round_absorbs_material_before_debug_probe(self) -> None:
         class FakeLlm:
@@ -870,11 +872,13 @@ class TestRunnerLoggingTests(unittest.TestCase):
         )
 
         with tempfile.TemporaryDirectory() as tmp, patch.object(
-            RustTestAgent, "_repair_failing_case", side_effect=[True, False, True]
+            RustTestAgent, "_repair_failing_case", side_effect=[True, True]
         ) as repair_mock, patch.object(
             RustTestAgent, "_print_summary", return_value=None
         ), patch.object(
             RustTestAgent, "_locate_release_binary", return_value="/tmp/bin"
+        ), patch.object(
+            TestRunner, "restage_rust_binary", return_value=None
         ), patch.object(
             TestRunner, "run_all", side_effect=[cycle1_summary, cycle2_summary]
         ) as run_all_mock:
@@ -895,7 +899,141 @@ class TestRunnerLoggingTests(unittest.TestCase):
 
             self.assertTrue(result.all_passed)
             self.assertEqual(run_all_mock.call_count, 2)
-            self.assertEqual(repair_mock.call_count, 3)
+            self.assertEqual(repair_mock.call_count, 2)
+
+    def test_failed_case_restore_rebuilds_and_restages_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "project"
+            (project / "src").mkdir(parents=True)
+            (project / "src" / "main.rs").write_text("fn main() {}\n", encoding="utf-8")
+            test_dir = root / "test"
+            test_dir.mkdir()
+            script = test_dir / "case.sh"
+            script.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+
+            agent = RustTestAgent(max_repair_iterations=1)
+            runner = TestRunner(test_dir=str(test_dir), bin_name="demo")
+            failing_case = TestCaseResult(
+                name="case.sh",
+                script_path=str(script),
+                passed=False,
+                exit_code=1,
+                stdout="",
+                stderr="fail",
+            )
+
+            with patch.object(
+                RustTestAgent, "_repair_one_round", return_value="abort"
+            ), patch.object(
+                RustTestAgent, "_rebuild_and_restage_after_restore"
+            ) as rebuild_mock:
+                fixed = agent._repair_failing_case(
+                    rust_project_path=str(project),
+                    bin_name="demo",
+                    runner=runner,
+                    project_structure="",
+                    source_index=CSourceIndex(),
+                    failing_case=failing_case,
+                    baseline_pass_names=set(),
+                )
+
+            self.assertFalse(fixed)
+            rebuild_mock.assert_called_once()
+
+    def test_regression_after_current_case_pass_rolls_back_and_continues_same_case(self) -> None:
+        class FakeRunner:
+            def __init__(self) -> None:
+                self.restaged = []
+                self.results = [
+                    TestCaseResult(
+                        name="new.sh",
+                        script_path="/tmp/new.sh",
+                        passed=True,
+                        exit_code=0,
+                        stdout="",
+                        stderr="",
+                    ),
+                    TestCaseResult(
+                        name="new.sh",
+                        script_path="/tmp/new.sh",
+                        passed=False,
+                        exit_code=1,
+                        stdout="",
+                        stderr="new still fails after rollback",
+                    ),
+                ]
+
+            def restage_rust_binary(self, path: str) -> None:
+                self.restaged.append(path)
+
+            def run_single(self, _script, capture_trace: bool = False):
+                return self.results.pop(0)
+
+        class FakeSnapshot:
+            def __init__(self) -> None:
+                self.restored = False
+
+            def restore(self) -> None:
+                self.restored = True
+
+        agent = RustTestAgent(max_repair_iterations=1)
+        failing_case = TestCaseResult(
+            name="new.sh",
+            script_path="/tmp/new.sh",
+            passed=False,
+            exit_code=1,
+            stdout="",
+            stderr="new failure",
+        )
+        old_failure = TestCaseResult(
+            name="old.sh",
+            script_path="/tmp/old.sh",
+            passed=False,
+            exit_code=1,
+            stdout="",
+            stderr="old regression",
+        )
+        state = _RepairLoopState(
+            history_summary="",
+            last_build_error="",
+            regression_warning="",
+            last_failure_signature=failing_case.failure_signature(),
+            last_edits_fingerprint="",
+            last_debug_probe_fingerprint="",
+            stall_count=0,
+            dup_edits_count=0,
+            debug_probe_count=0,
+        )
+        runner = FakeRunner()
+        snapshot = FakeSnapshot()
+
+        with patch.object(
+            RustTestAgent, "_cargo_build_release", return_value=True
+        ), patch.object(
+            RustTestAgent, "_locate_release_binary", return_value="/tmp/demo-rust"
+        ), patch.object(
+            RustTestAgent, "_rebuild_and_restage_after_restore", return_value=True
+        ) as rebuild_mock, patch.object(
+            RustTestAgent,
+            "_check_regression",
+            side_effect=[{"old.sh": old_failure}, {}],
+        ):
+            outcome = agent._build_and_verify(
+                rust_project_path="/tmp/project",
+                bin_name="demo",
+                runner=runner,
+                failing_case=failing_case,
+                baseline_pass_names={"old.sh"},
+                state=state,
+                snapshot=snapshot,
+            )
+
+        self.assertEqual(outcome, "continue")
+        self.assertTrue(snapshot.restored)
+        rebuild_mock.assert_called_once()
+        self.assertFalse(failing_case.passed)
+        self.assertIn("old.sh", state.regression_warning)
 
     def test_material_budget_keeps_single_large_requested_file(self) -> None:
         material = MaterialBudget(budget_chars=100)

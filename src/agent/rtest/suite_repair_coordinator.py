@@ -35,8 +35,7 @@ class SuiteRepairCoordinator:
         rust_bin_name = f"{self.context.bin_name}-rust"
         current_summary = self.context.summary
         for suite_cycle in range(1, self.context.max_suite_repair_cycles + 1):
-            failing_cases = [case for case in current_summary.results if not case.passed]
-            if not failing_cases:
+            if current_summary.all_passed:
                 return current_summary
 
             if suite_cycle > 1:
@@ -44,12 +43,24 @@ class SuiteRepairCoordinator:
                     f"[rtest] ===== 继续套件修复轮次 {suite_cycle}/{self.context.max_suite_repair_cycles} ====="
                 )
 
-            baseline_pass_names: Set[str] = {
-                case.name for case in current_summary.results if case.passed
-            }
-            failing_cases.sort(key=_script_size)
             fixed_any = False
-            for case in failing_cases:
+            attempted_names: Set[str] = set()
+            while True:
+                failing_cases = [
+                    case
+                    for case in current_summary.results
+                    if not case.passed and case.name not in attempted_names
+                ]
+                if not failing_cases:
+                    break
+
+                failing_cases.sort(key=_script_size)
+                case = failing_cases[0]
+                attempted_names.add(case.name)
+                baseline_pass_names: Set[str] = {
+                    result.name for result in current_summary.results if result.passed
+                }
+                passed_before = current_summary.passed
                 fixed = self.agent._repair_failing_case(  # noqa: SLF001
                     rust_project_path=self.context.rust_project_path,
                     bin_name=self.context.bin_name,
@@ -59,22 +70,27 @@ class SuiteRepairCoordinator:
                     failing_case=case,
                     baseline_pass_names=baseline_pass_names,
                 )
-                if fixed:
+
+                final_binary = self.agent._locate_release_binary(  # noqa: SLF001
+                    self.context.rust_project_path, rust_bin_name
+                )
+                if final_binary:
+                    self.context.runner.restage_rust_binary(final_binary)
+
+                current_summary = self.context.runner.run_all(self.context.scripts)
+                self.agent._print_summary(  # noqa: SLF001
+                    current_summary,
+                    label=f"第 {suite_cycle} 轮修复 {case.name} 后测试结果",
+                )
+                case_now_passed = any(
+                    result.name == case.name and result.passed
+                    for result in current_summary.results
+                )
+                if fixed and case_now_passed and current_summary.passed > passed_before:
                     fixed_any = True
-                    baseline_pass_names.add(case.name)
+                if current_summary.all_passed:
+                    return current_summary
 
-            final_binary = self.agent._locate_release_binary(  # noqa: SLF001
-                self.context.rust_project_path, rust_bin_name
-            )
-            if final_binary and final_binary != self.context.initial_binary_path:
-                self.context.runner.restage_rust_binary(final_binary)
-
-            current_summary = self.context.runner.run_all(self.context.scripts)
-            self.agent._print_summary(  # noqa: SLF001
-                current_summary, label=f"第 {suite_cycle} 轮套件修复后的测试结果"
-            )
-            if current_summary.all_passed:
-                return current_summary
             if not fixed_any:
                 print("[rtest] 本轮没有任何失败用例被修复，停止继续套件修复")
                 break
