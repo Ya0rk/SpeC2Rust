@@ -1368,7 +1368,7 @@ Generate a complete spec.md document containing:
 - Every requirement and success criterion must be traceable to module files, functions, or types in the input.
 - Do not expand new capabilities, new public APIs, thread-safety promises, serialization, recovery mechanisms, FFI, or benchmarks that are not evidenced for this module.
 
-**Output format**: Use the standard spec-kit spec document format, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use the standard spec-kit spec document format, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_module_spec_system_prompt() -> str:
@@ -1432,7 +1432,7 @@ Generate a complete plan.md document containing:
 - Keep the number of phases restrained, preferably 3-5 phases.
 - Do not plan thread-safety wrappers, recovery mechanisms, serialization, FFI, benchmarks, release flows, or other unevidenced work items.
 
-**Output format**: Use spec-kit's plan-template.md format, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use spec-kit's plan-template.md format, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_module_plan_system_prompt() -> str:
@@ -1484,7 +1484,7 @@ Generate a complete tasks.md document containing the following task phases:
 - Keep the number of phases restrained and avoid late engineering phases unrelated to the current module.
 - Do not add tasks for unevidenced thread safety, recovery mechanisms, serialization, FFI, benchmarks, or release flows.
 
-**Output format**: Use spec-kit's tasks-template.md format, but use Simplified Chinese consistently for titles and body text."""
+**Output format**: Use spec-kit's tasks-template.md format, but use English consistently for titles and body text."""
     
     @staticmethod
     def generate_module_tasks_system_prompt() -> str:

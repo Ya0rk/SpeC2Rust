@@ -53,13 +53,20 @@ class CSourceIndex:
         if not path:
             return []
         lowered = path.replace("\\", "/").lower()
+        lowered_name = Path(lowered).name
         exact = self._by_file.get(lowered)
         if exact:
             return exact
         # 兜底：尾部匹配（支持只写 basename）
         matched: List[Dict] = []
         for file_key, recs in self._by_file.items():
-            if file_key.endswith("/" + lowered) or file_key == lowered or lowered in file_key:
+            file_name = Path(file_key).name
+            if (
+                file_key.endswith("/" + lowered)
+                or file_key == lowered
+                or lowered in file_key
+                or (lowered_name and file_name == lowered_name)
+            ):
                 matched.extend(recs)
         return matched
 
@@ -151,7 +158,15 @@ class CSourceIndex:
         except Exception:
             return None
         if not full.is_file():
-            return None
+            basename_fallback = (root / Path(normalized).name).resolve()
+            try:
+                if root not in basename_fallback.parents and basename_fallback != root:
+                    return None
+            except Exception:
+                return None
+            if not basename_fallback.is_file():
+                return None
+            full = basename_fallback
         text = full.read_text(encoding="utf-8", errors="ignore")
         lines = text.splitlines()
         start = max(1, start_line)

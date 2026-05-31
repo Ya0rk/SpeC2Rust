@@ -3949,6 +3949,20 @@
     "chunks": []
   },
   {
+    "func_defid": "include/uchar.h:c32swidth",
+    "span": "include/uchar.h:1100:34:1108:2",
+    "pieces": [
+      "include/uchar.h:1100:34:1108:2"
+    ],
+    "sub_chunks": [],
+    "num_lines": 9,
+    "source": "int\nc32swidth (const char32_t *s, size_t n)\n{\n  return\n#  if 0 && defined __cplusplus && defined GNULIB_NAMESPACE\n         GNULIB_NAMESPACE::\n#  endif\n         wcswidth ((const wchar_t *) s, n);\n}",
+    "calls": [],
+    "globals": [],
+    "imports": [],
+    "chunks": []
+  },
+  {
     "func_defid": "include/uchar.h:c32tob",
     "span": "include/uchar.h:1125:12:1133:2",
     "pieces": [

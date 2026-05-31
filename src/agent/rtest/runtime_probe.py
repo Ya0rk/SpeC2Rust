@@ -325,6 +325,8 @@ class RuntimeProbeService:
 
     @staticmethod
     def _run_dir_for_case(failing_case: TestCaseResult) -> Path:
+        if getattr(failing_case, "run_dir", ""):
+            return Path(failing_case.run_dir)
         script = Path(failing_case.script_path)
         return script.parent / f".run_{script.stem}"
 

@@ -68,6 +68,38 @@ class TestRunnerLoggingTests(unittest.TestCase):
             self.assertEqual(payload["case_name"], "case.sh")
             self.assertEqual(payload["frames"][0]["file"], "src/main.rs")
 
+    def test_read_runtime_evidence_uses_actual_result_run_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            test_dir = Path(tmp) / "test"
+            actual_run_dir = Path(tmp) / "native-run" / ".run_case"
+            stale_run_dir = test_dir / ".run_case"
+            actual_log_dir = actual_run_dir / ".cgr_logs"
+            stale_log_dir = stale_run_dir / ".cgr_logs"
+            test_dir.mkdir()
+            actual_log_dir.mkdir(parents=True)
+            stale_log_dir.mkdir(parents=True)
+            (actual_log_dir / "runtime.json").write_text(
+                json.dumps({"case_name": "case.sh", "error": "actual"}),
+                encoding="utf-8",
+            )
+            (stale_log_dir / "runtime.json").write_text(
+                json.dumps({"case_name": "case.sh", "error": "stale"}),
+                encoding="utf-8",
+            )
+            failing_case = TestCaseResult(
+                name="case.sh",
+                script_path=str(test_dir / "case.sh"),
+                passed=False,
+                exit_code=1,
+                stdout="",
+                stderr="panic",
+                run_dir=str(actual_run_dir),
+            )
+
+            payload = RustTestAgent._read_runtime_evidence(failing_case)
+
+            self.assertEqual(payload["error"], "actual")
+
     def test_read_runtime_evidence_uses_latest_debug_probe_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             test_dir = Path(tmp) / "test"
@@ -901,6 +933,77 @@ class TestRunnerLoggingTests(unittest.TestCase):
             self.assertEqual(run_all_mock.call_count, 2)
             self.assertEqual(repair_mock.call_count, 2)
 
+    def test_repair_suite_does_not_stop_after_unfixed_cycle(self) -> None:
+        fail_case = TestCaseResult(
+            name="case.sh",
+            script_path="/tmp/case.sh",
+            passed=False,
+            exit_code=1,
+            stdout="",
+            stderr="fail",
+        )
+        initial_summary = TestRunSummary(1, 0, 1, [fail_case])
+        still_fail_summary = TestRunSummary(
+            1,
+            0,
+            1,
+            [
+                TestCaseResult(
+                    name="case.sh",
+                    script_path="/tmp/case.sh",
+                    passed=False,
+                    exit_code=1,
+                    stdout="",
+                    stderr="still fail",
+                )
+            ],
+        )
+        passed_summary = TestRunSummary(
+            1,
+            1,
+            0,
+            [
+                TestCaseResult(
+                    name="case.sh",
+                    script_path="/tmp/case.sh",
+                    passed=True,
+                    exit_code=0,
+                    stdout="",
+                    stderr="",
+                )
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(
+            RustTestAgent, "_repair_failing_case", side_effect=[False, True]
+        ) as repair_mock, patch.object(
+            RustTestAgent, "_print_summary", return_value=None
+        ), patch.object(
+            RustTestAgent, "_locate_release_binary", return_value="/tmp/bin"
+        ), patch.object(
+            TestRunner, "restage_rust_binary", return_value=None
+        ), patch.object(
+            TestRunner, "run_all", side_effect=[still_fail_summary, passed_summary]
+        ) as run_all_mock:
+            agent = RustTestAgent(max_repair_iterations=1, max_suite_repair_cycles=2)
+            runner = TestRunner(test_dir=str(Path(tmp) / "test"), bin_name="demo")
+
+            result = agent._repair_suite_until_stable(
+                rust_project_path=str(Path(tmp)),
+                bin_name="demo",
+                runner=runner,
+                project_structure="",
+                source_index=object(),
+                summary=initial_summary,
+                scripts=[Path("/tmp/case.sh")],
+                test_dst=str(Path(tmp) / "test"),
+                initial_binary_path="/tmp/bin",
+            )
+
+            self.assertTrue(result.all_passed)
+            self.assertEqual(repair_mock.call_count, 2)
+            self.assertEqual(run_all_mock.call_count, 2)
+
     def test_failed_case_restore_rebuilds_and_restages_binary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1141,6 +1244,38 @@ class TestRunnerLoggingTests(unittest.TestCase):
             self.assertIn("c line 3", rec["source"])
             self.assertIn("c line 5", rec["source"])
             self.assertNotIn("c line 2", rec["source"])
+
+    def test_c_source_index_line_range_matches_prefixed_source_path_by_basename(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "shc.c").write_text(
+                "\n".join(f"shc line {idx}" for idx in range(1, 8)) + "\n",
+                encoding="utf-8",
+            )
+            index = CSourceIndex(source_root=str(root))
+            index.add(
+                {
+                    "name": "write_c",
+                    "file": "shc.c",
+                    "source": "void write_c(void) {}",
+                }
+            )
+
+            rec = index.fulfill_request(
+                {
+                    "kind": "file",
+                    "query": "src/shc.c",
+                    "mode": "line_range",
+                    "start_line": 2,
+                    "end_line": 4,
+                }
+            )
+
+            self.assertIsNotNone(rec)
+            self.assertEqual(rec["file"], "shc.c")
+            self.assertIn("shc line 2", rec["source"])
+            self.assertIn("shc line 4", rec["source"])
+            self.assertNotIn("shc line 5", rec["source"])
 
 
 if __name__ == "__main__":

@@ -12,5 +12,5 @@ spec_agent.md
 spec
 log/
 .vscode
-output_gpt/
+output_gpt*/
 .tmp/*

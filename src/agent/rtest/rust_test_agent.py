@@ -648,6 +648,8 @@ class RustTestAgent:
 
     @staticmethod
     def _run_dir_for_case(failing_case: TestCaseResult) -> Path:
+        if getattr(failing_case, "run_dir", ""):
+            return Path(failing_case.run_dir)
         script = Path(failing_case.script_path)
         return script.parent / f".run_{script.stem}"
 
@@ -1023,6 +1025,7 @@ class RustTestAgent:
             or payload.get("test_artifact_requests")
             or []
         )
+        requested_material = bool(cgr_requests or rust_read_requests or test_artifact_requests)
         submitted_edits = [
             edit for edit in (payload.get("edits") or []) if isinstance(edit, dict)
         ]
@@ -1216,11 +1219,20 @@ class RustTestAgent:
             return "continue"
 
         if not new_material and not edits:
-            print("    [rtest] LLM 既没请求材料也没产生新编辑，继续下一轮并要求改变策略")
-            state.history_summary += (
-                "\n[System] The previous round did not produce any executable action. The next round must request missing materials "
-                "or provide new valid edits."
-            )
+            if requested_material:
+                print("    [rtest] LLM 请求了材料，但没有新增可读材料，继续下一轮并要求调整请求")
+                state.history_summary += (
+                    "\n[System] The previous round requested source/test materials, but no new readable material was added. "
+                    "Likely causes: the requested file/path was already provided, did not match any indexed source, was outside allowed paths, "
+                    "or produced empty content. The next round must use already provided material, request a more precise path/line_range, "
+                    "or provide concrete edits."
+                )
+            else:
+                print("    [rtest] LLM 既没请求材料也没产生新编辑，继续下一轮并要求改变策略")
+                state.history_summary += (
+                    "\n[System] The previous round did not produce any executable action. The next round must request missing materials "
+                    "or provide new valid edits."
+                )
             return "continue"
         return "continue"
 
@@ -1398,6 +1410,7 @@ class RustTestAgent:
         failing_case.stderr = new_result.stderr
         failing_case.trace = new_result.trace
         failing_case.duration_seconds = new_result.duration_seconds
+        failing_case.run_dir = new_result.run_dir
 
         if new_result.passed:
             regressed = self._check_regression(
@@ -1442,6 +1455,7 @@ class RustTestAgent:
                 failing_case.stderr = restored_result.stderr
                 failing_case.trace = restored_result.trace
                 failing_case.duration_seconds = restored_result.duration_seconds
+                failing_case.run_dir = restored_result.run_dir
                 if restored_result.passed and not post_restore_regressed:
                     print(
                         f"    [rtest] 回滚后 {failing_case.name} 已通过，"

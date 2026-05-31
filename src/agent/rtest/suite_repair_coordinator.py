@@ -92,8 +92,13 @@ class SuiteRepairCoordinator:
                     return current_summary
 
             if not fixed_any:
-                print("[rtest] 本轮没有任何失败用例被修复，停止继续套件修复")
-                break
+                if suite_cycle < self.context.max_suite_repair_cycles:
+                    print(
+                        "[rtest] 本轮没有任何失败用例被修复，"
+                        "继续下一轮套件修复以避免过早停止"
+                    )
+                    continue
+                print("[rtest] 已达套件修复轮次上限，仍有用例未通过")
 
         return current_summary
 

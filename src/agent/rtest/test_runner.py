@@ -211,6 +211,7 @@ class TestRunner:
             stdout=stdout[-TEST_OUTPUT_TAIL_CHARS:],
             stderr=stderr[-TEST_OUTPUT_TAIL_CHARS:],
             duration_seconds=round(time.time() - started, 2),
+            run_dir=str(run_dir),
         )
         if timed_out:
             result.trace = f"<测试超时，已终止进程组；跳过 bash -x 复跑，避免二次卡住>"

@@ -20,6 +20,7 @@ class TestCaseResult:
     stderr: str
     duration_seconds: float = 0.0
     trace: str = ""
+    run_dir: str = ""
 
     def short_failure_excerpt(self, max_chars: int = FAILURE_EXCERPT_CHARS) -> str:
         text = (self.stderr.strip() or self.stdout.strip() or "(no output)")
