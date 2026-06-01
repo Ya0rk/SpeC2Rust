@@ -22,7 +22,7 @@ import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 # 将 src/ 加入 sys.path，使 ``from config.config import Config`` 等导入成立。
 _SRC_DIR = Path(__file__).resolve().parents[2]
@@ -62,6 +62,10 @@ from .source_loader import (  # noqa: E402
 )
 from .suite_repair_coordinator import SuiteRepairContext, SuiteRepairCoordinator  # noqa: E402
 from .test_runner import TestRunner  # noqa: E402
+
+
+EDIT_REGION_BUCKET_LINES = 150
+MAX_REPEATED_EDIT_REGION_ROUNDS = 4
 
 
 # ---------------------------------------------------------------------------
@@ -678,6 +682,10 @@ class RustTestAgent:
                 continue
             if rel.startswith(".") or "/." in rel:
                 continue
+            if rel.lower().endswith((".sh", ".bash")):
+                continue
+            if path.name in {"a.out", "a.exe"}:
+                continue
             try:
                 size = path.stat().st_size
             except OSError:
@@ -711,6 +719,12 @@ class RustTestAgent:
             text = full.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             return ""
+        if text == "":
+            try:
+                if full.stat().st_size == 0:
+                    return "<empty file>\n"
+            except OSError:
+                pass
         if isinstance(start_line, int) and isinstance(end_line, int):
             lines = text.splitlines()
             start = max(1, start_line)
@@ -719,6 +733,89 @@ class RustTestAgent:
                 return ""
             return "\n".join(lines[start - 1:end]) + ("\n" if end >= start else "")
         return text[-max_chars:]
+
+    def _seed_test_artifacts(
+        self,
+        failing_case: TestCaseResult,
+        material: MaterialBudget,
+        *,
+        keywords: List[str],
+        limit: int = 8,
+    ) -> None:
+        """Seed concrete run artifacts before the first LLM repair round.
+
+        Generated-code projects often fail in an intermediate file (`*.x.c`,
+        compiler stderr, wrapper stdout). Waiting for the LLM to request those
+        files wastes rounds and encourages speculative generator rewrites.
+        """
+        run_dir = self._run_dir_for_case(failing_case)
+        if not run_dir.is_dir():
+            return
+
+        script_stem = Path(failing_case.name).stem.lower()
+        tokens: Set[str] = {
+            t.lower()
+            for t in re.split(r"[^A-Za-z0-9]+", script_stem)
+            if len(t) >= 2
+        }
+        tokens.update(k.lower() for k in keywords if len(k) >= 2)
+        if "-" in script_stem:
+            tokens.add(script_stem.rsplit("-", 1)[-1])
+
+        candidates: List[Tuple[int, str, int]] = []
+        try:
+            paths = sorted(run_dir.rglob("*"))
+        except OSError:
+            try:
+                paths = sorted(run_dir.iterdir())
+            except OSError:
+                return
+
+        for path in paths:
+            try:
+                if not path.is_file():
+                    continue
+                rel = path.relative_to(run_dir).as_posix()
+            except (OSError, ValueError):
+                continue
+            if rel.startswith(".") or "/." in rel:
+                continue
+            if rel.lower().endswith((".sh", ".bash")):
+                continue
+            if path.name in {"a.out", "a.exe"}:
+                continue
+            try:
+                size = path.stat().st_size
+            except OSError:
+                size = 0
+            if size > 32000:
+                continue
+
+            rel_l = rel.lower()
+            name_l = path.name.lower()
+            score = 0
+            if rel_l.startswith("ttest_artifacts/") or "/artifacts/" in rel_l:
+                score += 80
+            if any(t and t in rel_l for t in tokens):
+                score += 70
+            if name_l.endswith(".x.c"):
+                score += 60
+            if name_l in {"shc.stderr", "shc.stdout", "a.out.stdout", "a.out.stderr"}:
+                score += 55
+            if name_l.endswith((".stderr", ".stdout", ".log", ".out", ".err")):
+                score += 35
+            if "default" in rel_l:
+                score += 10
+            if score <= 0:
+                continue
+            candidates.append((score, rel, size))
+
+        for _, rel, _size in sorted(candidates, key=lambda item: (-item[0], item[1]))[:limit]:
+            if material.has_test_artifact(rel):
+                continue
+            content = self._read_test_artifact(failing_case, rel, max_chars=20000)
+            if material.add_test_artifact(rel, content):
+                print(f"  [rtest] 首轮注入测试产物：{rel}")
 
     @staticmethod
     def _read_runtime_evidence(failing_case: TestCaseResult) -> Dict[str, object]:
@@ -816,6 +913,11 @@ class RustTestAgent:
         ).items():
             if material.add_rust_file(rel, text):
                 print(f"  [rtest] 首轮注入 Rust 文件：{rel}")
+        self._seed_test_artifacts(
+            failing_case,
+            material,
+            keywords=keywords,
+        )
 
         # 快照项目，便于回归回滚
         snapshot = ProjectSnapshot(rust_project_path)
@@ -834,6 +936,7 @@ class RustTestAgent:
             stall_count=0,
             dup_edits_count=0,
             debug_probe_count=0,
+            edit_region_counts={},
             static_probes={},
             static_program_args=[],
         )
@@ -990,7 +1093,7 @@ class RustTestAgent:
         payload = self.adapter.extract_json_payload(text)
         if not isinstance(payload, dict):
             state.json_parse_failures += 1
-            max_json_retries = 3
+            max_json_retries = 9999
             if state.json_parse_failures >= max_json_retries:
                 print(
                     f"    [rtest] LLM 连续 {state.json_parse_failures} 轮返回不可解析 JSON，"
@@ -1003,7 +1106,7 @@ class RustTestAgent:
                 f"\n[System] The LLM output from the previous round (round {attempt}) could not be parsed as JSON, "
                 f"so it was skipped (consecutive {state.json_parse_failures}/{max_json_retries} failures)."
                 f"\nTail of the previous raw reply:\n```\n{raw_tail}\n```\n"
-                "The next round must return only a JSON object, with no text outside markdown fences."
+                "The next round must return only one raw JSON object. Do not use markdown fences or any text outside JSON."
             )
             print(
                 f"    [rtest] LLM 返回不可解析为 JSON（第 {state.json_parse_failures} 次），"
@@ -1042,6 +1145,28 @@ class RustTestAgent:
                 "\n[System] All edits submitted in the previous round were rejected by the anti-cheat check; "
                 "implement the real flag logic from the C source instead of placeholders or repeating expected output."
             )
+        if test_artifact_requests and edits:
+            print("    [rtest] 本轮同时请求 test artifact 和 edits，优先提供材料并跳过 edits")
+            state.history_summary += (
+                "\n[System] The previous round requested test artifacts and also submitted edits. "
+                "Test artifacts are evidence-gathering material; the edits from that same round were skipped. "
+                "Analyze the provided artifacts in the next round before submitting implementation edits."
+            )
+            edits = []
+
+        if cgr_requests and not edits and not rust_read_requests and not test_artifact_requests:
+            overbroad, detail = _overbroad_c_file_request(cgr_requests)
+            if overbroad:
+                print(f"    [rtest] 拒绝过宽 C 源码请求：{detail}")
+                state.history_summary += (
+                    "\n[System] The previous round requested an overbroad C source range "
+                    f"({detail}) without requesting concrete test artifacts or proposing an edit. "
+                    "That request was skipped. For generated-code failures, first read the generated artifact "
+                    "listed in the test artifact index (for example `*.x.c`, `*.stderr`, `*.stdout`), "
+                    "or submit a focused Rust edit. If C context is still needed, request a named function "
+                    "or a narrow line_range of at most 250 lines."
+                )
+                cgr_requests = []
 
         # Edits 去重（#20）
         if edits:
@@ -1068,6 +1193,34 @@ class RustTestAgent:
             failing_case, test_artifact_requests, material
         ):
             new_material = True
+        if new_material:
+            # 新证据进入后，允许模型在同一区域基于新材料重新尝试。
+            state.edit_region_counts.clear()
+
+        if edits:
+            same_failure_stalled = state.stall_count + 1 >= STALL_SAME_SIGNATURE_ROUNDS
+            blocked_regions = [
+                key
+                for key in _edit_region_keys(edits)
+                if same_failure_stalled
+                and state.edit_region_counts.get(key, 0) >= MAX_REPEATED_EDIT_REGION_ROUNDS
+            ]
+            if blocked_regions:
+                print(
+                    "    [rtest] LLM 连续多轮编辑同一代码区域，"
+                    "本轮跳过 edits 并要求先读取新证据"
+                )
+                state.history_summary += (
+                    "\n[System] The previous edits keep targeting the same file/line region "
+                    f"({', '.join(sorted(blocked_regions))}) while the failure is unchanged. "
+                    "Those edits were skipped. The next round must request/read new evidence first: "
+                    "timeout_context.txt, timeout_trace.txt, generated artifacts under tmp/, focused C source, "
+                    "or focused Rust line ranges. Do not rewrite the same region again without new evidence."
+                )
+                edits = []
+            else:
+                for key in _edit_region_keys(edits):
+                    state.edit_region_counts[key] = state.edit_region_counts.get(key, 0) + 1
 
         debug_probe = payload.get("debug_probe") or payload.get("instrumentation")
         static_probe_update = payload.get("static_probe_update")
@@ -1274,19 +1427,44 @@ class RustTestAgent:
                 mode = "whole_file"
                 start_line = None
                 end_line = None
-            if not rel or material.has_rust_file(rel, start_line=start_line, end_line=end_line):
+            if not rel:
                 continue
             if not self._is_editable_rust_path(rel):
                 print(f"    [rtest] 拒绝读取非 Rust 源文件：{rel}")
                 continue
-            if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int) and end_line >= start_line:
-                content = self.adapter.read_file_slice(
-                    rust_project_path,
-                    rel,
-                    start_line=start_line,
-                    end_line=end_line,
-                )
+            if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int):
+                if end_line < start_line:
+                    start_line, end_line = end_line, start_line
+                uncovered = material.uncovered_rust_ranges(rel, start_line, end_line)
+                if not uncovered:
+                    print(
+                        f"    [rtest] 跳过重复 Rust 行范围：{rel} [{start_line}-{end_line}] "
+                        "已由现有片段覆盖"
+                    )
+                    continue
+                for uncovered_start, uncovered_end in uncovered:
+                    content = self.adapter.read_file_slice(
+                        rust_project_path,
+                        rel,
+                        start_line=uncovered_start,
+                        end_line=uncovered_end,
+                    )
+                    if content and material.add_rust_file(
+                        rel,
+                        content,
+                        start_line=uncovered_start,
+                        end_line=uncovered_end,
+                        mode="line_range",
+                    ):
+                        new_material = True
+                        print(
+                            f"    [rtest] 提供 Rust 文件片段：{rel} "
+                            f"[{uncovered_start}-{uncovered_end}] ({len(content)} chars)"
+                        )
+                continue
             else:
+                if material.has_rust_file(rel):
+                    continue
                 content = self.adapter.read_file_slice(rust_project_path, rel)
                 start_line = None
                 end_line = None
@@ -1499,6 +1677,7 @@ class RustTestAgent:
         else:
             state.stall_count = 0
             state.last_failure_signature = new_sig
+            state.edit_region_counts.clear()
         if state.stall_count + 1 >= STALL_SAME_SIGNATURE_ROUNDS:
             print(
                 f"    [rtest] 连续 {state.stall_count + 1} 轮失败签名相同，"
@@ -1551,6 +1730,7 @@ class _RepairLoopState:
     stall_count: int
     dup_edits_count: int
     debug_probe_count: int
+    edit_region_counts: Dict[str, int] = field(default_factory=dict)
     json_parse_failures: int = 0
     static_probes: Dict[str, object] = field(default_factory=dict)
     static_program_args: List[str] = field(default_factory=list)
@@ -1570,6 +1750,71 @@ def _edits_fingerprint(edits: List[Dict]) -> str:
     except (TypeError, ValueError):
         payload = repr(edits)
     return hashlib.sha256(payload.encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+
+def _edit_region_keys(edits: List[Dict]) -> List[str]:
+    """粗粒度标记 edit 落点，避免同一失败下反复重写同一区域。"""
+    keys: Set[str] = set()
+    for edit in edits:
+        if not isinstance(edit, dict):
+            continue
+        path = str(edit.get("path") or "").replace("\\", "/")
+        if not path:
+            continue
+        try:
+            start = int(edit.get("start_line") or edit.get("line") or 1)
+        except (TypeError, ValueError):
+            start = 1
+        try:
+            end = int(edit.get("end_line") or start)
+        except (TypeError, ValueError):
+            end = start
+        if end < start:
+            start, end = end, start
+        midpoint = max(1, (start + end) // 2)
+        bucket = ((midpoint - 1) // EDIT_REGION_BUCKET_LINES) * EDIT_REGION_BUCKET_LINES + 1
+        keys.add(f"{path}:{bucket}-{bucket + EDIT_REGION_BUCKET_LINES - 1}")
+    return sorted(keys)
+
+
+def _overbroad_c_file_request(requests: List[Dict]) -> Tuple[bool, str]:
+    """Detect C file range requests that are too broad for a repair round."""
+    file_ranges = 0
+    total_lines = 0
+    widest = 0
+    whole_files = 0
+    for req in requests or []:
+        if not isinstance(req, dict):
+            continue
+        kind = str(req.get("kind") or "").strip().lower()
+        mode = str(req.get("mode") or "").strip().lower()
+        if kind != "file":
+            continue
+        if mode != "line_range":
+            whole_files += 1
+            continue
+        try:
+            start = int(req.get("start_line"))
+            end = int(req.get("end_line"))
+        except (TypeError, ValueError):
+            whole_files += 1
+            continue
+        if end < start:
+            start, end = end, start
+        span = max(1, end - start + 1)
+        file_ranges += 1
+        total_lines += span
+        widest = max(widest, span)
+
+    if whole_files:
+        return True, f"{whole_files} whole-file C request(s)"
+    if widest > 300:
+        return True, f"widest C file range is {widest} lines"
+    if file_ranges > 2:
+        return True, f"{file_ranges} C file ranges in one round"
+    if total_lines > 500:
+        return True, f"{total_lines} total C lines requested"
+    return False, ""
 
 
 def _debug_probe_fingerprint(probe: Dict[str, object]) -> str:

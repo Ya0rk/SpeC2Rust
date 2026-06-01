@@ -92,6 +92,77 @@ class MaterialBudget:
             return f"{normalized}:{start_line}-{end_line}"
         return normalized
 
+    @staticmethod
+    def _normalize_path(path: str) -> str:
+        return (path or "").replace("\\", "/")
+
+    @staticmethod
+    def _normalize_range(
+        start_line: Optional[int],
+        end_line: Optional[int],
+    ) -> Optional[Tuple[int, int]]:
+        if not isinstance(start_line, int) or not isinstance(end_line, int):
+            return None
+        start = max(1, start_line)
+        end = max(1, end_line)
+        if end < start:
+            start, end = end, start
+        return start, end
+
+    def _rust_line_intervals(self, path: str) -> List[Tuple[int, int]]:
+        normalized = self._normalize_path(path)
+        intervals: List[Tuple[int, int]] = []
+        for entry in self._rust_files.values():
+            if self._normalize_path(str(entry.get("path") or "")) != normalized:
+                continue
+            rng = self._normalize_range(
+                entry.get("start_line"),
+                entry.get("end_line"),
+            )
+            if rng:
+                intervals.append(rng)
+        if not intervals:
+            return []
+        intervals.sort()
+        merged: List[Tuple[int, int]] = []
+        for start, end in intervals:
+            if not merged or start > merged[-1][1] + 1:
+                merged.append((start, end))
+            else:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        return merged
+
+    def uncovered_rust_ranges(
+        self,
+        path: str,
+        start_line: int,
+        end_line: int,
+    ) -> List[Tuple[int, int]]:
+        """Return sub-ranges not already covered by provided Rust snippets."""
+        normalized = self._normalize_path(path)
+        requested = self._normalize_range(start_line, end_line)
+        if not normalized or not requested:
+            return []
+        if self._range_key(normalized) in self._rust_files:
+            return []
+
+        req_start, req_end = requested
+        cursor = req_start
+        missing: List[Tuple[int, int]] = []
+        for have_start, have_end in self._rust_line_intervals(normalized):
+            if have_end < cursor:
+                continue
+            if have_start > req_end:
+                break
+            if have_start > cursor:
+                missing.append((cursor, min(req_end, have_start - 1)))
+            cursor = max(cursor, have_end + 1)
+            if cursor > req_end:
+                break
+        if cursor <= req_end:
+            missing.append((cursor, req_end))
+        return missing
+
     def add_rust_file(
         self,
         path: str,
@@ -127,11 +198,15 @@ class MaterialBudget:
         start_line: Optional[int] = None,
         end_line: Optional[int] = None,
     ) -> bool:
-        normalized = (path or "").replace("\\", "/")
+        normalized = self._normalize_path(path)
         if self._range_key(normalized) in self._rust_files:
             return True
-        if isinstance(start_line, int) and isinstance(end_line, int):
-            return self._range_key(normalized, start_line, end_line) in self._rust_files
+        requested = self._normalize_range(start_line, end_line)
+        if requested:
+            start, end = requested
+            if self._range_key(normalized, start, end) in self._rust_files:
+                return True
+            return not self.uncovered_rust_ranges(normalized, start, end)
         return False
 
     def rust_files(self) -> Dict[str, str]:
@@ -452,7 +527,9 @@ C source index (request as needed; mimic ContextualRustAgent semantics by functi
 {source_records_index}
 
 Readable test-run artifacts (via test_artifact_read requests; paths are relative to the current test run directory.
-If stdout only shows a diff summary, prioritize the corresponding `.raw` / `.out` / `.log` files. Large artifacts may also be requested with `mode="line_range"`):
+If stdout only shows a diff summary, prioritize the corresponding `.raw` / `.out` / `.log` files. Large artifacts may also be requested with `mode="line_range"`.
+If the failure is a timeout, first request/read `timeout_context.txt` and then the focused `timeout_trace.txt` or generated files under `tmp/`.
+For generated-code projects, inspect generated source/binary artifacts such as `*.x.c`, `a.out`, compiler logs, or files under `tmp/` before repeatedly editing the Rust generator):
 ```text
 {artifact_index_block}
 ```
@@ -522,6 +599,8 @@ Requirements:
    so prefer minimal changes / only fix the code path related to this case's features.
 7. If the current materials are not enough to edit safely, you may request materials only; you will see the response in the next round.
    For large Rust/C/test files that were evicted or are too large to fit, prefer `mode="line_range"` with `start_line` / `end_line`.
+   For timeout failures, do not keep guessing from the word "timeout"; request/read timeout artifacts or generated-code artifacts to identify the concrete subcase.
+   If you use `test_artifact_read`, leave `edits` empty in the same round; artifact reads must be reviewed before editing.
 8. If the target Rust file is already in "provided Rust files" and the key C functions have also been provided,
    this round must provide edits or request new focused evidence; do not request the same provided file again, do not set complete=true to stop,
    and do not just repeat the problem.
@@ -535,7 +614,18 @@ Requirements:
 12. If the current failing subcase shows the C/Rust outputs differ only by the binary absolute path, and the C source confirms the program prints argv[0],
     do not hardcode the C_BIN path in Rust and do not edit the test script. Report that the preprocessed read-only test baseline needs human review.
 13. You may set `history_control.drop_history=true` when old history is crowding out useful source context. If you do, put only the new concise memory in `updated_summary`.
-13. You may set `history_control.drop_history=true` when old history is crowding out useful source context. If you do, put only the new concise memory in `updated_summary`.
+14. If the same failure persists after multiple edits to the same file region, stop editing that region and request new evidence first
+    (C source, focused Rust line ranges, timeout artifacts, generated files, or instrumentation). A slightly different rewrite of the same region is not progress.
+15. For Rust code that generates C/shell/source text, inspect the generated artifact before editing the generator. Prefer small logic changes
+    to argument construction, shell option selection, escaping helpers, or branch conditions. Do not replace a large generated C template as one
+    giant escaped Rust string unless no smaller fix exists; if a template edit is unavoidable, use focused line ranges and keep the JSON content
+    short enough to remain parseable.
+16. If a generated source file is empty or fails with "undefined reference to `main`", treat the immediate defect as "the generator emitted
+    no compilable program". Do not assume the only valid fix is to fully clone the original C project's entire generated runtime. For script
+    wrapper tests, a minimal generated program that writes the embedded script to a temporary file and execs the configured shell with preserved
+    argv is an acceptable repair step, as long as it is based on the generator inputs and not hardcoded to the expected output.
+17. Do not request broad C file chunks as a substitute for a repair plan. C file `line_range` requests should normally be at most 250 lines
+    and should target a named function or a narrow area. If generated artifacts are listed, read those artifacts before asking for more C source.
 {instrumentation_requirement}
 """
 

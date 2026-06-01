@@ -174,11 +174,14 @@ class TestRunner:
         _copy_fixtures_into(script_path.parent, run_dir)
         self._stage_wrappers_into_run_dir(run_dir)
         bash_env = self._write_bash_env(run_dir)
+        tmp_dir = run_dir / "tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
 
         started = time.time()
         timed_out = False
         try:
             env = self._env.base_env.copy()
+            env["TMPDIR"] = _to_bash_path(tmp_dir.resolve())
             if bash_env:
                 env["BASH_ENV"] = _to_bash_path(bash_env.resolve())
             proc = _run_bash_with_timeout(
@@ -196,9 +199,11 @@ class TestRunner:
             stderr = f"bash 不可用，无法运行测试：{exc}"
             exit_code = -1
             passed = False
-        except subprocess.TimeoutExpired:
-            stdout = ""
-            stderr = f"测试超时 (> {self.timeout_seconds}s)"
+        except subprocess.TimeoutExpired as exc:
+            stdout = _decode_timeout_stream(exc.output)
+            stderr_body = _decode_timeout_stream(exc.stderr)
+            timeout_msg = f"测试超时 (> {self.timeout_seconds}s)"
+            stderr = f"{stderr_body.rstrip()}\n{timeout_msg}" if stderr_body.strip() else timeout_msg
             exit_code = -1
             passed = False
             timed_out = True
@@ -214,7 +219,11 @@ class TestRunner:
             run_dir=str(run_dir),
         )
         if timed_out:
-            result.trace = f"<测试超时，已终止进程组；跳过 bash -x 复跑，避免二次卡住>"
+            trace_timeout = _short_trace_timeout(self.timeout_seconds)
+            result.trace = self._capture_trace(
+                script_path, run_dir, timeout_seconds=trace_timeout
+            )
+            self._write_timeout_artifacts(run_dir, script_path, result, trace_timeout)
         elif not passed and capture_trace:
             result.trace = self._capture_trace(script_path, run_dir)
         if self.enable_logging:
@@ -252,6 +261,7 @@ class TestRunner:
             _copy_fixtures_into(script_path.parent, run_dir)
             self._stage_wrappers_into_run_dir(run_dir)
             self._write_bash_env(run_dir)
+            (run_dir / "tmp").mkdir(parents=True, exist_ok=True)
             self._run_dirs.append(run_dir)
         return self._capture_trace(script_path, run_dir)
 
@@ -271,9 +281,19 @@ class TestRunner:
         summary = LogAgent.compress(bundle)
         return LogAgent.write_case_bundle(run_dir / ".cgr_logs", summary)
 
-    def _capture_trace(self, script_path: Path, run_dir: Path) -> str:
+    def _capture_trace(
+        self,
+        script_path: Path,
+        run_dir: Path,
+        *,
+        timeout_seconds: Optional[int] = None,
+    ) -> str:
+        timeout = timeout_seconds or self.timeout_seconds
         try:
             env = self._env.base_env.copy() if self._env else os.environ.copy()
+            tmp_dir = run_dir / "tmp"
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            env["TMPDIR"] = _to_bash_path(tmp_dir.resolve())
             bash_env = run_dir / ".cgr_bash_env"
             if bash_env.is_file():
                 env["BASH_ENV"] = _to_bash_path(bash_env.resolve())
@@ -281,26 +301,78 @@ class TestRunner:
                 ["bash", "-lc", self._bash_invocation(script_path, run_dir, trace=True)],
                 cwd=str(run_dir),
                 env=env,
-                timeout=self.timeout_seconds,
+                timeout=timeout,
             )
             trace = proc.stderr.decode("utf-8", errors="ignore")
-        except subprocess.TimeoutExpired:
-            return f"<trace 捕获超时 (> {self.timeout_seconds}s)，已终止进程组>"
+        except subprocess.TimeoutExpired as exc:
+            trace = _decode_timeout_stream(exc.stderr)
+            stdout = _decode_timeout_stream(exc.output)
+            parts = [f"<trace 捕获超时 (> {timeout}s)，已终止进程组>"]
+            if trace.strip():
+                parts.append("[trace stderr tail]\n" + trace[-TRACE_TAIL_CHARS:])
+            if stdout.strip():
+                parts.append("[trace stdout tail]\n" + stdout[-TRACE_TAIL_CHARS:])
+            return "\n".join(parts)
         except Exception as exc:  # noqa: BLE001
             return f"<trace 捕获失败：{exc}>"
         if len(trace) > TRACE_TAIL_CHARS:
             trace = trace[-TRACE_TAIL_CHARS:]
         return trace
 
+    def _write_timeout_artifacts(
+        self,
+        run_dir: Path,
+        script_path: Path,
+        result: TestCaseResult,
+        trace_timeout: int,
+    ) -> None:
+        _write_text_artifact(run_dir / "timeout_stdout.txt", result.stdout)
+        _write_text_artifact(run_dir / "timeout_stderr.txt", result.stderr)
+        _write_text_artifact(run_dir / "timeout_trace.txt", result.trace)
+        artifact_summary = _visible_artifact_summary(run_dir)
+        body = (
+            f"script: {script_path.name}\n"
+            f"timeout_seconds: {self.timeout_seconds}\n"
+            f"trace_timeout_seconds: {trace_timeout}\n"
+            f"exit_code: {result.exit_code}\n"
+            f"run_dir: {run_dir}\n"
+            f"tmpdir: {run_dir / 'tmp'}\n"
+            "\n"
+            "Notes:\n"
+            "- TMPDIR is forced to the per-case run_dir/tmp so mktemp-generated files remain readable after a timeout.\n"
+            "- For matrix shell scripts, inspect timeout_trace.txt to identify the last shell/option/command before the hang.\n"
+            "- If this project generates intermediate source or binaries, inspect the tmp/ subtree and any *.x.c / a.out artifacts.\n"
+            "\n"
+            "stdout tail:\n"
+            "```text\n"
+            f"{result.stdout}\n"
+            "```\n\n"
+            "stderr tail:\n"
+            "```text\n"
+            f"{result.stderr}\n"
+            "```\n\n"
+            "trace tail:\n"
+            "```text\n"
+            f"{result.trace}\n"
+            "```\n\n"
+            "visible artifacts after timeout:\n"
+            "```text\n"
+            f"{artifact_summary or '(none)'}\n"
+            "```\n"
+        )
+        _write_text_artifact(run_dir / "timeout_context.txt", body)
+
     def _bash_invocation(self, script_path: Path, run_dir: Path, *, trace: bool) -> str:
         if self._env is None:
             return f"bash {shlex.quote(_to_bash_path(script_path.resolve()))}"
 
+        tmp_dir = run_dir / "tmp"
         exports = [
             f"export RUST_BIN={shlex.quote(self._env.base_env['RUST_BIN'])}",
             f"export CGR_WRAPPER_DIR={shlex.quote(self._env.base_env['CGR_WRAPPER_DIR'])}",
             f"export RUST_WRAPPER_BIN={shlex.quote(self._env.base_env['RUST_WRAPPER_BIN'])}",
             f"export RUST_NAMED_WRAPPER_BIN={shlex.quote(self._env.base_env['RUST_NAMED_WRAPPER_BIN'])}",
+            f"export TMPDIR={shlex.quote(_to_bash_path(tmp_dir.resolve()))}",
             "export srcdir=.",
             f"export abs_srcdir={shlex.quote(_to_bash_path(run_dir.resolve()))}",
             "export builddir=.",
@@ -449,6 +521,54 @@ def _copy_replace(src: Path, dst: Path) -> None:
         except OSError:
             pass
     shutil.copy2(src, dst)
+
+
+def _decode_timeout_stream(data: object) -> str:
+    if not data:
+        return ""
+    if isinstance(data, bytes):
+        return data.decode("utf-8", errors="ignore")
+    return str(data)
+
+
+def _short_trace_timeout(main_timeout: int) -> int:
+    return max(3, min(8, max(1, main_timeout // 3)))
+
+
+def _write_text_artifact(path: Path, content: str) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content or "", encoding="utf-8", errors="ignore")
+    except OSError:
+        pass
+
+
+def _visible_artifact_summary(run_dir: Path, limit: int = 120) -> str:
+    rows: List[str] = []
+    try:
+        entries = sorted(run_dir.rglob("*"))
+    except OSError:
+        try:
+            entries = sorted(run_dir.iterdir())
+        except OSError:
+            return ""
+    for path in entries:
+        try:
+            if not path.is_file():
+                continue
+            rel = path.relative_to(run_dir).as_posix()
+        except (OSError, ValueError):
+            continue
+        if rel.startswith(".") or "/." in rel:
+            continue
+        try:
+            size = path.stat().st_size
+        except OSError:
+            size = 0
+        rows.append(f"- {rel} ({size} bytes)")
+        if len(rows) >= limit:
+            break
+    return "\n".join(rows)
 
 
 def _run_bash_with_timeout(

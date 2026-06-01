@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -18,6 +19,47 @@ from agent.rtest.test_runner import TestRunner  # noqa: E402
 
 
 class TestRunnerLoggingTests(unittest.TestCase):
+    def test_timeout_preserves_output_and_writes_readable_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            test_dir = Path(tmp) / "test"
+            test_dir.mkdir()
+            script = test_dir / "case.sh"
+            script.write_text("echo running\nsleep 99\n", encoding="utf-8")
+            binary = Path(tmp) / "demo-rust"
+            binary.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+            os.chmod(binary, 0o755)
+
+            exc = subprocess.TimeoutExpired(
+                cmd=["bash"],
+                timeout=1,
+                output=b"before timeout\n",
+                stderr=b"stderr before timeout\n",
+            )
+            runner = TestRunner(test_dir=str(test_dir), bin_name="demo", timeout_seconds=3)
+            runner.stage(str(binary), None)
+
+            with patch(
+                "agent.rtest.test_runner._run_bash_with_timeout",
+                side_effect=exc,
+            ), patch.object(
+                TestRunner,
+                "_capture_trace",
+                return_value="+ shell=/bin/sh\n+ opt=-S\n+ ./demo -f test.sh\n",
+            ):
+                result = runner.run_single(script)
+
+            run_dir = Path(result.run_dir)
+            self.assertFalse(result.passed)
+            self.assertIn("before timeout", result.stdout)
+            self.assertIn("stderr before timeout", result.stderr)
+            self.assertIn("测试超时", result.stderr)
+            self.assertTrue((run_dir / "tmp").is_dir())
+            self.assertIn("timeout_context.txt", RustTestAgent._list_test_artifacts(result))
+            self.assertIn("timeout_trace.txt", RustTestAgent._list_test_artifacts(result))
+            context = (run_dir / "timeout_context.txt").read_text(encoding="utf-8")
+            self.assertIn("TMPDIR is forced", context)
+            self.assertIn("shell=/bin/sh", context)
+
     def test_write_runtime_log_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             test_dir = Path(tmp) / "test"
@@ -332,6 +374,93 @@ class TestRunnerLoggingTests(unittest.TestCase):
 
             self.assertEqual(outcome, "continue")
             self.assertIn("read-only inputs", state.history_summary)
+
+    def test_repair_round_skips_edits_when_requesting_test_artifacts(self) -> None:
+        class FakeLlm:
+            def set_request_label(self, _label: str) -> None:
+                return None
+
+            def generate(self, _messages):
+                return json.dumps(
+                    {
+                        "summary": "need artifact and edit",
+                        "test_artifact_read": [{"path": "timeout_context.txt"}],
+                        "edits": [
+                            {
+                                "path": "src/main.rs",
+                                "mode": "replace_range",
+                                "start_line": 1,
+                                "end_line": 1,
+                                "content": "fn main() { panic!(\"changed\"); }\n",
+                            }
+                        ],
+                        "complete": False,
+                        "updated_summary": "requested timeout context",
+                    }
+                )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            src = project / "src"
+            test_dir = Path(tmp) / "test"
+            run_dir = Path(tmp) / "run"
+            src.mkdir(parents=True)
+            test_dir.mkdir()
+            run_dir.mkdir()
+            main_rs = src / "main.rs"
+            main_rs.write_text("fn main() {}\n", encoding="utf-8")
+            script = test_dir / "case.sh"
+            script.write_text("exit 1\n", encoding="utf-8")
+            (run_dir / "timeout_context.txt").write_text("last command\n", encoding="utf-8")
+            failing_case = TestCaseResult(
+                name="case.sh",
+                script_path=str(script),
+                passed=False,
+                exit_code=-1,
+                stdout="",
+                stderr="测试超时",
+                run_dir=str(run_dir),
+            )
+            agent = RustTestAgent(max_repair_iterations=1)
+            agent.llm = FakeLlm()
+            material = MaterialBudget()
+            state = _RepairLoopState(
+                history_summary="",
+                last_build_error="",
+                regression_warning="",
+                last_failure_signature=failing_case.failure_signature(),
+                last_edits_fingerprint="",
+                last_debug_probe_fingerprint="",
+                stall_count=0,
+                dup_edits_count=0,
+                debug_probe_count=0,
+            )
+
+            outcome = agent._repair_one_round(
+                rust_project_path=str(project),
+                bin_name="demo",
+                runner=TestRunner(test_dir=str(test_dir), bin_name="demo"),
+                project_structure="",
+                source_index=None,
+                source_index_display="",
+                rust_overview="",
+                failing_case=failing_case,
+                script_content="exit 1\n",
+                flags=[],
+                keywords=[],
+                expected_outputs=[],
+                baseline_pass_names=set(),
+                material=material,
+                state=state,
+                attempt=1,
+                snapshot=None,
+            )
+
+            self.assertEqual(outcome, "continue")
+            self.assertEqual(main_rs.read_text(encoding="utf-8"), "fn main() {}\n")
+            self.assertEqual(state.last_edits_fingerprint, "")
+            self.assertIn("timeout_context.txt", material.test_artifacts())
+            self.assertIn("edits from that same round were skipped", state.history_summary)
 
     def test_test_runner_only_persists_runtime_log_when_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1212,6 +1341,80 @@ class TestRunnerLoggingTests(unittest.TestCase):
 
             self.assertIn("src/c4.rs:4-6", prompt)
             self.assertIn("   4 | line 4", prompt)
+
+    def test_material_budget_treats_covered_rust_line_ranges_as_duplicates(self) -> None:
+        material = MaterialBudget()
+
+        self.assertTrue(
+            material.add_rust_file(
+                "src/shc.rs",
+                "first slice",
+                start_line=593,
+                end_line=668,
+                mode="line_range",
+            )
+        )
+
+        self.assertTrue(material.has_rust_file("src/shc.rs", start_line=600, end_line=650))
+        self.assertFalse(material.has_rust_file("src/shc.rs", start_line=593, end_line=900))
+        self.assertEqual(
+            material.uncovered_rust_ranges("src/shc.rs", 593, 900),
+            [(669, 900)],
+        )
+
+        self.assertTrue(
+            material.add_rust_file(
+                "src/shc.rs",
+                "second slice",
+                start_line=669,
+                end_line=900,
+                mode="line_range",
+            )
+        )
+        self.assertTrue(material.has_rust_file("src/shc.rs", start_line=593, end_line=700))
+        self.assertEqual(material.uncovered_rust_ranges("src/shc.rs", 593, 700), [])
+
+    def test_absorb_rust_line_range_request_only_reads_uncovered_subranges(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            src = project / "src"
+            src.mkdir(parents=True)
+            (src / "shc.rs").write_text(
+                "\n".join(f"line {idx}" for idx in range(1, 1001)) + "\n",
+                encoding="utf-8",
+            )
+            agent = RustTestAgent(max_repair_iterations=1)
+            material = MaterialBudget()
+            self.assertTrue(
+                material.add_rust_file(
+                    "src/shc.rs",
+                    "provided",
+                    start_line=593,
+                    end_line=668,
+                    mode="line_range",
+                )
+            )
+
+            added = agent._absorb_material_requests(
+                str(project),
+                CSourceIndex(),
+                [],
+                [
+                    {
+                        "path": "src/shc.rs",
+                        "mode": "line_range",
+                        "start_line": 593,
+                        "end_line": 900,
+                    }
+                ],
+                material,
+            )
+
+            self.assertTrue(added)
+            display_paths = [entry["display_path"] for entry in material.rust_file_entries()]
+            self.assertIn("src/shc.rs:593-668", display_paths)
+            self.assertIn("src/shc.rs:669-900", display_paths)
+            self.assertNotIn("src/shc.rs:593-900", display_paths)
 
     def test_c_source_index_can_read_file_line_range_from_original_project(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
