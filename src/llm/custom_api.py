@@ -34,10 +34,13 @@ class CustomApiGen:
         self.rate_limit_cooldown_seconds = float(rate_limit_cooldown_seconds)
         self.disable_env_proxy = bool(disable_env_proxy)
         self.stream = bool(stream)
+        self.disable_thinking = "deepseek" in (self.model or "").lower()
         self._last_request_time = 0.0
         self._current_max_tokens = self.max_tokens
         self._current_request_label = ""
         self.last_usage = None
+        self.last_stream_diagnostics = None
+        self.last_request_metadata = None
         self.session = requests.Session()
         # 某些环境会注入 HTTP(S)_PROXY，导致兼容 API 走到不稳定代理链路。
         # 对直连模型服务的场景，默认禁用 requests 对环境代理变量的继承。
@@ -132,6 +135,11 @@ class CustomApiGen:
         解析 OpenAI-compatible SSE 流，并实时打印增量内容。
         """
         chunks = []
+        reasoning_chunks = []
+        finish_reasons = []
+        event_count = 0
+        content_chunk_count = 0
+        reasoning_chunk_count = 0
         started = False
 
         for raw_line in response.iter_lines(decode_unicode=False):
@@ -151,6 +159,7 @@ class CustomApiGen:
             except Exception:
                 continue
 
+            event_count += 1
             if event.get("usage"):
                 self.last_usage = event.get("usage")
 
@@ -158,25 +167,126 @@ class CustomApiGen:
             if not choices:
                 continue
 
-            delta = choices[0].get("delta") or {}
-            piece = delta.get("content") or ""
-            if not piece:
-                continue
+            for choice in choices:
+                finish_reason = choice.get("finish_reason")
+                if finish_reason is not None:
+                    finish_reasons.append(str(finish_reason))
 
-            if not started:
-                stream_title = self._current_request_label or "unnamed request"
-                print(f"\n[stream start] {stream_title}")
-                started = True
+                delta = choice.get("delta") or {}
+                message = choice.get("message") or {}
 
-            sys.stdout.write(piece)
-            sys.stdout.flush()
-            chunks.append(piece)
+                reasoning_piece = self._coerce_content_piece(
+                    delta.get("reasoning_content")
+                    or delta.get("reasoning")
+                    or delta.get("thinking")
+                    or message.get("reasoning_content")
+                    or message.get("reasoning")
+                    or message.get("thinking")
+                )
+                if reasoning_piece:
+                    reasoning_chunk_count += 1
+                    reasoning_chunks.append(reasoning_piece)
+
+                piece = self._coerce_content_piece(
+                    delta.get("content")
+                    or delta.get("text")
+                    or message.get("content")
+                    or choice.get("text")
+                )
+                if not piece:
+                    continue
+
+                content_chunk_count += 1
+                if not started:
+                    stream_title = self._current_request_label or "unnamed request"
+                    print(f"\n[stream start] {stream_title}")
+                    started = True
+
+                sys.stdout.write(piece)
+                sys.stdout.flush()
+                chunks.append(piece)
 
         if started:
             stream_title = self._current_request_label or "unnamed request"
             print(f"\n[stream end] {stream_title}")
 
-        return self._repair_mojibake_text("".join(chunks))
+        body = self._repair_mojibake_text("".join(chunks))
+        reasoning_text = "".join(reasoning_chunks)
+        self.last_stream_diagnostics = {
+            "event_count": event_count,
+            "content_chunk_count": content_chunk_count,
+            "content_chars": len(body),
+            "reasoning_chunk_count": reasoning_chunk_count,
+            "reasoning_chars": len(reasoning_text),
+            "finish_reasons": finish_reasons,
+            "visible_content_empty": not bool(body.strip()),
+        }
+        if self.last_usage is None:
+            self.last_usage = {}
+        if isinstance(self.last_usage, dict):
+            if finish_reasons:
+                self.last_usage["finish_reason"] = finish_reasons[-1]
+                self.last_usage["finish_reasons"] = finish_reasons
+            self.last_usage["stream_diagnostics"] = self.last_stream_diagnostics
+        return body
+
+    @staticmethod
+    def _coerce_content_piece(value) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list):
+            parts = []
+            for item in value:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict):
+                    parts.append(
+                        str(
+                            item.get("text")
+                            or item.get("content")
+                            or item.get("value")
+                            or ""
+                        )
+                    )
+                elif item is not None:
+                    parts.append(str(item))
+            return "".join(parts)
+        return str(value)
+
+    def _build_payload(self, messages, temperature):
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": self._current_max_tokens,
+            "stream": self.stream,
+        }
+        if self.disable_thinking:
+            payload["thinking"] = {"type": "disabled"}
+        if self.stream:
+            payload["stream_options"] = {"include_usage": True}
+        return payload
+
+    def _request_metadata(self, payload):
+        metadata = {
+            "api_model": self.model,
+            "stream": self.stream,
+            "thinking_disabled": self.disable_thinking,
+            "payload_keys": sorted(payload.keys()),
+        }
+        if "thinking" in payload:
+            metadata["thinking"] = payload.get("thinking")
+        if "stream_options" in payload:
+            metadata["stream_options"] = payload.get("stream_options")
+        return metadata
+
+    def _merge_request_metadata(self):
+        if self.last_usage is None:
+            self.last_usage = {}
+        if isinstance(self.last_usage, dict) and self.last_request_metadata:
+            self.last_usage["request_options"] = self.last_request_metadata
 
     def get_response(self, messages, temperature=0, top_k=1):
         if top_k != 1 and temperature == 0:
@@ -199,16 +309,11 @@ class CustomApiGen:
             try:
                 self._wait_for_min_interval()
                 self.last_usage = None
+                self.last_stream_diagnostics = None
+                self.last_request_metadata = None
 
-                payload = {
-                    "model": self.model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": self._current_max_tokens,
-                    "stream": self.stream,
-                }
-                if self.stream:
-                    payload["stream_options"] = {"include_usage": True}
+                payload = self._build_payload(messages, temperature)
+                self.last_request_metadata = self._request_metadata(payload)
                 response = self.session.post(
                     self.api_url,
                     json=payload,
@@ -230,13 +335,18 @@ class CustomApiGen:
 
                 if self.stream:
                     body_content = self._stream_response_content(response)
+                    self._merge_request_metadata()
                     response_end_prematurely_count = 0
                     return [body_content]
 
                 body = response.json()
                 response_end_prematurely_count = 0
                 self.last_usage = body.get("usage")
-                content = body["choices"][0]["message"]["content"]
+                choice = body["choices"][0]
+                if isinstance(self.last_usage, dict) and choice.get("finish_reason") is not None:
+                    self.last_usage["finish_reason"] = choice.get("finish_reason")
+                self._merge_request_metadata()
+                content = self._coerce_content_piece((choice.get("message") or {}).get("content"))
                 return [self._repair_mojibake_text(content)]
             except Exception as e:
                 retry_count += 1

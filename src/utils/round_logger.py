@@ -123,6 +123,9 @@ class RoundLogger:
         prompt_tokens = usage.get("prompt_tokens")
         completion_tokens = usage.get("completion_tokens")
         total_tokens = usage.get("total_tokens")
+        finish_reason = usage.get("finish_reason")
+        stream_diagnostics = usage.get("stream_diagnostics")
+        request_options = usage.get("request_options")
 
         if prompt_tokens is not None or completion_tokens is not None or total_tokens is not None:
             lines = []
@@ -142,15 +145,65 @@ class RoundLogger:
                 request_tokens = prompt_tokens if prompt_tokens is not None else cls._estimate_tokens(request)
                 reply_tokens = completion_tokens if completion_tokens is not None else cls._estimate_tokens(reply)
                 lines.append(f"**Total Tokens:** {request_tokens + reply_tokens} (estimated)")
+            if finish_reason is not None:
+                lines.append(f"**Finish Reason:** {finish_reason}")
+            lines.extend(cls._stream_diagnostic_lines(stream_diagnostics))
+            lines.extend(cls._request_option_lines(request_options))
             return lines
 
         request_tokens = cls._estimate_tokens(request)
         reply_tokens = cls._estimate_tokens(reply)
-        return [
+        lines = [
             f"**Request Tokens:** {request_tokens} (estimated)",
             f"**Reply Tokens:** {reply_tokens} (estimated)",
             f"**Total Tokens:** {request_tokens + reply_tokens} (estimated)",
         ]
+        if finish_reason is not None:
+            lines.append(f"**Finish Reason:** {finish_reason}")
+        lines.extend(cls._stream_diagnostic_lines(stream_diagnostics))
+        lines.extend(cls._request_option_lines(request_options))
+        return lines
+
+    @staticmethod
+    def _stream_diagnostic_lines(stream_diagnostics: Any) -> List[str]:
+        if not isinstance(stream_diagnostics, dict):
+            return []
+        parts = []
+        finish_reasons = stream_diagnostics.get("finish_reasons")
+        if finish_reasons:
+            parts.append(f"finish_reasons={finish_reasons}")
+        for key in (
+            "event_count",
+            "content_chunk_count",
+            "content_chars",
+            "reasoning_chunk_count",
+            "reasoning_chars",
+            "visible_content_empty",
+        ):
+            if key in stream_diagnostics:
+                parts.append(f"{key}={stream_diagnostics.get(key)}")
+        if not parts:
+            return []
+        return [f"**Stream Diagnostics:** {'; '.join(parts)}"]
+
+    @staticmethod
+    def _request_option_lines(request_options: Any) -> List[str]:
+        if not isinstance(request_options, dict):
+            return []
+        parts = []
+        for key in (
+            "api_model",
+            "stream",
+            "thinking_disabled",
+            "thinking",
+            "stream_options",
+            "payload_keys",
+        ):
+            if key in request_options:
+                parts.append(f"{key}={request_options.get(key)}")
+        if not parts:
+            return []
+        return [f"**Request Options:** {'; '.join(parts)}"]
 
     def _build_markdown_payload(
         self,

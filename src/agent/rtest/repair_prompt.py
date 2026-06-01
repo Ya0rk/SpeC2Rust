@@ -380,6 +380,7 @@ def build_repair_prompt(
     expected_outputs: Optional[Iterable[str]] = None,
     regression_warning: str = "",
     focused_failure: str = "",
+    subcase_context: str = "",
     test_artifact_index: str = "",
     runtime_evidence: Optional[Dict[str, object]] = None,
     log_agent_enabled: bool = False,
@@ -465,6 +466,7 @@ def build_repair_prompt(
     rust_block_text = "\n".join(rust_blocks) if rust_blocks else "(none)"
     artifact_block_text = "\n".join(artifact_blocks) if artifact_blocks else "(none)"
     focused_failure_block = focused_failure or "(failed to extract a structured failure block; refer to the most recent run result and trace)"
+    subcase_context_block = subcase_context or "(not enough trace information to infer a focused subcase; use the failure block and script directly)"
     artifact_index_block = test_artifact_index or "(no readable test artifacts found)"
     budget_block = material.budget_pressure_summary()
 
@@ -495,6 +497,11 @@ Inferred tested features (from script name / content; may be CLI flags, subcomma
 Current failing subcase / minimized diff (look here first):
 ```text
 {focused_failure_block}
+```
+
+Current unresolved subcase inferred from the latest bash trace:
+```text
+{subcase_context_block}
 ```
 
 Test script: {failing_case.name}
@@ -548,12 +555,16 @@ Provided Rust files (the first round already injected the most relevant Rust fil
 Provided test-run artifacts:
 {artifact_block_text}
 
-History summary:
+Repair memory:
+The current unresolved subcase above overrides older history. Older history may describe resolved or rolled-back attempts;
+do not repair an older subcase unless it is still present in the current failure block / latest trace.
 {history_summary or '(none)'}
 
-Return JSON only, with no explanation. Use the following structure:
+Return exactly one raw JSON object, with no markdown fences and no text outside the JSON.
+Keep the JSON compact: `summary` must be at most 800 characters, and `updated_summary` must be at most 500 characters.
+Do not repeat analysis sentences. Use the following structure:
 {{
-  "summary": "This round's analysis (must clearly explain how the tested feature is implemented/handled in C, and which part of Rust is missing or wrong)",
+  "summary": "Concise analysis, max 800 chars. Explain the C behavior and the specific Rust defect without repeated reasoning.",
   "cgr_read": [
     {{"kind": "function", "query": "C function name"}},
     {{"kind": "file", "query": "C file name or relative path", "mode": "line_range", "start_line": 120, "end_line": 220}}
@@ -579,7 +590,7 @@ Return JSON only, with no explanation. Use the following structure:
   "history_control": {{"drop_history": false}},
 {instrumentation_json}
   "complete": false,
-  "updated_summary": "Updated brief memory"
+  "updated_summary": "Updated brief memory, max 500 chars"
 }}
 
 Requirements:
@@ -626,6 +637,8 @@ Requirements:
     argv is an acceptable repair step, as long as it is based on the generator inputs and not hardcoded to the expected output.
 17. Do not request broad C file chunks as a substitute for a repair plan. C file `line_range` requests should normally be at most 250 lines
     and should target a named function or a narrow area. If generated artifacts are listed, read those artifacts before asking for more C source.
+18. The response must stay parseable. Do not wrap the JSON in ```json fences. Do not write long chain-of-thought style explanations inside
+    `summary`; if you need more evidence, request it with the read fields and keep `edits` empty.
 {instrumentation_requirement}
 """
 

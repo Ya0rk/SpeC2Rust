@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import sys
 from dataclasses import dataclass, field
@@ -46,6 +47,7 @@ from .log_agent import LogAgent  # noqa: E402
 from .models import TestCaseResult, TestRunSummary  # noqa: E402
 from .repair_adapter import RepairAdapter  # noqa: E402
 from .repair_prompt import MaterialBudget, build_repair_prompt  # noqa: E402
+from .response_contract import RepairResponseContract  # noqa: E402
 from .runtime_probe import RuntimeProbeService  # noqa: E402
 from .seeding import seed_c_sources, seed_rust_files  # noqa: E402
 from .signals import (  # noqa: E402
@@ -839,6 +841,93 @@ class RustTestAgent:
         )
 
     @staticmethod
+    def _trace_subcase_context(
+        failing_case: TestCaseResult,
+        *,
+        script_content: str,
+        bin_name: str,
+    ) -> str:
+        trace = failing_case.trace or ""
+        if not trace.strip():
+            return ""
+
+        trace_lines = trace.splitlines()
+        tested_commands: List[Tuple[int, str, str]] = []
+        compare_markers: List[Tuple[int, str]] = []
+        failure_markers: List[Tuple[int, str]] = []
+
+        for idx, raw in enumerate(trace_lines):
+            cmd = _strip_bash_xtrace_command(raw)
+            if not cmd:
+                if "trace 捕获超时" in raw or "timed out" in raw.lower():
+                    failure_markers.append((idx, raw.strip()))
+                continue
+
+            normalized = _normalize_tested_command(cmd, bin_name)
+            if normalized:
+                if not tested_commands or tested_commands[-1][1] != normalized:
+                    tested_commands.append((idx, normalized, cmd))
+                continue
+
+            if _is_compare_or_diff_command(cmd):
+                compare_markers.append((idx, cmd))
+            if _is_failure_marker_command(cmd):
+                failure_markers.append((idx, cmd))
+
+        if not tested_commands:
+            return ""
+
+        marker_idx = failure_markers[-1][0] if failure_markers else len(trace_lines)
+        compare_before_failure = [
+            item for item in compare_markers if item[0] <= marker_idx
+        ]
+        anchor_idx = (
+            compare_before_failure[-1][0]
+            if compare_before_failure
+            else marker_idx
+        )
+        current_candidates = [
+            item for item in tested_commands if item[0] < anchor_idx
+        ]
+        current = current_candidates[-1] if current_candidates else tested_commands[-1]
+        current_idx, current_cmd, raw_current_cmd = current
+        previous = _unique_preserving_order(
+            cmd for idx, cmd, _raw in tested_commands if idx < current_idx
+        )
+        previous = [cmd for cmd in previous if cmd != current_cmd][-8:]
+        script_matches = _find_matching_script_lines(
+            script_content,
+            current_cmd,
+            bin_name,
+            limit=4,
+        )
+
+        lines = [
+            "Current unresolved subcase inferred from latest trace:",
+            f"- likely tested command: {current_cmd}",
+        ]
+        if raw_current_cmd != current_cmd:
+            lines.append(f"- raw trace command: {raw_current_cmd}")
+        if compare_before_failure:
+            lines.append(
+                f"- nearest compare/diff before failure: {compare_before_failure[-1][1]}"
+            )
+        if failure_markers:
+            lines.append(f"- failure marker: {failure_markers[-1][1]}")
+        if script_matches:
+            lines.append("- matching script line(s):")
+            lines.extend(f"  * {line}" for line in script_matches)
+        if previous:
+            lines.append(
+                "Resolved/earlier tested commands in the same latest trace "
+                "(lower priority; do not repair these again unless they still appear in the current failure):"
+            )
+            lines.extend(f"  - {cmd}" for cmd in previous)
+        else:
+            lines.append("- no earlier tested command was identified before this subcase")
+        return "\n".join(lines)
+
+    @staticmethod
     def _focused_failure_block(failing_case: TestCaseResult) -> str:
         text = failing_case.stdout or ""
         lines = text.splitlines()
@@ -1065,6 +1154,11 @@ class RustTestAgent:
             expected_outputs=expected_outputs,
             regression_warning=state.regression_warning,
             focused_failure=self._focused_failure_block(failing_case),
+            subcase_context=self._trace_subcase_context(
+                failing_case,
+                script_content=script_content,
+                bin_name=bin_name,
+            ),
             test_artifact_index=self._list_test_artifacts(failing_case),
             runtime_evidence=runtime_evidence,
             log_agent_enabled=self.enable_log_agent,
@@ -1092,30 +1186,33 @@ class RustTestAgent:
 
         payload = self.adapter.extract_json_payload(text)
         if not isinstance(payload, dict):
-            state.json_parse_failures += 1
-            max_json_retries = 9999
-            if state.json_parse_failures >= max_json_retries:
-                print(
-                    f"    [rtest] LLM 连续 {state.json_parse_failures} 轮返回不可解析 JSON，"
-                    "终止本用例修复"
-                )
-                return "abort"
-            # 把 LLM 原始回复尾部带入下一轮，让模型看到自己的格式错误并自我纠正。
-            raw_tail = (text or "")[-1500:].strip()
-            state.history_summary += (
-                f"\n[System] The LLM output from the previous round (round {attempt}) could not be parsed as JSON, "
-                f"so it was skipped (consecutive {state.json_parse_failures}/{max_json_retries} failures)."
-                f"\nTail of the previous raw reply:\n```\n{raw_tail}\n```\n"
-                "The next round must return only one raw JSON object. Do not use markdown fences or any text outside JSON."
+            state.response_contract_failures += 1
+            usage = getattr(getattr(self.llm, "llm", None), "last_usage", None)
+            violation = RepairResponseContract.parse_failure(
+                text=text or "",
+                usage=usage,
+                attempt=attempt,
+                consecutive_count=state.response_contract_failures,
             )
+            state.history_summary += "\n" + violation.history_feedback
             print(
-                f"    [rtest] LLM 返回不可解析为 JSON（第 {state.json_parse_failures} 次），"
-                "继续下一轮重试"
+                f"    [rtest] {violation.log_message}，"
+                "继续下一轮协议修正"
+            )
+            return "continue"
+
+        violation = RepairResponseContract.validate_payload(payload)
+        if violation:
+            state.response_contract_failures += 1
+            state.history_summary += "\n" + violation.history_feedback
+            print(
+                f"    [rtest] {violation.log_message}，"
+                "继续下一轮协议修正"
             )
             return "continue"
 
         # JSON 解析成功，重置连续失败计数
-        state.json_parse_failures = 0
+        state.response_contract_failures = 0
 
         state.history_summary = (
             payload.get("updated_summary") or payload.get("summary") or state.history_summary
@@ -1731,7 +1828,7 @@ class _RepairLoopState:
     dup_edits_count: int
     debug_probe_count: int
     edit_region_counts: Dict[str, int] = field(default_factory=dict)
-    json_parse_failures: int = 0
+    response_contract_failures: int = 0
     static_probes: Dict[str, object] = field(default_factory=dict)
     static_program_args: List[str] = field(default_factory=list)
 
@@ -1750,6 +1847,92 @@ def _edits_fingerprint(edits: List[Dict]) -> str:
     except (TypeError, ValueError):
         payload = repr(edits)
     return hashlib.sha256(payload.encode("utf-8", errors="ignore")).hexdigest()[:16]
+
+
+def _strip_bash_xtrace_command(line: str) -> str:
+    match = re.match(r"^\++\s+(.*)$", line.strip())
+    return match.group(1).strip() if match else ""
+
+
+def _normalize_tested_command(command: str, bin_name: str) -> str:
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        tokens = command.split()
+    if not tokens:
+        return ""
+
+    executable = tokens[0]
+    base = Path(executable).name
+    if base.endswith(".exe"):
+        base = base[:-4]
+    aliases = {
+        bin_name,
+        f"{bin_name}-rust",
+        f"{bin_name}_rust",
+    }
+    if base not in aliases:
+        return ""
+
+    return " ".join([bin_name] + [shlex.quote(token) for token in tokens[1:]])
+
+
+def _is_compare_or_diff_command(command: str) -> bool:
+    try:
+        tokens = shlex.split(command, posix=True)
+    except ValueError:
+        tokens = command.split()
+    if not tokens:
+        return False
+    name = Path(tokens[0]).name
+    return name in {"compare", "diff", "cmp"}
+
+
+def _is_failure_marker_command(command: str) -> bool:
+    command = command.strip()
+    return bool(
+        re.match(r"(?:fail=1|Exit\s+\$?fail|exit\s+[1-9]\d*|return\s+[1-9]\d*)\b", command)
+    )
+
+
+def _unique_preserving_order(items) -> List[str]:
+    seen: Set[str] = set()
+    result: List[str] = []
+    for item in items:
+        if item in seen:
+            continue
+        seen.add(item)
+        result.append(item)
+    return result
+
+
+def _find_matching_script_lines(
+    script_content: str,
+    normalized_command: str,
+    bin_name: str,
+    *,
+    limit: int,
+) -> List[str]:
+    try:
+        command_tokens = shlex.split(normalized_command, posix=True)
+    except ValueError:
+        command_tokens = normalized_command.split()
+    args = command_tokens[1:]
+    matches: List[str] = []
+    bin_pattern = re.compile(rf"(^|[\s;(]){re.escape(bin_name)}([\s;&|)]|$)")
+    for raw in script_content.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if not bin_pattern.search(line):
+            continue
+        if all(arg == "-" or arg in line for arg in args[:4]):
+            matches.append(line)
+            if len(matches) >= limit:
+                break
+    return matches
+
+
 
 
 def _edit_region_keys(edits: List[Dict]) -> List[str]:
