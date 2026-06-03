@@ -194,6 +194,8 @@ class RoundLogger:
         for key in (
             "api_model",
             "stream",
+            "max_tokens",
+            "thinking_enabled",
             "thinking_disabled",
             "thinking",
             "stream_options",
@@ -204,6 +206,22 @@ class RoundLogger:
         if not parts:
             return []
         return [f"**Request Options:** {'; '.join(parts)}"]
+
+    @classmethod
+    def _thinking_block(cls, token_usage: Optional[Dict[str, Any]]) -> List[str]:
+        if not isinstance(token_usage, dict):
+            return []
+        thinking = token_usage.get("reasoning_content")
+        if not thinking:
+            return []
+        text = cls._expand_literal_newlines(str(thinking)).rstrip()
+        if not text:
+            return []
+        lines = ["", "-------"]
+        for line in text.splitlines():
+            lines.append(f"|{line}|")
+        lines.append("-------")
+        return lines
 
     def _build_markdown_payload(
         self,
@@ -262,6 +280,7 @@ class RoundLogger:
                 self._human_text(reply) or "(empty)",
             ]
         )
+        parts.extend(self._thinking_block(token_usage))
 
         return "\n".join(parts).rstrip() + "\n"
 

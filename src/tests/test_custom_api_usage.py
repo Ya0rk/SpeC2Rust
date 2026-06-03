@@ -19,7 +19,7 @@ class FakeStreamResponse:
 
 
 class CustomApiUsageTests(unittest.TestCase):
-    def test_deepseek_payload_disables_thinking_by_default(self):
+    def test_deepseek_payload_enables_thinking_by_default(self):
         client = CustomApiGen(
             api_key="",
             model="deepseek-v4-flash",
@@ -30,7 +30,7 @@ class CustomApiUsageTests(unittest.TestCase):
 
         payload = client._build_payload([{"role": "user", "content": "hi"}], 0)
 
-        self.assertEqual(payload["thinking"], {"type": "disabled"})
+        self.assertEqual(payload["thinking"], {"type": "enabled"})
         self.assertEqual(payload["stream_options"], {"include_usage": True})
 
     def test_non_deepseek_payload_does_not_add_thinking_field(self):
@@ -45,6 +45,25 @@ class CustomApiUsageTests(unittest.TestCase):
         payload = client._build_payload([{"role": "user", "content": "hi"}], 0)
 
         self.assertNotIn("thinking", payload)
+
+    def test_payload_replaces_lone_surrogates_before_json_send(self):
+        client = CustomApiGen(
+            api_key="",
+            model="gpt-4o-mini",
+            api_base_url="http://example.com/v1",
+            max_tokens=128,
+            stream=False,
+        )
+
+        payload = client._build_payload(
+            [{"role": "user", "content": "bad \ud800 value"}],
+            0,
+        )
+        encoded = json.dumps(payload)
+
+        self.assertEqual(payload["messages"][0]["content"], "bad \uFFFD value")
+        self.assertNotIn("\\ud800", encoded)
+        self.assertEqual(client.last_sanitized_surrogates, 1)
 
     def test_stream_response_records_usage_event(self):
         client = CustomApiGen.__new__(CustomApiGen)
@@ -107,6 +126,7 @@ class CustomApiUsageTests(unittest.TestCase):
 
         self.assertEqual(reply, "")
         self.assertEqual(client.last_usage["finish_reason"], "length")
+        self.assertEqual(client.last_usage["reasoning_content"], "internal reasoning")
         self.assertEqual(client.last_stream_diagnostics["reasoning_chunk_count"], 1)
         self.assertEqual(client.last_stream_diagnostics["reasoning_chars"], len("internal reasoning"))
         self.assertTrue(client.last_stream_diagnostics["visible_content_empty"])

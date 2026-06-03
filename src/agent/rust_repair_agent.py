@@ -33,6 +33,13 @@ from config.config import Config
 from llm.model import Model
 
 try:
+    from agent.rtest.c_string_arrays import c_string_array_lines_to_rust_static
+except ModuleNotFoundError as exc:
+    if exc.name not in {"agent", "agent.rtest", "agent.rtest.c_string_arrays"}:
+        raise
+    from rtest.c_string_arrays import c_string_array_lines_to_rust_static
+
+try:
     from agent.rust_structural_repair import try_deterministic_repair
 except ModuleNotFoundError as exc:
     if exc.name not in {"agent", "agent.rust_structural_repair"}:
@@ -1147,7 +1154,11 @@ class RustRepairAgent:
 
         start = max(1, start_line)
 
-        end = min(len(lines), end_line)
+        if start > len(lines) and lines:
+
+            start = len(lines)
+
+        end = min(len(lines), max(start, end_line))
 
         if end < start:
 
@@ -1323,7 +1334,11 @@ class RustRepairAgent:
 
         start = max(1, start_line)
 
-        end = min(len(lines), end_line)
+        if start > len(lines) and lines:
+
+            start = len(lines)
+
+        end = min(len(lines), max(start, end_line))
 
         if end < start:
 
@@ -1661,7 +1676,7 @@ Return JSON only, in the following object format:
 
   ],
 
-  "edit_strategy": "Overall strategy for replace_range / delete_range / insert_before / insert_after / create_file / create_dir",
+  "edit_strategy": "Overall strategy for replace_range / delete_range / insert_before / insert_after / copy_range_after / cp / copy_c_string_array_after / create_file / create_dir",
 
   "reasoning": ["brief point 1", "brief point 2"]
 
@@ -2071,7 +2086,11 @@ Return JSON only, in the following object format:
 
             "- search_requests: search keywords in files. Fields: kind=rust/c/spec/all, query, path_glob, context_lines, max_results.",
 
-            "- edits: modify the Rust project only when evidence is sufficient. mode may be replace_range/delete_range/insert_before/insert_after/create_file/create_dir.",
+            "- edits: modify the Rust project only when evidence is sufficient. mode may be replace_range/delete_range/insert_before/insert_after/copy_range_after/cp/copy_c_string_array_after/create_file/create_dir.",
+
+            "- copy_range_after/cp copies an existing source file line range into the target file after target_line. Fields: path, target_line, source_path, source_start_line, source_end_line, optional source_kind=rust/c/spec. Use it for large strings, arrays, or templates instead of pasting them into JSON.",
+
+            "- copy_c_string_array_after parses C string literals from source_path[source_start_line..source_end_line] and inserts `static <constant_name>: &[&str] = &[...]` after target_line. Use it for RTC-style C string arrays. Optional array_name narrows a wide range to one C array block.",
 
             "- If you need a larger coherent read or a larger coherent patch, request or return it directly; it will not be rejected or shrunk solely because it is large.",
 
@@ -2082,6 +2101,10 @@ Return JSON only, in the following object format:
             "- If the error involves a missing business module, empty file, unknown behavior, or unknown interface, you must read c/spec/rust evidence first; do not jump straight to a minimal compilable implementation.",
 
             "- If the currently read material is not enough for a real fix, return empty edits and continue gathering evidence through more_read_requests/search_requests.",
+
+            "- If the defect is already identified from the current material, do not delay the fix just to request confirmation. Submit edits now.",
+
+            "- copy_range_after/cp/copy_c_string_array_after are edit operations, not read requests. Use them immediately when the source path/range is known.",
 
             "",
 
@@ -2299,7 +2322,8 @@ Requirements:
 
 1. Return JSON only, without explanations.
 
-2. Allowed edit modes: replace_range / delete_range / insert_before / insert_after / create_file / create_dir.
+2. Allowed edit modes: replace_range / delete_range / insert_before / insert_after / copy_range_after / cp / copy_c_string_array_after / create_file / create_dir.
+   insert_before accepts `before_line` or `target_line`; insert_after accepts `after_line` or `target_line`.
 
 3. `replace_file` is not allowed. Only when creating a new file may create_file.content contain the full file content; create_file does not overwrite existing files by default, and overwrite must be explicitly set to `true` if needed.
 
@@ -2310,6 +2334,7 @@ Requirements:
    Read materials are shown as `NNNN | code`; `NNNN` is the real line number to fill into the edit.
 
 6. If the current materials are insufficient for a safe fix, you may return no edits and instead return more_read_requests or search_requests to read more context.
+   If the target file/range is already shown in Read material inventory or the provided materials, do not request it again just to be cautious; edit it.
 
 7. This is the {cycle_index}th action in this repair round. You have already seen the latest compile result at this moment.
 
@@ -2334,6 +2359,10 @@ Requirements:
 17. create_file may only be used to "create a real implementation based on already read evidence" or "create a pure module declaration file"; do not create placeholder business modules that return defaults.
 
 18. If the current error is `could not find module/type/function`, first search and read existing Rust/C/spec evidence to determine whether the issue is a missing module declaration, a wrong file path, inconsistent naming, or missing code generation.
+
+19. For large existing strings, arrays, generated templates, or repeated code blocks, prefer copy_range_after/cp instead of pasting the copied text into JSON. `source_kind` defaults to `rust`; use `source_kind="c"` or a `c:path` source_path only when copying from the original C project.
+    For C string literal arrays, prefer copy_c_string_array_after with `constant_name` and optional `array_name` instead of manually converting hundreds of escaped strings.
+    These copy modes are edits. Do not request "the copy" for a later round when the source path and line range are already known.
 
 {tool_protocol}
 
@@ -2394,6 +2423,44 @@ Return JSON:
       "end_line": 30,
 
       "content": "Replacement full snippet, keeping valid Rust"
+
+    }},
+
+    {{
+
+      "path": "src/file.rs",
+
+      "mode": "copy_range_after",
+
+      "target_line": 120,
+
+      "source_kind": "c",
+
+      "source_path": "src/original.c",
+
+      "source_start_line": 50,
+
+      "source_end_line": 180
+
+    }},
+
+    {{
+
+      "path": "src/file.rs",
+
+      "mode": "copy_c_string_array_after",
+
+      "target_line": 20,
+
+      "source_path": "src/original.c",
+
+      "source_start_line": 150,
+
+      "source_end_line": 760,
+
+      "array_name": "RTC",
+
+      "constant_name": "RTC_LINES"
 
     }}
 
@@ -2695,7 +2762,7 @@ Was this round accepted as the new baseline: {"yes" if accepted_as_best else "no
 
         if mode == "insert_before":
 
-            before_line = int(edit.get("before_line") or edit.get("start_line") or 1)
+            before_line = int(edit.get("before_line") or edit.get("target_line") or edit.get("start_line") or 1)
 
             actual_before_line = max(1, before_line)
 
@@ -2731,7 +2798,7 @@ Was this round accepted as the new baseline: {"yes" if accepted_as_best else "no
 
         if mode == "insert_after":
 
-            after_line = int(edit.get("after_line") or edit.get("end_line") or edit.get("start_line") or 0)
+            after_line = int(edit.get("after_line") or edit.get("target_line") or edit.get("end_line") or edit.get("start_line") or 0)
 
             actual_after_line = max(0, after_line)
 
@@ -2765,7 +2832,258 @@ Was this round accepted as the new baseline: {"yes" if accepted_as_best else "no
 
 
 
+        if self._is_copy_range_edit(mode):
+
+            target_line = int(edit.get("target_line") or edit.get("after_line") or edit.get("end_line") or edit.get("start_line") or 0)
+
+            actual_target_line = max(0, target_line)
+
+            insert_at = max(0, min(len(lines), actual_target_line))
+
+            insertion = str(edit.get("_copy_content") or "")
+
+            if insertion and not insertion.endswith("\n"):
+
+                insertion += "\n"
+
+            insertion_lines = insertion.splitlines(keepends=True)
+
+            anchor_before = "".join(lines[max(0, insert_at - 2):min(len(lines), insert_at + 2)])
+
+            new_lines = lines[:insert_at] + insertion_lines + lines[insert_at:]
+
+            record.update({
+
+                "target_line": target_line,
+
+                "actual_target_line": actual_target_line,
+
+                "source_kind": edit.get("_copy_source_kind") or edit.get("source_kind") or "rust",
+
+                "source_path": edit.get("_copy_source_path") or edit.get("source_path") or edit.get("from_path") or edit.get("src_path") or "",
+
+                "source_start_line": edit.get("source_start_line") or edit.get("from_start_line") or edit.get("start_line"),
+
+                "source_end_line": edit.get("source_end_line") or edit.get("from_end_line") or edit.get("end_line"),
+
+                "actual_source_start_line": edit.get("_copy_actual_source_start_line"),
+
+                "actual_source_end_line": edit.get("_copy_actual_source_end_line"),
+
+                "before": anchor_before[:1200],
+
+                "after": insertion[:1200],
+
+            })
+
+            return new_lines, len(insertion_lines), record
+
+
+
         raise ValueError(f"unsupported edit mode: {mode}")
+
+
+
+    @staticmethod
+
+    def _is_copy_range_edit(mode: str) -> bool:
+
+        return (mode or "").strip().lower() in {
+            "copy_range_after",
+            "cp",
+            "copy_c_string_array_after",
+            "copy_c_str_array_after",
+        }
+
+
+    @staticmethod
+
+    def _is_c_string_array_copy(mode: str) -> bool:
+
+        return (mode or "").strip().lower() in {
+            "copy_c_string_array_after",
+            "copy_c_str_array_after",
+        }
+
+
+
+    @staticmethod
+
+    def _edit_source_path(edit: Dict) -> str:
+
+        return str(edit.get("source_path") or edit.get("from_path") or edit.get("src_path") or "").strip()
+
+
+
+    def _copy_source_ref(self, edit: Dict) -> Tuple[str, str]:
+
+        source_path = self._edit_source_path(edit)
+
+        default_kind = "c" if self._is_c_string_array_copy(edit.get("mode") or "") else "rust"
+
+        source_kind = str(edit.get("source_kind") or edit.get("source_scope") or edit.get("kind") or default_kind).strip().lower()
+
+        kind, rel_path = self._parse_context_ref({"kind": source_kind, "path": source_path})
+
+        return kind, rel_path
+
+
+
+    @staticmethod
+
+    def _copy_line_value(edit: Dict, *keys: str, default: int = 1) -> int:
+
+        for key in keys:
+
+            if key not in edit:
+
+                continue
+
+            try:
+
+                return int(edit.get(key))
+
+            except (TypeError, ValueError):
+
+                continue
+
+        return default
+
+
+
+    def _prepare_copy_range_edit(
+
+        self,
+
+        project_dir: str,
+
+        target_rel_path: str,
+
+        current_target_lines: List[str],
+
+        edit: Dict,
+
+    ) -> Tuple[bool, Dict]:
+
+        source_kind, source_rel_path = self._copy_source_ref(edit)
+
+        if not source_rel_path:
+
+            return False, {"reason": "missing source_path"}
+
+        full_path, normalized_source_path, normalized_source_kind = self._resolve_context_path(
+
+            project_dir,
+
+            source_kind,
+
+            source_rel_path,
+
+        )
+
+        if not full_path or not normalized_source_path:
+
+            return False, {"reason": f"invalid {source_kind} source path"}
+
+        if not os.path.isfile(full_path):
+
+            return False, {"reason": f"source file does not exist: {normalized_source_kind}:{normalized_source_path}"}
+
+        target_normalized = (target_rel_path or "").replace("\\", "/").strip().lstrip("/")
+
+        if normalized_source_kind == "rust" and normalized_source_path == target_normalized:
+
+            source_lines = list(current_target_lines)
+
+        else:
+
+            source_lines = self._read_file(full_path).splitlines(keepends=True)
+
+        if not source_lines:
+
+            return False, {"reason": f"source file is empty or unreadable: {normalized_source_kind}:{normalized_source_path}"}
+
+        requested_start = self._copy_line_value(edit, "source_start_line", "from_start_line", "start_line", default=1)
+
+        requested_end = self._copy_line_value(edit, "source_end_line", "from_end_line", "end_line", default=requested_start)
+
+        if requested_end < requested_start:
+
+            requested_start, requested_end = requested_end, requested_start
+
+        actual_start = max(1, requested_start)
+
+        if actual_start > len(source_lines):
+
+            actual_start = len(source_lines)
+
+        actual_end = min(len(source_lines), max(actual_start, requested_end))
+
+        selected_lines = source_lines[actual_start - 1:actual_end]
+
+        mode = str(edit.get("mode") or "").strip().lower()
+
+        if self._is_c_string_array_copy(mode):
+
+            constant_name = str(edit.get("constant_name") or edit.get("name") or "").strip()
+
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", constant_name):
+
+                return False, {"reason": "copy_c_string_array_after requires a valid constant_name"}
+
+            visibility = str(edit.get("visibility") or "").strip()
+
+            if visibility not in {"", "pub", "pub(crate)"}:
+
+                visibility = ""
+
+            copied = c_string_array_lines_to_rust_static(
+
+                selected_lines,
+
+                constant_name=constant_name,
+
+                visibility=visibility,
+
+                array_name=str(edit.get("array_name") or edit.get("source_array") or ""),
+
+            )
+
+        else:
+
+            copied = "".join(selected_lines)
+
+        if not copied:
+
+            return False, {"reason": "source range is empty"}
+
+        edit["_copy_content"] = copied
+
+        edit["_copy_source_kind"] = normalized_source_kind
+
+        edit["_copy_source_path"] = normalized_source_path
+
+        edit["_copy_actual_source_start_line"] = actual_start
+
+        edit["_copy_actual_source_end_line"] = actual_end
+
+        return True, {}
+
+
+
+    def _copy_source_matches_path(self, edit: Dict, rel_path: str) -> bool:
+
+        source_kind, source_rel_path = self._copy_source_ref(edit)
+
+        if source_kind != "rust" or not source_rel_path:
+
+            return False
+
+        normalized_source = re.sub(r"/+", "/", source_rel_path.replace("\\", "/")).strip().lstrip("/")
+
+        normalized_target = re.sub(r"/+", "/", (rel_path or "").replace("\\", "/")).strip().lstrip("/")
+
+        return normalized_source == normalized_target
 
 
 
@@ -2803,6 +3121,8 @@ Was this round accepted as the new baseline: {"yes" if accepted_as_best else "no
 
         mode = applied_edit.get("mode") or "replace_range"
 
+        applied_path = str(applied_edit.get("path") or "").replace("\\", "/")
+
         if mode in {"replace_range", "delete_range"}:
 
             pivot_start = int(applied_edit.get("actual_start_line") or applied_edit.get("start_line") or 1)
@@ -2819,6 +3139,18 @@ Was this round accepted as the new baseline: {"yes" if accepted_as_best else "no
 
                 self._shift_edit_line(edit, "after_line", pivot_start, pivot_end, delta, "after")
 
+                self._shift_edit_line(edit, "target_line", pivot_start, pivot_end, delta, "after")
+
+                if self._copy_source_matches_path(edit, applied_path):
+
+                    self._shift_edit_line(edit, "source_start_line", pivot_start, pivot_end, delta, "before")
+
+                    self._shift_edit_line(edit, "source_end_line", pivot_start, pivot_end, delta, "before")
+
+                    self._shift_edit_line(edit, "from_start_line", pivot_start, pivot_end, delta, "before")
+
+                    self._shift_edit_line(edit, "from_end_line", pivot_start, pivot_end, delta, "before")
+
             return
 
 
@@ -2829,7 +3161,7 @@ Was this round accepted as the new baseline: {"yes" if accepted_as_best else "no
 
             for edit in remaining_edits:
 
-                for key in ("start_line", "end_line", "before_line", "after_line"):
+                for key in ("start_line", "end_line", "before_line", "after_line", "target_line"):
 
                     if key not in edit:
 
@@ -2847,17 +3179,37 @@ Was this round accepted as the new baseline: {"yes" if accepted_as_best else "no
 
                         edit[key] = value + delta
 
+                if self._copy_source_matches_path(edit, applied_path):
+
+                    for key in ("source_start_line", "source_end_line", "from_start_line", "from_end_line"):
+
+                        if key not in edit:
+
+                            continue
+
+                        try:
+
+                            value = int(edit.get(key))
+
+                        except Exception:
+
+                            continue
+
+                        if value >= pivot_line:
+
+                            edit[key] = value + delta
+
             return
 
 
 
-        if mode == "insert_after":
+        if mode == "insert_after" or self._is_copy_range_edit(mode):
 
-            pivot_line = int(applied_edit.get("actual_after_line") or applied_edit.get("after_line") or 0)
+            pivot_line = int(applied_edit.get("actual_after_line") or applied_edit.get("actual_target_line") or applied_edit.get("after_line") or applied_edit.get("target_line") or 0)
 
             for edit in remaining_edits:
 
-                for key in ("start_line", "end_line", "before_line", "after_line"):
+                for key in ("start_line", "end_line", "before_line", "after_line", "target_line"):
 
                     if key not in edit:
 
@@ -2874,6 +3226,26 @@ Was this round accepted as the new baseline: {"yes" if accepted_as_best else "no
                     if value > pivot_line:
 
                         edit[key] = value + delta
+
+                if self._copy_source_matches_path(edit, applied_path):
+
+                    for key in ("source_start_line", "source_end_line", "from_start_line", "from_end_line"):
+
+                        if key not in edit:
+
+                            continue
+
+                        try:
+
+                            value = int(edit.get(key))
+
+                        except Exception:
+
+                            continue
+
+                        if value > pivot_line:
+
+                            edit[key] = value + delta
 
 
 
@@ -3033,11 +3405,50 @@ Was this round accepted as the new baseline: {"yes" if accepted_as_best else "no
 
                 mode = edit.get("mode") or "replace_range"
 
-                if mode not in {"replace_range", "delete_range", "insert_before", "insert_after"}:
+                if mode not in {
+                    "replace_range",
+                    "delete_range",
+                    "insert_before",
+                    "insert_after",
+                    "copy_range_after",
+                    "cp",
+                    "copy_c_string_array_after",
+                    "copy_c_str_array_after",
+                }:
 
                     audit_records.append({"path": normalized_rel_path, "mode": mode, "skipped": True, "reason": "unsupported edit mode"})
 
                     continue
+
+                if self._is_copy_range_edit(mode):
+
+                    ready, copy_record = self._prepare_copy_range_edit(
+
+                        project_dir,
+
+                        normalized_rel_path,
+
+                        lines,
+
+                        edit,
+
+                    )
+
+                    if not ready:
+
+                        audit_records.append({
+
+                            "path": normalized_rel_path,
+
+                            "mode": mode,
+
+                            "skipped": True,
+
+                            "reason": copy_record.get("reason") or "copy source unavailable",
+
+                        })
+
+                        continue
 
                 start = int(edit.get("start_line") or 0)
 

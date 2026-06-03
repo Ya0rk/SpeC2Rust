@@ -13,4 +13,5 @@ spec
 log/
 .vscode
 output_gpt*/
+output_deepseek*/
 .tmp

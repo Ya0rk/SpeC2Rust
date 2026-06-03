@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import OrderedDict
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -30,6 +31,20 @@ def _with_line_numbers(content: str, start_line: int = 1) -> str:
     end = start + len(lines) - 1
     width = max(4, len(str(end)))
     return "\n".join(f"{idx:>{width}} | {line}" for idx, line in enumerate(lines, start=start))
+
+
+def _source_start_line(entry: Dict, default: int = 1) -> int:
+    value = entry.get("start_line")
+    if isinstance(value, int) and value > 0:
+        return value
+    span = str(entry.get("span") or "").strip()
+    match = re.match(r"^\s*(\d+)", span)
+    if match:
+        try:
+            return max(1, int(match.group(1)))
+        except ValueError:
+            pass
+    return default
 
 
 class MaterialBudget:
@@ -82,6 +97,33 @@ class MaterialBudget:
 
     def c_records(self) -> List[Dict]:
         return list(self._c_records.values())
+
+    def material_manifest(self) -> str:
+        lines = []
+        if self._c_records:
+            lines.append("C source materials:")
+            for key, rec in self._c_records.items():
+                source = str(rec.get("source") or "")
+                lines.append(
+                    f"- {key} ({len(source)} chars)"
+                )
+        if self._rust_files:
+            lines.append("Rust materials:")
+            for key, entry in self._rust_files.items():
+                content = str(entry.get("content") or "")
+                lines.append(
+                    f"- {key} ({len(content)} chars)"
+                )
+        if self._test_artifacts:
+            lines.append("Test artifact materials:")
+            for key, entry in self._test_artifacts.items():
+                content = str(entry.get("content") or "")
+                lines.append(
+                    f"- {key} ({len(content)} chars)"
+                )
+        if not lines:
+            return "(none)"
+        return "\n".join(lines)
 
     # ---------------- Rust files ----------------
 
@@ -174,13 +216,20 @@ class MaterialBudget:
     ) -> bool:
         if not path or not content:
             return False
+        path = path.replace("\\", "/")
+        mode = "line_range" if mode == "line_range" else "whole_file"
+        if mode == "line_range" and self._range_key(path) in self._rust_files:
+            self._touch("rust", self._range_key(path))
+            return False
         key = self._range_key(path, start_line, end_line) if mode == "line_range" else self._range_key(path)
         if key in self._rust_files and self._rust_files[key].get("content") == content:
             self._rust_files.move_to_end(key)
             self._touch("rust", key)
             return False
+        if mode != "line_range":
+            self._remove_rust_line_ranges_for(path)
         self._rust_files[key] = {
-            "path": path.replace("\\", "/"),
+            "path": path,
             "display_path": key,
             "content": content,
             "mode": mode,
@@ -191,6 +240,16 @@ class MaterialBudget:
         self._touch("rust", key)
         self._evict_if_needed(protected=("rust", key))
         return key in self._rust_files
+
+    def _remove_rust_line_ranges_for(self, path: str) -> None:
+        normalized = self._normalize_path(path)
+        for key, entry in list(self._rust_files.items()):
+            if self._normalize_path(str(entry.get("path") or "")) != normalized:
+                continue
+            if str(entry.get("mode") or "") != "line_range":
+                continue
+            self._rust_files.pop(key, None)
+            self._lru.pop(("rust", key), None)
 
     def has_rust_file(
         self,
@@ -231,6 +290,10 @@ class MaterialBudget:
     ) -> bool:
         if not path or not content:
             return False
+        path = path.replace("\\", "/")
+        mode = "line_range" if mode == "line_range" else "whole_file"
+        if mode != "line_range":
+            self._remove_test_artifact_line_ranges_for(path)
         key = self._range_key(path, start_line, end_line) if mode == "line_range" else self._range_key(path)
         if key in self._test_artifacts and self._test_artifacts[key].get("content") == content:
             self._test_artifacts.move_to_end(key)
@@ -248,6 +311,16 @@ class MaterialBudget:
         self._touch("test", key)
         self._evict_if_needed(protected=("test", key))
         return key in self._test_artifacts
+
+    def _remove_test_artifact_line_ranges_for(self, path: str) -> None:
+        normalized = self._normalize_path(path)
+        for key, entry in list(self._test_artifacts.items()):
+            if self._normalize_path(str(entry.get("path") or "")) != normalized:
+                continue
+            if str(entry.get("mode") or "") != "line_range":
+                continue
+            self._test_artifacts.pop(key, None)
+            self._lru.pop(("test", key), None)
 
     def has_test_artifact(
         self,
@@ -382,15 +455,20 @@ def build_repair_prompt(
     focused_failure: str = "",
     subcase_context: str = "",
     test_artifact_index: str = "",
+    material_request_feedback: str = "",
     runtime_evidence: Optional[Dict[str, object]] = None,
     log_agent_enabled: bool = False,
     active_static_probes: Optional[Iterable[object]] = None,
 ) -> str:
     c_blocks: List[str] = []
     for rec in material.c_records():
+        source = str(rec.get("source") or "")
+        start_line = _source_start_line(rec)
         c_blocks.append(
             f"### `{rec.get('name')}` [{rec.get('file')} {rec.get('span')}]"
-            f"\n```c\n{rec.get('source','')}\n```"
+            "\nThe left side of the code block, `NNNN |`, is the real C file line number; "
+            "do not write the line-number prefix into any Rust edit content.\n"
+            f"```text\n{_with_line_numbers(source, start_line)}\n```"
         )
     rust_blocks: List[str] = []
     for entry in material.rust_file_entries():
@@ -469,6 +547,8 @@ def build_repair_prompt(
     subcase_context_block = subcase_context or "(not enough trace information to infer a focused subcase; use the failure block and script directly)"
     artifact_index_block = test_artifact_index or "(no readable test artifacts found)"
     budget_block = material.budget_pressure_summary()
+    material_manifest_block = material.material_manifest()
+    material_feedback_block = material_request_feedback or "(none)"
 
     return f"""You are fixing a Rust project translated from a C project so that it passes sh functional tests.
 The current case failed (repair round {attempt}/{max_attempts}).
@@ -546,6 +626,24 @@ Prompt material budget status:
 {budget_block}
 ```
 
+Currently provided material table:
+These are the exact material IDs currently included in this prompt. At the end of your JSON reply,
+fill `material_keep` with the IDs that are most useful for the next round. This is a priority hint, not
+a deletion command: the agent may keep extra material when it helps avoid stale or partial context,
+especially after edits, build failures, or regressions. Newly requested materials do not need to appear here yet.
+If this table already includes the Rust target range and the C source range/whole file needed for a mechanical
+copy or conversion, use the corresponding edit tool now instead of requesting the same material again.
+```text
+{material_manifest_block}
+```
+
+Latest material request status:
+If a requested item is listed as already available, it is present in the current prompt below; use it directly
+instead of requesting it again.
+```text
+{material_feedback_block}
+```
+
 Provided C source code (the first round already injected the relevant functions based on the tested features; inspect this first):
 {c_block_text}
 
@@ -561,10 +659,10 @@ do not repair an older subcase unless it is still present in the current failure
 {history_summary or '(none)'}
 
 Return exactly one raw JSON object, with no markdown fences and no text outside the JSON.
-Keep the JSON compact: `summary` must be at most 800 characters, and `updated_summary` must be at most 500 characters.
+Keep the JSON readable and avoid repeated analysis, but do not omit necessary source/test material requests just to make the response shorter.
 Do not repeat analysis sentences. Use the following structure:
 {{
-  "summary": "Concise analysis, max 800 chars. Explain the C behavior and the specific Rust defect without repeated reasoning.",
+  "summary": "Concise analysis. Explain the C behavior and the specific Rust defect without repeated reasoning.",
   "cgr_read": [
     {{"kind": "function", "query": "C function name"}},
     {{"kind": "file", "query": "C file name or relative path", "mode": "line_range", "start_line": 120, "end_line": 220}}
@@ -585,22 +683,57 @@ Do not repeat analysis sentences. Use the following structure:
       "start_line": 10,
       "end_line": 20,
       "content": "Replacement valid Rust snippet"
+    }},
+    {{
+      "path": "src/<your_module>.rs",
+      "mode": "copy_range_after",
+      "target_line": 120,
+      "source_kind": "c",
+      "source_path": "src/original.c",
+      "source_start_line": 200,
+      "source_end_line": 420
+    }},
+    {{
+      "path": "src/<your_module>.rs",
+      "mode": "copy_c_string_array_after",
+      "target_line": 20,
+      "source_path": "src/original.c",
+      "source_start_line": 150,
+      "source_end_line": 760,
+      "array_name": "RTC",
+      "constant_name": "RTC_LINES"
     }}
   ],
+  "material_keep": {{
+    "c": ["cat.c::main"],
+    "rust": ["src/cat.rs:120-180"],
+    "test": ["timeout_trace.txt"]
+  }},
   "history_control": {{"drop_history": false}},
 {instrumentation_json}
   "complete": false,
-  "updated_summary": "Updated brief memory, max 500 chars"
+  "updated_summary": "Updated brief memory"
 }}
 
 Requirements:
-1. Only local edits are allowed: replace_range / delete_range / insert_before / insert_after.
-2. Line numbers must be based on the actual line numbers of Rust files that have already been read. If the target Rust file has not been read yet,
-   read it with rust_read_requests first; this round may return no edits.
+1. Only local edits are allowed: replace_range / delete_range / insert_before / insert_after / copy_range_after / cp / copy_c_string_array_after.
+   insert_before accepts `before_line` or `target_line`; insert_after accepts `after_line` or `target_line`.
+   If you use target_line with insert_before, the content is inserted before that exact line, not after it.
+   copy_range_after/cp copies source_path[source_start_line..source_end_line] into path after target_line.
+   source_kind defaults to "rust"; use source_kind="c" or source_path="c:..." to copy from the original C project.
+   Use this for large strings, arrays, templates, or constant tables instead of pasting them into JSON content.
+   copy_c_string_array_after parses C string literals from the C source line range and inserts
+   `static <constant_name>: &[&str] = &[...]` after target_line; use it for RTC-style C string arrays.
+   If the line range is wider than the array, set optional `array_name` so the tool extracts only that array block.
+2. Line numbers must be based on the actual line numbers of Rust files that have already been read. If the target Rust file is already in
+   "Provided Rust files" or "Currently provided material table", do not request it again just to be cautious; edit it now.
+   If the target Rust file truly has not been read yet, read it with rust_read_requests first; that evidence-gathering round may return no edits.
    Provided Rust files are shown as `NNNN | code`; `NNNN` is the real line number to use in edits.
 3. If you need more C source context, use cgr_read (kind is "function" or "file",
-   query by name or relative path). For large C/Rust files, prefer mode="line_range" with start_line/end_line.
-   Whole-file requests are allowed when the whole file is genuinely necessary and fits the budget.
+   query by name or relative path). `kind="file", mode="whole_file"` returns the raw C file, including
+   global arrays/macros/templates, not only function bodies. Whole-file requests are appropriate for small files
+   and for generator/runtime-template failures where globals matter. Line-range requests that run past EOF will
+   be clamped to the available file tail.
 4. Only edit the translated Rust project (`*.rs` / `Cargo.toml`, etc.). Every test shell script and fixture is read-only,
    including the currently failing script. Do not edit the original C project or the target directory.
 5. **No fake implementations**: do not use placeholder styles such as `unimplemented!()` / `todo!()` / `panic!("not implemented")` /
@@ -608,16 +741,22 @@ Requirements:
    as the return value. Both approaches will be automatically rejected. Fixes must be based on the real C source logic.
 6. If your change makes this case pass but causes other previously passing cases to fail (a regression), the whole change will be rolled back,
    so prefer minimal changes / only fix the code path related to this case's features.
-7. If the current materials are not enough to edit safely, you may request materials only; you will see the response in the next round.
+7. If the current materials are not enough to edit safely, request the missing materials. But if you have already identified the defect
+   from the provided material, do not delay the fix just to request confirmation. Submit edits in this round.
+   cgr_read/rust_read_requests may appear together with edits when the edits are based on already provided material; newly requested material
+   is for future rounds. A test_artifact_read request is evidence-only only when it asks for a missing or refreshed artifact that is not
+   already present in the current prompt.
    For large Rust/C/test files that were evicted or are too large to fit, prefer `mode="line_range"` with `start_line` / `end_line`.
    For timeout failures, do not keep guessing from the word "timeout"; request/read timeout artifacts or generated-code artifacts to identify the concrete subcase.
-   If you use `test_artifact_read`, leave `edits` empty in the same round; artifact reads must be reviewed before editing.
+   If you use `test_artifact_read` for a genuinely new or refreshed artifact, leave `edits` empty in the same round; artifact reads must be
+   reviewed before editing. If the same artifact is already listed in the current material table or latest request status, do not request it
+   again just to be cautious; use it and edit.
 8. If the target Rust file is already in "provided Rust files" and the key C functions have also been provided,
    this round must provide edits or request new focused evidence; do not request the same provided file again, do not set complete=true to stop,
    and do not just repeat the problem.
    If the full file was evicted because of prompt budget pressure, request a focused line_range for the exact area you need.
 9. If you have determined that a Rust file is missing the corresponding C logic (for example main.rs only prints a placeholder output),
-   you must fix that file directly with replace_range / insert_before / insert_after.
+   you must fix that file directly with replace_range / insert_before / insert_after / copy_range_after.
 10. If cargo reports a private field / private method, do not continue accessing private members from outside the module;
     instead add the necessary public method inside the module that owns the struct, or switch to an existing public API.
 11. When adding methods to an existing impl, insert them before that impl's closing brace; do not insert them into a later
@@ -635,10 +774,16 @@ Requirements:
     no compilable program". Do not assume the only valid fix is to fully clone the original C project's entire generated runtime. For script
     wrapper tests, a minimal generated program that writes the embedded script to a temporary file and execs the configured shell with preserved
     argv is an acceptable repair step, as long as it is based on the generator inputs and not hardcoded to the expected output.
-17. Do not request broad C file chunks as a substitute for a repair plan. C file `line_range` requests should normally be at most 250 lines
-    and should target a named function or a narrow area. If generated artifacts are listed, read those artifacts before asking for more C source.
+17. Do not request C file chunks as a substitute for a repair plan. Request the named function, line range, or whole file that is actually
+    needed to understand the current failure. If generated artifacts are listed, read those artifacts before repeatedly asking for more C source.
 18. The response must stay parseable. Do not wrap the JSON in ```json fences. Do not write long chain-of-thought style explanations inside
-    `summary`; if you need more evidence, request it with the read fields and keep `edits` empty.
+    `summary`; if you need more evidence that will change the decision, request it with the read fields and keep `edits` empty.
+    If the evidence is already present and the remaining work is a mechanical copy/conversion, use copy_range_after/cp/copy_c_string_array_after
+    as an edit now. Do not say "request the copy and edit next round"; copy_* modes are edits, not read requests.
+19. You must maintain the material table. In `material_keep`, list currently provided material IDs that are important for the next round.
+    This is a context-priority hint; do not assume omitted materials are immediately deleted. Prefer keeping the current failing subcase,
+    edited Rust ranges, build-error ranges, and generated artifacts that directly explain the active failure. Use exact IDs from
+    "Currently provided material table"; do not invent IDs. If no current material is useful, return empty lists.
 {instrumentation_requirement}
 """
 

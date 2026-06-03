@@ -305,6 +305,190 @@ error[E0001]: first issue
                 except PermissionError:
                     pass
 
+    def test_insert_before_accepts_target_line_alias(self):
+        config = Config(config_path=None, model_name="qwen32")
+        agent = RustRepairAgent(config=config, max_iterations=3)
+
+        root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
+        root.mkdir()
+        try:
+            target = root / "sample.rs"
+            target.write_text("line1\nline2\nline3\n", encoding="utf-8")
+
+            applied, records = agent._apply_structured_edits_with_audit(
+                str(root),
+                [
+                    {
+                        "path": "sample.rs",
+                        "mode": "insert_before",
+                        "target_line": 3,
+                        "content": "inserted\n",
+                    }
+                ],
+            )
+
+            self.assertTrue(applied)
+            self.assertEqual(
+                target.read_text(encoding="utf-8"),
+                "line1\nline2\ninserted\nline3\n",
+            )
+            self.assertEqual(records[0]["actual_before_line"], 3)
+        finally:
+            if root.exists():
+                try:
+                    shutil.rmtree(root)
+                except PermissionError:
+                    pass
+
+    def test_copy_range_after_copies_project_file_lines(self):
+        config = Config(config_path=None, model_name="qwen32")
+        agent = RustRepairAgent(config=config, max_iterations=3)
+
+        root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
+        root.mkdir()
+        try:
+            source = root / "source.rs"
+            target = root / "target.rs"
+            source.write_text(
+                "ignore\nconst DATA: &[&str] = &[\n    \"a\",\n    \"b\",\n];\n",
+                encoding="utf-8",
+            )
+            target.write_text("fn main() {\n}\n", encoding="utf-8")
+
+            applied, records = agent._apply_structured_edits_with_audit(
+                str(root),
+                [
+                    {
+                        "path": "target.rs",
+                        "mode": "copy_range_after",
+                        "target_line": 1,
+                        "source_path": "source.rs",
+                        "source_start_line": 2,
+                        "source_end_line": 5,
+                    }
+                ],
+            )
+
+            self.assertTrue(applied)
+            self.assertEqual(
+                target.read_text(encoding="utf-8"),
+                "fn main() {\nconst DATA: &[&str] = &[\n    \"a\",\n    \"b\",\n];\n}\n",
+            )
+            self.assertEqual(records[0]["mode"], "copy_range_after")
+            self.assertEqual(records[0]["source_path"], "source.rs")
+            self.assertEqual(records[0]["actual_source_start_line"], 2)
+            self.assertEqual(records[0]["actual_source_end_line"], 5)
+        finally:
+            if root.exists():
+                try:
+                    shutil.rmtree(root)
+                except PermissionError:
+                    pass
+
+    def test_cp_mode_can_copy_from_configured_c_project(self):
+        config = Config(config_path=None, model_name="qwen32")
+        agent = RustRepairAgent(config=config, max_iterations=3)
+
+        root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
+        root.mkdir()
+        try:
+            c_root = root / "c_project"
+            rust_root = root / "rust_project"
+            c_root.mkdir()
+            rust_root.mkdir()
+            (c_root / "source.c").write_text(
+                "line1\nstatic const char *RTC[] = {\n  \"main\",\n};\nline5\n",
+                encoding="utf-8",
+            )
+            target = rust_root / "src.rs"
+            target.write_text("pub fn emit() {\n}\n", encoding="utf-8")
+            agent.configure_context_sources(c_project_path=str(c_root))
+
+            applied, records = agent._apply_structured_edits_with_audit(
+                str(rust_root),
+                [
+                    {
+                        "path": "src.rs",
+                        "mode": "cp",
+                        "target_line": 1,
+                        "source_kind": "c",
+                        "source_path": "source.c",
+                        "source_start_line": 2,
+                        "source_end_line": 4,
+                    }
+                ],
+            )
+
+            self.assertTrue(applied)
+            self.assertEqual(
+                target.read_text(encoding="utf-8"),
+                "pub fn emit() {\nstatic const char *RTC[] = {\n  \"main\",\n};\n}\n",
+            )
+            self.assertEqual(records[0]["mode"], "cp")
+            self.assertEqual(records[0]["source_kind"], "c")
+            self.assertEqual(records[0]["source_path"], "source.c")
+        finally:
+            if root.exists():
+                try:
+                    shutil.rmtree(root)
+                except PermissionError:
+                    pass
+
+    def test_copy_c_string_array_after_converts_c_strings(self):
+        config = Config(config_path=None, model_name="qwen32")
+        agent = RustRepairAgent(config=config, max_iterations=3)
+
+        root = Path(__file__).parent / f"_tmp_rust_repair_agent_{uuid.uuid4().hex}"
+        root.mkdir()
+        try:
+            c_root = root / "c_project"
+            rust_root = root / "rust_project"
+            c_root.mkdir()
+            rust_root.mkdir()
+            (c_root / "source.c").write_text(
+                "static char *OTHER[] = { \"skip\\n\" };\n"
+                "static char *RTC[] = {\n"
+                "  \"int main(void) {\\n\",\n"
+                "  \"  return 0;\\n\",\n"
+                "  \"}\\n\",\n"
+                "  0\n"
+                "};\n",
+                encoding="utf-8",
+            )
+            target = rust_root / "src.rs"
+            target.write_text("mod generated;\n", encoding="utf-8")
+            agent.configure_context_sources(c_project_path=str(c_root))
+
+            applied, records = agent._apply_structured_edits_with_audit(
+                str(rust_root),
+                [
+                    {
+                        "path": "src.rs",
+                        "mode": "copy_c_string_array_after",
+                        "target_line": 1,
+                        "source_path": "source.c",
+                        "source_start_line": 1,
+                        "source_end_line": 99,
+                        "array_name": "RTC",
+                        "constant_name": "RTC_LINES",
+                    }
+                ],
+            )
+
+            content = target.read_text(encoding="utf-8")
+            self.assertTrue(applied)
+            self.assertIn("static RTC_LINES: &[&str] = &[", content)
+            self.assertIn('"int main(void) {\\n",', content)
+            self.assertIn('"  return 0;\\n",', content)
+            self.assertNotIn("skip", content)
+            self.assertEqual(records[0]["actual_source_end_line"], 7)
+        finally:
+            if root.exists():
+                try:
+                    shutil.rmtree(root)
+                except PermissionError:
+                    pass
+
     def test_apply_structured_edits_with_audit_updates_remaining_positions_for_same_file(self):
         config = Config(config_path=None, model_name="qwen32")
         agent = RustRepairAgent(config=config, max_iterations=3)

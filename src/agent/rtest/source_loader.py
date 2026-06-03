@@ -16,7 +16,9 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
+
+from .material_policy import read_text_file_slice
 
 
 @dataclass
@@ -89,6 +91,9 @@ class CSourceIndex:
             ranged = self._fulfill_file_range(query, request)
             if ranged:
                 return ranged
+            raw_file = self._fulfill_whole_file(query)
+            if raw_file:
+                return raw_file
             recs = self.find_file(query)
             if not recs:
                 # 兜底：query 可能是函数名，但用户标成了 file
@@ -120,21 +125,45 @@ class CSourceIndex:
             return None
         if start_line <= 0 or end_line < start_line:
             return None
-        source = self._read_source_file_range(query, start_line, end_line)
-        if source is None:
+        resolved = self._read_source_file_range(query, start_line, end_line)
+        if resolved is None:
             return None
+        source, actual_start, actual_end = resolved
         rel = self._canonical_file_path(query) or query
         return {
-            "name": f"<file:{rel}:{start_line}-{end_line}>",
+            "name": f"<file:{rel}:{actual_start}-{actual_end}>",
             "file": rel,
-            "span": f"{start_line}-{end_line}",
+            "span": f"{actual_start}-{actual_end}",
             "source": source,
             "num_lines": len(source.splitlines()),
-            "func_defid": f"{rel}:<file:{start_line}-{end_line}>",
+            "func_defid": f"{rel}:<file:{actual_start}-{actual_end}>",
             "is_file_aggregate": True,
             "is_line_range": True,
-            "start_line": start_line,
-            "end_line": end_line,
+            "start_line": actual_start,
+            "end_line": actual_end,
+            "requested_start_line": start_line,
+            "requested_end_line": end_line,
+        }
+
+    def _fulfill_whole_file(self, query: str) -> Optional[Dict]:
+        full = self.resolve_source_file_path(query)
+        if not full:
+            return None
+        rel = self._canonical_file_path(query) or query.replace("\\", "/").strip()
+        resolved = read_text_file_slice(full)
+        if resolved is None:
+            return None
+        return {
+            "name": f"<file:{rel}>",
+            "file": rel,
+            "span": f"1-{resolved.total_lines}",
+            "source": resolved.content,
+            "num_lines": resolved.total_lines,
+            "func_defid": f"{rel}:<file>",
+            "is_file_aggregate": True,
+            "is_raw_file": True,
+            "start_line": 1,
+            "end_line": resolved.total_lines,
         }
 
     def _canonical_file_path(self, query: str) -> str:
@@ -143,7 +172,7 @@ class CSourceIndex:
             return str(matches[0].get("file") or "").replace("\\", "/")
         return query.replace("\\", "/").strip()
 
-    def _read_source_file_range(self, query: str, start_line: int, end_line: int) -> Optional[str]:
+    def resolve_source_file_path(self, query: str) -> Optional[Path]:
         if not self.source_root:
             return None
         rel = self._canonical_file_path(query)
@@ -157,23 +186,31 @@ class CSourceIndex:
                 return None
         except Exception:
             return None
-        if not full.is_file():
-            basename_fallback = (root / Path(normalized).name).resolve()
-            try:
-                if root not in basename_fallback.parents and basename_fallback != root:
-                    return None
-            except Exception:
+        if full.is_file():
+            return full
+        basename_fallback = (root / Path(normalized).name).resolve()
+        try:
+            if root not in basename_fallback.parents and basename_fallback != root:
                 return None
-            if not basename_fallback.is_file():
-                return None
-            full = basename_fallback
-        text = full.read_text(encoding="utf-8", errors="ignore")
-        lines = text.splitlines()
-        start = max(1, start_line)
-        end = min(len(lines), end_line)
-        if end < start:
-            return ""
-        return "\n".join(lines[start - 1:end]) + "\n"
+        except Exception:
+            return None
+        if basename_fallback.is_file():
+            return basename_fallback
+        return None
+
+    def _read_source_file_range(
+        self,
+        query: str,
+        start_line: int,
+        end_line: int,
+    ) -> Optional[Tuple[str, int, int]]:
+        full = self.resolve_source_file_path(query)
+        if not full:
+            return None
+        resolved = read_text_file_slice(full, start_line=start_line, end_line=end_line)
+        if resolved is None:
+            return None
+        return resolved.content, resolved.start_line, resolved.end_line
 
 
 def _aggregate_file_record(records: List[Dict]) -> Dict:

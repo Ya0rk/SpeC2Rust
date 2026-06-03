@@ -9,7 +9,7 @@ continue.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 
 @dataclass(frozen=True)
@@ -20,26 +20,11 @@ class ResponseContractViolation:
 
 
 class RepairResponseContract:
-    SUMMARY_LIMIT = 800
-    UPDATED_SUMMARY_LIMIT = 500
     RAW_TAIL_CHARS = 800
 
     @classmethod
     def validate_payload(cls, payload: Dict[str, Any]) -> Optional[ResponseContractViolation]:
-        oversized = cls._oversized_text_fields(payload)
-        if not oversized:
-            return None
-        return ResponseContractViolation(
-            code="oversized_text_fields",
-            log_message=f"LLM JSON 字段超长：{', '.join(oversized)}",
-            history_feedback=(
-                "[System] The previous reply was valid JSON but violated the response contract: "
-                f"{', '.join(oversized)}. Do not expand the analysis in visible content. "
-                f"Return compact JSON only: summary <= {cls.SUMMARY_LIMIT} chars and "
-                f"updated_summary <= {cls.UPDATED_SUMMARY_LIMIT} chars. If more evidence is needed, "
-                "use the read-request fields and leave edits empty."
-            ),
-        )
+        return None
 
     @classmethod
     def parse_failure(
@@ -82,22 +67,6 @@ class RepairResponseContract:
                 f"This is a response-contract violation, not a reason to stop the repair flow. "
                 f"finish_reason={finish_reason or 'unknown'}.{stream_note}\n"
                 f"{detail}\n"
-                "Return exactly one compact raw JSON object next. No markdown fences, no text outside JSON, "
-                f"summary <= {cls.SUMMARY_LIMIT} chars, updated_summary <= {cls.UPDATED_SUMMARY_LIMIT} chars."
+                "Return exactly one raw JSON object next. No markdown fences and no text outside JSON."
             ),
         )
-
-    @classmethod
-    def _oversized_text_fields(cls, payload: Dict[str, Any]) -> List[str]:
-        limits = {
-            "summary": cls.SUMMARY_LIMIT,
-            "updated_summary": cls.UPDATED_SUMMARY_LIMIT,
-        }
-        oversized: List[str] = []
-        for key, limit in limits.items():
-            value = payload.get(key)
-            if value is None:
-                continue
-            if len(str(value)) > limit:
-                oversized.append(f"{key}>{limit}")
-        return oversized

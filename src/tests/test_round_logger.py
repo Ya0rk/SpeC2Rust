@@ -81,6 +81,20 @@ class RoundLoggerTests(unittest.TestCase):
         self.assertTrue(path.parent.name.endswith("-head"))
         self.assertEqual(path.parent.parent, self.root)
 
+    def test_log_round_appends_reasoning_content_box_at_end(self):
+        logger = RoundLogger(base_dir=self.root, run_name="run")
+        path = logger.log_round(
+            request="ping",
+            reply="pong",
+            objective="thinking",
+            token_usage={"reasoning_content": "think line 1\n think line 2"},
+        )
+
+        text = path.read_text(encoding="utf-8")
+        self.assertTrue(
+            text.endswith("-------\n|think line 1|\n| think line 2|\n-------\n")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

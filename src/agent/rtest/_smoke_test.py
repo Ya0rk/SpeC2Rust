@@ -157,6 +157,50 @@ def test_source_index_file_aggregation() -> None:
     _pass("file aggregation OK")
 
 
+def test_source_index_raw_file_and_eof_clamp() -> None:
+    _h("CSourceIndex raw whole-file and EOF clamp")
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        src_dir = root / "src"
+        src_dir.mkdir()
+        (src_dir / "shc.c").write_text(
+            "int helper(void) { return 1; }\n"
+            "static char *RTC[] = {\n"
+            "  \"main\\n\",\n"
+            "};\n",
+            encoding="utf-8",
+        )
+        idx = CSourceIndex(source_root=str(root))
+        idx.add({
+            "name": "helper",
+            "file": "src/shc.c",
+            "span": "1-1",
+            "source": "int helper(void) { return 1; }",
+            "num_lines": 1,
+            "func_defid": "src/shc.c:helper",
+        })
+
+        raw = idx.fulfill_request({"kind": "file", "query": "src/shc.c", "mode": "whole_file"})
+        if not raw or not raw.get("is_raw_file"):
+            _fail(f"raw whole-file missing: {raw}")
+        if "RTC" not in raw.get("source", ""):
+            _fail("raw whole-file lost global RTC array")
+        _pass("raw whole-file includes globals")
+
+        tail = idx.fulfill_request({
+            "kind": "file",
+            "query": "src/shc.c",
+            "mode": "line_range",
+            "start_line": 3,
+            "end_line": 99,
+        })
+        if not tail or tail.get("end_line") != 4:
+            _fail(f"EOF clamp failed: {tail}")
+        if "};" not in tail.get("source", ""):
+            _fail("EOF-clamped range missing tail line")
+        _pass("line_range clamps to EOF")
+
+
 # ---------------------------------------------------------------- material budget
 
 
@@ -187,6 +231,44 @@ def test_material_budget_lru_eviction() -> None:
         # but here 80 <= 100 so should fit after evicting b
         _fail(f"over budget: {m.total_chars()}")
     _pass(f"c_records={names}, rust_files={files}, total={m.total_chars()}")
+
+
+def test_material_budget_deduplicates_whole_rust_file_and_ranges() -> None:
+    _h("MaterialBudget deduplicates Rust whole-file and line ranges")
+    m = MaterialBudget(budget_chars=10000)
+    if not m.add_rust_file("src/shc.rs", "line1\nline2\n", start_line=1, end_line=2, mode="line_range"):
+        _fail("failed to add initial line range")
+    if not m.add_rust_file("src/shc.rs", "line1\nline2\n"):
+        _fail("failed to add whole file")
+    keys = list(m.rust_files().keys())
+    if keys != ["src/shc.rs"]:
+        _fail(f"line range survived whole-file add: {keys}")
+    if m.add_rust_file("src/shc.rs", "line1\n", start_line=1, end_line=1, mode="line_range"):
+        _fail("line range added despite whole-file coverage")
+    keys = list(m.rust_files().keys())
+    if keys != ["src/shc.rs"]:
+        _fail(f"unexpected keys after covered range add: {keys}")
+    _pass("whole-file/range dedupe OK")
+
+
+def test_material_budget_refreshes_test_artifacts() -> None:
+    _h("MaterialBudget refreshes test artifacts")
+    m = MaterialBudget(budget_chars=10000)
+    if not m.add_test_artifact("artifacts/out.x.c", "old\n", start_line=1, end_line=1, mode="line_range"):
+        _fail("failed to add initial artifact range")
+    if not m.add_test_artifact("artifacts/out.x.c", "new full\n"):
+        _fail("whole artifact did not replace stale range")
+    keys = list(m.test_artifacts().keys())
+    if keys != ["artifacts/out.x.c"]:
+        _fail(f"stale artifact range survived whole-file add: {keys}")
+    if not m.add_test_artifact("artifacts/out.x.c", "newer full\n"):
+        _fail("changed artifact content should refresh existing key")
+    values = list(m.test_artifacts().values())
+    if values != ["newer full\n"]:
+        _fail(f"artifact content not refreshed: {values}")
+    if m.add_test_artifact("artifacts/out.x.c", "newer full\n"):
+        _fail("unchanged artifact should be treated as already available")
+    _pass("test artifact refresh OK")
 
 
 # ---------------------------------------------------------------- snapshot
@@ -254,7 +336,10 @@ def main() -> int:
     test_keywords()
     test_violates_no_fake_impl()
     test_source_index_file_aggregation()
+    test_source_index_raw_file_and_eof_clamp()
     test_material_budget_lru_eviction()
+    test_material_budget_deduplicates_whole_rust_file_and_ranges()
+    test_material_budget_refreshes_test_artifacts()
     test_snapshot_atomic_restore()
     test_snapshot_incomplete_target_raises()
     print("\nAll smoke tests passed.")

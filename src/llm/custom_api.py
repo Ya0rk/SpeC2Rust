@@ -34,13 +34,15 @@ class CustomApiGen:
         self.rate_limit_cooldown_seconds = float(rate_limit_cooldown_seconds)
         self.disable_env_proxy = bool(disable_env_proxy)
         self.stream = bool(stream)
-        self.disable_thinking = "deepseek" in (self.model or "").lower()
+        self.enable_thinking = "deepseek" in (self.model or "").lower()
+        self.disable_thinking = False
         self._last_request_time = 0.0
         self._current_max_tokens = self.max_tokens
         self._current_request_label = ""
         self.last_usage = None
         self.last_stream_diagnostics = None
         self.last_request_metadata = None
+        self.last_sanitized_surrogates = 0
         self.session = requests.Session()
         # 某些环境会注入 HTTP(S)_PROXY，导致兼容 API 走到不稳定代理链路。
         # 对直连模型服务的场景，默认禁用 requests 对环境代理变量的继承。
@@ -228,6 +230,8 @@ class CustomApiGen:
                 self.last_usage["finish_reason"] = finish_reasons[-1]
                 self.last_usage["finish_reasons"] = finish_reasons
             self.last_usage["stream_diagnostics"] = self.last_stream_diagnostics
+            if reasoning_text:
+                self.last_usage["reasoning_content"] = reasoning_text
         return body
 
     @staticmethod
@@ -255,25 +259,74 @@ class CustomApiGen:
             return "".join(parts)
         return str(value)
 
+    def _reasoning_content_from_choice(self, choice) -> str:
+        if not isinstance(choice, dict):
+            return ""
+        message = choice.get("message") or {}
+        if not isinstance(message, dict):
+            message = {}
+        return self._coerce_content_piece(
+            message.get("reasoning_content")
+            or message.get("reasoning")
+            or message.get("thinking")
+            or choice.get("reasoning_content")
+            or choice.get("reasoning")
+            or choice.get("thinking")
+        )
+
     def _build_payload(self, messages, temperature):
+        self.last_sanitized_surrogates = 0
         payload = {
             "model": self.model,
-            "messages": messages,
+            "messages": self._sanitize_json_value(messages),
             "temperature": temperature,
             "max_tokens": self._current_max_tokens,
             "stream": self.stream,
         }
-        if self.disable_thinking:
-            payload["thinking"] = {"type": "disabled"}
+        if self.enable_thinking:
+            payload["thinking"] = {"type": "enabled"}
         if self.stream:
             payload["stream_options"] = {"include_usage": True}
         return payload
+
+    def _sanitize_json_value(self, value):
+        if isinstance(value, str):
+            return self._sanitize_json_string(value)
+        if isinstance(value, list):
+            return [self._sanitize_json_value(item) for item in value]
+        if isinstance(value, tuple):
+            return [self._sanitize_json_value(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                self._sanitize_json_string(str(key)): self._sanitize_json_value(item)
+                for key, item in value.items()
+            }
+        return value
+
+    def _sanitize_json_string(self, text: str) -> str:
+        if not text:
+            return text
+        bad = 0
+        chars = []
+        for ch in text:
+            if 0xD800 <= ord(ch) <= 0xDFFF:
+                bad += 1
+                chars.append("\uFFFD")
+            else:
+                chars.append(ch)
+        if bad:
+            self.last_sanitized_surrogates += bad
+            return "".join(chars)
+        return text
 
     def _request_metadata(self, payload):
         metadata = {
             "api_model": self.model,
             "stream": self.stream,
+            "max_tokens": self._current_max_tokens,
+            "thinking_enabled": self.enable_thinking,
             "thinking_disabled": self.disable_thinking,
+            "sanitized_surrogates": self.last_sanitized_surrogates,
             "payload_keys": sorted(payload.keys()),
         }
         if "thinking" in payload:
@@ -287,6 +340,16 @@ class CustomApiGen:
             self.last_usage = {}
         if isinstance(self.last_usage, dict) and self.last_request_metadata:
             self.last_usage["request_options"] = self.last_request_metadata
+
+    @staticmethod
+    def _serialize_payload(payload) -> bytes:
+        """Serialize request JSON after local normalization.
+
+        We intentionally own this serialization step instead of delegating to
+        requests' ``json=`` shortcut so invalid Unicode cannot silently become
+        a server-side JSON parse error.
+        """
+        return json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")
 
     def get_response(self, messages, temperature=0, top_k=1):
         if top_k != 1 and temperature == 0:
@@ -314,9 +377,10 @@ class CustomApiGen:
 
                 payload = self._build_payload(messages, temperature)
                 self.last_request_metadata = self._request_metadata(payload)
+                request_body = self._serialize_payload(payload)
                 response = self.session.post(
                     self.api_url,
-                    json=payload,
+                    data=request_body,
                     headers=headers,
                     timeout=180,
                     stream=self.stream,
@@ -345,6 +409,12 @@ class CustomApiGen:
                 choice = body["choices"][0]
                 if isinstance(self.last_usage, dict) and choice.get("finish_reason") is not None:
                     self.last_usage["finish_reason"] = choice.get("finish_reason")
+                reasoning_text = self._reasoning_content_from_choice(choice)
+                if reasoning_text:
+                    if self.last_usage is None:
+                        self.last_usage = {}
+                    if isinstance(self.last_usage, dict):
+                        self.last_usage["reasoning_content"] = reasoning_text
                 self._merge_request_metadata()
                 content = self._coerce_content_piece((choice.get("message") or {}).get("content"))
                 return [self._repair_mojibake_text(content)]

@@ -14,7 +14,6 @@ repair_prompt / repair_adapter 等模块，便于单独测试与维护。
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -44,6 +43,11 @@ from .constants import (  # noqa: E402
 )
 from .c_project_builder import CProjectBuilder  # noqa: E402
 from .log_agent import LogAgent  # noqa: E402
+from .material_policy import (  # noqa: E402
+    SMALL_FILE_WHOLE_FILE_CHARS,
+    read_text_file_slice,
+    should_upgrade_line_range_to_whole_file,
+)
 from .models import TestCaseResult, TestRunSummary  # noqa: E402
 from .repair_adapter import RepairAdapter  # noqa: E402
 from .repair_prompt import MaterialBudget, build_repair_prompt  # noqa: E402
@@ -67,7 +71,7 @@ from .test_runner import TestRunner  # noqa: E402
 
 
 EDIT_REGION_BUCKET_LINES = 150
-MAX_REPEATED_EDIT_REGION_ROUNDS = 4
+AUTO_CONTEXT_LINES = 180
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +129,7 @@ class RustTestAgent:
     ) -> TestRunSummary:
         rust_project_path = str(Path(rust_project_path).resolve())
         c_project_path = str(Path(c_project_path).resolve())
+        self._repair_helper.configure_context_sources(c_project_path=c_project_path)
         bin_name = binary_name or self._infer_bin_name(c_project_path, rust_project_path)
         if not binary_name:
             print(f"[rtest] 自动推断 bin_name = {bin_name}（C 项目目录 / Cargo.toml）")
@@ -624,6 +629,37 @@ class RustTestAgent:
             print(f"    [rtest] 已拒绝对非 Rust 源文件的编辑请求：{rel or '(空 path)'}")
         return clean
 
+    @staticmethod
+    def _resolve_under_root(root: Path, rel_path: str) -> Optional[Path]:
+        rel = (rel_path or "").replace("\\", "/").strip().lstrip("/")
+        if not rel or rel.startswith("../") or "/../" in f"/{rel}/":
+            return None
+        full = (root.resolve() / rel).resolve()
+        try:
+            if os.path.commonpath([str(root.resolve()), str(full)]) != str(root.resolve()):
+                return None
+        except ValueError:
+            return None
+        return full
+
+    @staticmethod
+    def _material_count_for_file(material: MaterialBudget, kind: str, rel_path: str) -> int:
+        normalized = (rel_path or "").replace("\\", "/").strip().lower()
+        if not normalized:
+            return 0
+        count = 0
+        if kind == "rust":
+            for entry in material.rust_file_entries():
+                path = str(entry.get("path") or "").replace("\\", "/").lower()
+                if path == normalized:
+                    count += 1
+        elif kind == "c":
+            for rec in material.c_records():
+                path = str(rec.get("file") or "").replace("\\", "/").lower()
+                if path == normalized or Path(path).name == Path(normalized).name:
+                    count += 1
+        return count
+
     def _filter_fake_impl_edits(
         self,
         edits: List[Dict],
@@ -701,7 +737,7 @@ class RustTestAgent:
     def _read_test_artifact(
         failing_case: TestCaseResult,
         rel_path: str,
-        max_chars: int = 12000,
+        max_chars: int = 64000,
         start_line: Optional[int] = None,
         end_line: Optional[int] = None,
     ) -> str:
@@ -717,10 +753,10 @@ class RustTestAgent:
             return ""
         if not full.is_file():
             return ""
-        try:
-            text = full.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
+        resolved = read_text_file_slice(full)
+        if resolved is None:
             return ""
+        text = resolved.content
         if text == "":
             try:
                 if full.stat().st_size == 0:
@@ -728,12 +764,14 @@ class RustTestAgent:
             except OSError:
                 pass
         if isinstance(start_line, int) and isinstance(end_line, int):
-            lines = text.splitlines()
-            start = max(1, start_line)
-            end = min(len(lines), end_line)
-            if end < start:
+            resolved_range = read_text_file_slice(
+                full,
+                start_line=start_line,
+                end_line=end_line,
+            )
+            if resolved_range is None:
                 return ""
-            return "\n".join(lines[start - 1:end]) + ("\n" if end >= start else "")
+            return resolved_range.content
         return text[-max_chars:]
 
     def _seed_test_artifacts(
@@ -1020,10 +1058,7 @@ class RustTestAgent:
             last_build_error="",
             regression_warning="",
             last_failure_signature=failing_case.failure_signature(),
-            last_edits_fingerprint="",
-            last_debug_probe_fingerprint="",
             stall_count=0,
-            dup_edits_count=0,
             debug_probe_count=0,
             edit_region_counts={},
             static_probes={},
@@ -1160,11 +1195,13 @@ class RustTestAgent:
                 bin_name=bin_name,
             ),
             test_artifact_index=self._list_test_artifacts(failing_case),
+            material_request_feedback=state.material_request_feedback,
             runtime_evidence=runtime_evidence,
             log_agent_enabled=self.enable_log_agent,
             active_static_probes=list(state.static_probes.values()),
         )
         state.regression_warning = ""  # 只提示一次
+        state.material_request_feedback = ""  # 只提示一次
 
         self.llm.set_request_label(f"测试修复 {failing_case.name} #{attempt}")
         reply = self.llm.generate(
@@ -1203,13 +1240,11 @@ class RustTestAgent:
 
         violation = RepairResponseContract.validate_payload(payload)
         if violation:
-            state.response_contract_failures += 1
             state.history_summary += "\n" + violation.history_feedback
             print(
                 f"    [rtest] {violation.log_message}，"
-                "继续下一轮协议修正"
+                "本轮继续执行有效请求"
             )
-            return "continue"
 
         # JSON 解析成功，重置连续失败计数
         state.response_contract_failures = 0
@@ -1225,6 +1260,13 @@ class RustTestAgent:
             or payload.get("test_artifact_requests")
             or []
         )
+        material_keep = payload.get("material_keep")
+        if isinstance(material_keep, dict):
+            # `material_keep` is only a priority hint. Hard-pruning here made later
+            # rounds lose the edited file tail or the compile-error context and then
+            # repair against stale fragments. Budget pressure is still handled by
+            # MaterialBudget's LRU eviction when new material is added.
+            pass
         requested_material = bool(cgr_requests or rust_read_requests or test_artifact_requests)
         submitted_edits = [
             edit for edit in (payload.get("edits") or []) if isinstance(edit, dict)
@@ -1242,82 +1284,32 @@ class RustTestAgent:
                 "\n[System] All edits submitted in the previous round were rejected by the anti-cheat check; "
                 "implement the real flag logic from the C source instead of placeholders or repeating expected output."
             )
-        if test_artifact_requests and edits:
-            print("    [rtest] 本轮同时请求 test artifact 和 edits，优先提供材料并跳过 edits")
-            state.history_summary += (
-                "\n[System] The previous round requested test artifacts and also submitted edits. "
-                "Test artifacts are evidence-gathering material; the edits from that same round were skipped. "
-                "Analyze the provided artifacts in the next round before submitting implementation edits."
-            )
-            edits = []
-
-        if cgr_requests and not edits and not rust_read_requests and not test_artifact_requests:
-            overbroad, detail = _overbroad_c_file_request(cgr_requests)
-            if overbroad:
-                print(f"    [rtest] 拒绝过宽 C 源码请求：{detail}")
-                state.history_summary += (
-                    "\n[System] The previous round requested an overbroad C source range "
-                    f"({detail}) without requesting concrete test artifacts or proposing an edit. "
-                    "That request was skipped. For generated-code failures, first read the generated artifact "
-                    "listed in the test artifact index (for example `*.x.c`, `*.stderr`, `*.stdout`), "
-                    "or submit a focused Rust edit. If C context is still needed, request a named function "
-                    "or a narrow line_range of at most 250 lines."
-                )
-                cgr_requests = []
-
-        # Edits 去重（#20）
-        if edits:
-            fp = _edits_fingerprint(edits)
-            if fp == state.last_edits_fingerprint:
-                state.dup_edits_count += 1
-                print(
-                    f"    [rtest] LLM 返回与上一轮完全相同的 edits（第 {state.dup_edits_count} 次），"
-                    "跳过重复应用"
-                )
-                state.history_summary += (
-                    "\n[System] The edits from the previous round were identical to an earlier round and have been skipped. "
-                    "The next round must read new material or provide a different local fix."
-                )
-                edits = []
-            else:
-                state.last_edits_fingerprint = fp
-                state.dup_edits_count = 0
-
-        new_material = self._absorb_material_requests(
+        material_result = self._absorb_material_requests(
             rust_project_path, source_index, cgr_requests, rust_read_requests, material
         )
-        if self._absorb_test_artifact_requests(
+        artifact_result = self._absorb_test_artifact_requests(
             failing_case, test_artifact_requests, material
-        ):
-            new_material = True
+        )
+        material_result.merge(artifact_result)
+        if requested_material:
+            state.material_request_feedback = _format_material_request_feedback(material_result)
+            self._print_material_request_feedback(material_result)
+        if test_artifact_requests and edits and artifact_result.new_material:
+            print("    [rtest] 本轮同时新增 test artifact 和 edits，优先提供材料并跳过 edits")
+            state.history_summary += (
+                "\n[System] The previous round requested new test artifacts and also submitted edits. "
+                "The newly provided artifacts must be reviewed before implementation edits, so those edits were skipped. "
+                "If the requested artifact was already available in the prompt, edits are allowed and will not be skipped."
+            )
+            edits = []
+        new_material = material_result.new_material
         if new_material:
             # 新证据进入后，允许模型在同一区域基于新材料重新尝试。
             state.edit_region_counts.clear()
 
         if edits:
-            same_failure_stalled = state.stall_count + 1 >= STALL_SAME_SIGNATURE_ROUNDS
-            blocked_regions = [
-                key
-                for key in _edit_region_keys(edits)
-                if same_failure_stalled
-                and state.edit_region_counts.get(key, 0) >= MAX_REPEATED_EDIT_REGION_ROUNDS
-            ]
-            if blocked_regions:
-                print(
-                    "    [rtest] LLM 连续多轮编辑同一代码区域，"
-                    "本轮跳过 edits 并要求先读取新证据"
-                )
-                state.history_summary += (
-                    "\n[System] The previous edits keep targeting the same file/line region "
-                    f"({', '.join(sorted(blocked_regions))}) while the failure is unchanged. "
-                    "Those edits were skipped. The next round must request/read new evidence first: "
-                    "timeout_context.txt, timeout_trace.txt, generated artifacts under tmp/, focused C source, "
-                    "or focused Rust line ranges. Do not rewrite the same region again without new evidence."
-                )
-                edits = []
-            else:
-                for key in _edit_region_keys(edits):
-                    state.edit_region_counts[key] = state.edit_region_counts.get(key, 0) + 1
+            for key in _edit_region_keys(edits):
+                state.edit_region_counts[key] = state.edit_region_counts.get(key, 0) + 1
 
         debug_probe = payload.get("debug_probe") or payload.get("instrumentation")
         static_probe_update = payload.get("static_probe_update")
@@ -1399,7 +1391,6 @@ class RustTestAgent:
                     "A valid debug_probe must include at least one concrete Rust source breakpoint and must not be combined with edits."
                 )
             else:
-                fp = _debug_probe_fingerprint(debug_probe)
                 if state.debug_probe_count >= self.max_debug_probes:
                     print("    [rtest] 本用例 debug_probe 已达配置上限，跳过新的请求")
                     state.history_summary += (
@@ -1407,14 +1398,6 @@ class RustTestAgent:
                         "Use the existing evidence, static probes, source reads, or submit concrete edits."
                     )
                     return "continue"
-                if fp and fp == state.last_debug_probe_fingerprint:
-                    print("    [rtest] 跳过重复 debug_probe 请求")
-                    state.history_summary += (
-                        "\n[System] The previous debug_probe request was a duplicate and was skipped. "
-                        "Use the available current-round evidence or provide a different repair action."
-                    )
-                    return "continue"
-                state.last_debug_probe_fingerprint = fp
                 state.debug_probe_count += 1
                 if self._execute_debug_probe(
                     rust_project_path=rust_project_path,
@@ -1446,6 +1429,11 @@ class RustTestAgent:
                     refreshed = self.adapter.read_file_slice(rust_project_path, rel)
                     if refreshed:
                         material.add_rust_file(rel, refreshed)
+                self._refresh_post_edit_materials(
+                    rust_project_path=rust_project_path,
+                    edits=edits,
+                    material=material,
+                )
 
                 return self._build_and_verify(
                     rust_project_path=rust_project_path,
@@ -1455,6 +1443,7 @@ class RustTestAgent:
                     baseline_pass_names=baseline_pass_names,
                     state=state,
                     snapshot=snapshot,
+                    material=material,
                 )
 
         if payload.get("complete"):
@@ -1471,12 +1460,7 @@ class RustTestAgent:
         if not new_material and not edits:
             if requested_material:
                 print("    [rtest] LLM 请求了材料，但没有新增可读材料，继续下一轮并要求调整请求")
-                state.history_summary += (
-                    "\n[System] The previous round requested source/test materials, but no new readable material was added. "
-                    "Likely causes: the requested file/path was already provided, did not match any indexed source, was outside allowed paths, "
-                    "or produced empty content. The next round must use already provided material, request a more precise path/line_range, "
-                    "or provide concrete edits."
-                )
+                state.history_summary += "\n" + _format_material_request_feedback(material_result)
             else:
                 print("    [rtest] LLM 既没请求材料也没产生新编辑，继续下一轮并要求改变策略")
                 state.history_summary += (
@@ -1486,6 +1470,27 @@ class RustTestAgent:
             return "continue"
         return "continue"
 
+    @staticmethod
+    def _print_material_request_feedback(result: "_MaterialRequestResult") -> None:
+        if result.added:
+            print(
+                "    [rtest] 本轮新增材料："
+                + ", ".join(_unique_preserving_order(result.added)[:8])
+                + (" ..." if len(result.added) > 8 else "")
+            )
+        if result.already_available:
+            print(
+                "    [rtest] 本轮请求的材料已在当前 prompt 中："
+                + ", ".join(_unique_preserving_order(result.already_available)[:8])
+                + (" ..." if len(result.already_available) > 8 else "")
+            )
+        if result.unavailable:
+            print(
+                "    [rtest] 本轮请求的材料不可读或未匹配："
+                + ", ".join(_unique_preserving_order(result.unavailable)[:8])
+                + (" ..." if len(result.unavailable) > 8 else "")
+            )
+
     def _absorb_material_requests(
         self,
         rust_project_path: str,
@@ -1493,19 +1498,72 @@ class RustTestAgent:
         cgr_requests: List[Dict],
         rust_read_requests: List[Dict],
         material: MaterialBudget,
-    ) -> bool:
-        new_material = False
+    ) -> "_MaterialRequestResult":
+        result = _MaterialRequestResult()
         for req in cgr_requests:
             if not isinstance(req, dict):
                 continue
-            rec = source_index.fulfill_request(req)
-            if rec and not material.has_c_record(rec):
-                if material.add_c_record(rec):
-                    kind_tag = "file" if rec.get("is_file_aggregate") else "function"
-                    print(
-                        f"    [rtest] 提供 C {kind_tag}：{rec.get('name')} [{rec.get('file')}]"
+            request = dict(req)
+            kind = str(request.get("kind") or "function").strip().lower()
+            mode = str(request.get("mode") or "").strip().lower()
+            query = str(
+                request.get("query") or request.get("path") or request.get("file") or ""
+            ).strip()
+            start_line = request.get("start_line")
+            end_line = request.get("end_line")
+            if kind == "file" and mode in {"line_range", "range"}:
+                try:
+                    start_int = int(start_line)
+                    end_int = int(end_line)
+                except (TypeError, ValueError):
+                    start_int = None
+                    end_int = None
+                full = source_index.resolve_source_file_path(query)
+                canonical = source_index._canonical_file_path(query) if query else query
+                if (
+                    full
+                    and should_upgrade_line_range_to_whole_file(
+                        full,
+                        existing_material_count=self._material_count_for_file(material, "c", canonical),
+                        start_line=start_int,
+                        end_line=end_int,
                     )
-                    new_material = True
+                ):
+                    request["mode"] = "whole_file"
+                    request.pop("start_line", None)
+                    request.pop("end_line", None)
+                    print(
+                        "    [rtest] C 小文件/多片段请求升级为 whole_file："
+                        f"{canonical} ({full.stat().st_size} bytes <= {SMALL_FILE_WHOLE_FILE_CHARS})"
+                    )
+            rec = source_index.fulfill_request(request)
+            request_label = _format_c_request_label(request)
+            if not rec:
+                result.unavailable.append(f"c:{request_label}")
+                continue
+            material_id = MaterialBudget._c_key(rec)
+            if material.has_c_record(rec):
+                result.already_available.append(f"c:{material_id}")
+                continue
+            if material.add_c_record(rec):
+                kind_tag = "file" if rec.get("is_file_aggregate") else "function"
+                print(
+                    f"    [rtest] 提供 C {kind_tag}：{rec.get('name')} [{rec.get('file')}]"
+                )
+                result.added.append(f"c:{material_id}")
+                requested_start = rec.get("requested_start_line")
+                requested_end = rec.get("requested_end_line")
+                actual_start = rec.get("start_line")
+                actual_end = rec.get("end_line")
+                if (
+                    rec.get("is_line_range")
+                    and (requested_start, requested_end) != (actual_start, actual_end)
+                ):
+                    print(
+                        "    [rtest] C 行范围按实际文件范围提供："
+                        f"requested={requested_start}-{requested_end}, actual={actual_start}-{actual_end}"
+                    )
+                result.new_material = True
 
         for req in rust_read_requests:
             if isinstance(req, dict):
@@ -1528,24 +1586,66 @@ class RustTestAgent:
                 continue
             if not self._is_editable_rust_path(rel):
                 print(f"    [rtest] 拒绝读取非 Rust 源文件：{rel}")
+                result.unavailable.append(f"rust:{rel}")
                 continue
+            full_path = self._resolve_under_root(Path(rust_project_path), rel)
+            if not full_path or not full_path.is_file():
+                result.unavailable.append(f"rust:{rel}")
+                continue
+            if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int):
+                if should_upgrade_line_range_to_whole_file(
+                    full_path,
+                    existing_material_count=self._material_count_for_file(material, "rust", rel),
+                    start_line=start_line,
+                    end_line=end_line,
+                ):
+                    mode = "whole_file"
+                    start_line = None
+                    end_line = None
+                    print(
+                        "    [rtest] Rust 小文件/多片段请求升级为 whole_file："
+                        f"{rel} ({full_path.stat().st_size} bytes <= {SMALL_FILE_WHOLE_FILE_CHARS})"
+                    )
             if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int):
                 if end_line < start_line:
                     start_line, end_line = end_line, start_line
-                uncovered = material.uncovered_rust_ranges(rel, start_line, end_line)
+                file_slice = read_text_file_slice(
+                    full_path,
+                    start_line=start_line,
+                    end_line=end_line,
+                )
+                if not file_slice or not file_slice.content:
+                    result.unavailable.append(f"rust:{rel}:{start_line}-{end_line}")
+                    continue
+                if file_slice.range_changed:
+                    print(
+                        "    [rtest] Rust 行范围按实际文件范围提供："
+                        f"{rel} requested={start_line}-{end_line}, "
+                        f"actual={file_slice.start_line}-{file_slice.end_line}, "
+                        f"total_lines={file_slice.total_lines}"
+                    )
+                uncovered = material.uncovered_rust_ranges(
+                    rel,
+                    file_slice.start_line,
+                    file_slice.end_line,
+                )
                 if not uncovered:
                     print(
-                        f"    [rtest] 跳过重复 Rust 行范围：{rel} [{start_line}-{end_line}] "
+                        f"    [rtest] 跳过重复 Rust 行范围：{rel} "
+                        f"[{file_slice.start_line}-{file_slice.end_line}] "
                         "已由现有片段覆盖"
+                    )
+                    result.already_available.append(
+                        f"rust:{rel}:{file_slice.start_line}-{file_slice.end_line}"
                     )
                     continue
                 for uncovered_start, uncovered_end in uncovered:
-                    content = self.adapter.read_file_slice(
-                        rust_project_path,
-                        rel,
+                    uncovered_slice = read_text_file_slice(
+                        full_path,
                         start_line=uncovered_start,
                         end_line=uncovered_end,
                     )
+                    content = uncovered_slice.content if uncovered_slice else ""
                     if content and material.add_rust_file(
                         rel,
                         content,
@@ -1553,7 +1653,8 @@ class RustTestAgent:
                         end_line=uncovered_end,
                         mode="line_range",
                     ):
-                        new_material = True
+                        result.new_material = True
+                        result.added.append(f"rust:{rel}:{uncovered_start}-{uncovered_end}")
                         print(
                             f"    [rtest] 提供 Rust 文件片段：{rel} "
                             f"[{uncovered_start}-{uncovered_end}] ({len(content)} chars)"
@@ -1561,8 +1662,10 @@ class RustTestAgent:
                 continue
             else:
                 if material.has_rust_file(rel):
+                    result.already_available.append(f"rust:{rel}")
                     continue
-                content = self.adapter.read_file_slice(rust_project_path, rel)
+                file_slice = read_text_file_slice(full_path)
+                content = file_slice.content if file_slice else ""
                 start_line = None
                 end_line = None
                 mode = "whole_file"
@@ -1573,23 +1676,27 @@ class RustTestAgent:
                 end_line=end_line,
                 mode=mode,
             ):
-                new_material = True
+                result.new_material = True
                 if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int):
+                    result.added.append(f"rust:{rel}:{start_line}-{end_line}")
                     print(
                         f"    [rtest] 提供 Rust 文件片段：{rel} [{start_line}-{end_line}] "
                         f"({len(content)} chars)"
                     )
                 else:
+                    result.added.append(f"rust:{rel}")
                     print(f"    [rtest] 提供 Rust 文件：{rel} ({len(content)} chars)")
-        return new_material
+            elif not content:
+                result.unavailable.append(f"rust:{rel}")
+        return result
 
     def _absorb_test_artifact_requests(
         self,
         failing_case: TestCaseResult,
         requests: List[Dict],
         material: MaterialBudget,
-    ) -> bool:
-        new_material = False
+    ) -> "_MaterialRequestResult":
+        result = _MaterialRequestResult()
         for req in requests or []:
             if isinstance(req, dict):
                 rel = str(req.get("path") or "").replace("\\", "/")
@@ -1608,9 +1715,15 @@ class RustTestAgent:
                 start_line = None
                 end_line = None
             rel = rel.strip().lstrip("/")
-            if not rel or material.has_test_artifact(rel, start_line=start_line, end_line=end_line):
+            if not rel:
                 continue
-            if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int) and end_line >= start_line:
+            if (
+                mode == "line_range"
+                and isinstance(start_line, int)
+                and isinstance(end_line, int)
+                and end_line >= start_line
+                and not material.has_test_artifact(rel)
+            ):
                 content = self._read_test_artifact(
                     failing_case,
                     rel,
@@ -1618,7 +1731,11 @@ class RustTestAgent:
                     end_line=end_line,
                 )
             else:
-                content = self._read_test_artifact(failing_case, rel)
+                # Test artifacts are runtime products and may change after every
+                # edit/build/rerun. Always re-read explicit artifact requests;
+                # path-only dedupe can otherwise keep stale generated sources in
+                # the prompt and mislead the next repair round.
+                content = self._read_test_artifact(failing_case, rel, max_chars=64000)
                 start_line = None
                 end_line = None
                 mode = "whole_file"
@@ -1630,16 +1747,199 @@ class RustTestAgent:
                 mode=mode,
             ):
                 if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int):
+                    result.added.append(f"test:{rel}:{start_line}-{end_line}")
                     print(
                         f"    [rtest] 提供测试产物片段：{rel} [{start_line}-{end_line}] "
                         f"({len(content)} chars)"
                     )
                 else:
+                    result.added.append(f"test:{rel}")
                     print(f"    [rtest] 提供测试产物：{rel} ({len(content)} chars)")
-                new_material = True
+                result.new_material = True
             elif not content:
                 print(f"    [rtest] 测试产物不存在或不可读：{rel}")
-        return new_material
+                result.unavailable.append(f"test:{rel}")
+            else:
+                if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int):
+                    result.already_available.append(f"test:{rel}:{start_line}-{end_line}")
+                else:
+                    result.already_available.append(f"test:{rel}")
+        return result
+
+    def _refresh_post_edit_materials(
+        self,
+        *,
+        rust_project_path: str,
+        edits: List[Dict],
+        material: MaterialBudget,
+    ) -> None:
+        """After edits, add current source windows around every touched range.
+
+        The LLM should never repair the next round from stale pre-edit snippets.
+        We still refresh the whole edited file in the caller when possible; these
+        focused windows make the exact edit area survive even under budget
+        pressure and show the post-edit line numbers.
+        """
+        ranges: Dict[str, Tuple[int, int]] = {}
+        whole_files: Set[str] = set()
+        for edit in edits or []:
+            if not isinstance(edit, dict):
+                continue
+            rel = str(edit.get("path") or "").replace("\\", "/").strip()
+            if not rel or not self._is_editable_rust_path(rel):
+                continue
+            mode = str(edit.get("mode") or "").strip().lower()
+            if mode in {
+                "copy_range_after",
+                "cp",
+                "copy_c_string_array_after",
+                "copy_c_str_array_after",
+            }:
+                try:
+                    start = int(edit.get("target_line") or edit.get("after_line") or 1)
+                except (TypeError, ValueError):
+                    start = 1
+                end = start
+            elif mode == "insert_before":
+                try:
+                    start = int(edit.get("before_line") or edit.get("target_line") or edit.get("start_line") or 1)
+                except (TypeError, ValueError):
+                    start = 1
+                end = start
+            elif mode == "insert_after":
+                try:
+                    start = int(edit.get("after_line") or edit.get("target_line") or edit.get("end_line") or edit.get("start_line") or 1)
+                except (TypeError, ValueError):
+                    start = 1
+                end = start
+            else:
+                try:
+                    start = int(edit.get("start_line") or edit.get("line") or 1)
+                except (TypeError, ValueError):
+                    start = 1
+                try:
+                    end = int(edit.get("end_line") or start)
+                except (TypeError, ValueError):
+                    end = start
+            if start <= 0 or end <= 0:
+                whole_files.add(rel)
+                continue
+            if end < start:
+                start, end = end, start
+            ranges[rel] = (
+                min(start, ranges.get(rel, (start, end))[0]),
+                max(end, ranges.get(rel, (start, end))[1]),
+            )
+
+        for rel in sorted(whole_files):
+            content = self.adapter.read_file_slice(rust_project_path, rel)
+            if content and material.add_rust_file(rel, content):
+                print(f"    [rtest] 编辑后刷新 Rust 文件：{rel} ({len(content)} chars)")
+
+        for rel, (start, end) in sorted(ranges.items()):
+            self._add_rust_context_window(
+                rust_project_path=rust_project_path,
+                rel=rel,
+                center_start=start,
+                center_end=end,
+                material=material,
+                reason="编辑后上下文",
+            )
+
+    def _refresh_build_error_materials(
+        self,
+        *,
+        rust_project_path: str,
+        build_output: str,
+        material: MaterialBudget,
+    ) -> None:
+        """Add current Rust source windows around rustc error locations."""
+        locations = self._rustc_error_locations(rust_project_path, build_output)
+        if not locations:
+            return
+        for rel, line in locations[:16]:
+            self._add_rust_context_window(
+                rust_project_path=rust_project_path,
+                rel=rel,
+                center_start=line,
+                center_end=line,
+                material=material,
+                reason="编译错误上下文",
+            )
+
+    def _add_rust_context_window(
+        self,
+        *,
+        rust_project_path: str,
+        rel: str,
+        center_start: int,
+        center_end: int,
+        material: MaterialBudget,
+        reason: str,
+    ) -> None:
+        rel = rel.replace("\\", "/").strip().lstrip("/")
+        if not rel or not self._is_editable_rust_path(rel):
+            return
+        line_count = self._rust_file_line_count(rust_project_path, rel)
+        start = max(1, int(center_start) - AUTO_CONTEXT_LINES)
+        end = max(start, int(center_end) + AUTO_CONTEXT_LINES)
+        if line_count:
+            end = min(line_count, end)
+        content = self.adapter.read_file_slice(
+            rust_project_path,
+            rel,
+            start_line=start,
+            end_line=end,
+        )
+        if content and material.add_rust_file(
+            rel,
+            content,
+            start_line=start,
+            end_line=end,
+            mode="line_range",
+        ):
+            print(f"    [rtest] 提供 {reason}：{rel} [{start}-{end}] ({len(content)} chars)")
+
+    @staticmethod
+    def _rust_file_line_count(rust_project_path: str, rel: str) -> int:
+        full = Path(rust_project_path) / rel.replace("/", os.sep)
+        try:
+            return len(full.read_text(encoding="utf-8", errors="ignore").splitlines())
+        except OSError:
+            return 0
+
+    @staticmethod
+    def _rustc_error_locations(
+        rust_project_path: str,
+        build_output: str,
+    ) -> List[Tuple[str, int]]:
+        root = Path(rust_project_path).resolve()
+        seen: Set[Tuple[str, int]] = set()
+        locations: List[Tuple[str, int]] = []
+        pattern = re.compile(r"-->\s+(.+?\.rs):(\d+):(\d+)")
+        for match in pattern.finditer(build_output or ""):
+            raw_path = match.group(1).strip().replace("\\", "/")
+            try:
+                line = int(match.group(2))
+            except ValueError:
+                continue
+            rel = raw_path
+            path_obj = Path(raw_path)
+            if path_obj.is_absolute():
+                try:
+                    rel = path_obj.resolve().relative_to(root).as_posix()
+                except (OSError, ValueError):
+                    continue
+            else:
+                rel = rel.lstrip("./")
+            if not rel.startswith("src/") and "/" not in rel:
+                rel = f"src/{rel}"
+            key = (rel, line)
+            if key in seen:
+                continue
+            seen.add(key)
+            locations.append(key)
+        return locations
 
     def _build_and_verify(
         self,
@@ -1651,6 +1951,7 @@ class RustTestAgent:
         baseline_pass_names: Set[str],
         state: "_RepairLoopState",
         snapshot: ProjectSnapshot,
+        material: MaterialBudget,
     ) -> str:
         if not self._cargo_build_release(rust_project_path):
             ok, build_output = self.adapter.run_command(
@@ -1659,6 +1960,11 @@ class RustTestAgent:
                 timeout_seconds=self.build_timeout_seconds,
             )
             state.last_build_error = build_output if not ok else ""
+            self._refresh_build_error_materials(
+                rust_project_path=rust_project_path,
+                build_output=state.last_build_error,
+                material=material,
+            )
             print("    [rtest] 修复后编译失败，将编译错误带入下一轮")
             state.history_summary += "\n[System] The previous edit caused a compile failure; prioritize fixing the compile error."
             return "continue"
@@ -1822,15 +2128,27 @@ class _RepairLoopState:
     last_build_error: str
     regression_warning: str
     last_failure_signature: str
-    last_edits_fingerprint: str
-    last_debug_probe_fingerprint: str
     stall_count: int
-    dup_edits_count: int
     debug_probe_count: int
     edit_region_counts: Dict[str, int] = field(default_factory=dict)
     response_contract_failures: int = 0
     static_probes: Dict[str, object] = field(default_factory=dict)
     static_program_args: List[str] = field(default_factory=list)
+    material_request_feedback: str = ""
+
+
+@dataclass
+class _MaterialRequestResult:
+    new_material: bool = False
+    added: List[str] = field(default_factory=list)
+    already_available: List[str] = field(default_factory=list)
+    unavailable: List[str] = field(default_factory=list)
+
+    def merge(self, other: "_MaterialRequestResult") -> None:
+        self.new_material = self.new_material or other.new_material
+        self.added.extend(other.added)
+        self.already_available.extend(other.already_available)
+        self.unavailable.extend(other.unavailable)
 
 
 def _script_size(case: TestCaseResult) -> int:
@@ -1838,15 +2156,6 @@ def _script_size(case: TestCaseResult) -> int:
         return os.path.getsize(case.script_path)
     except OSError:
         return 1 << 30
-
-
-def _edits_fingerprint(edits: List[Dict]) -> str:
-    """对一组 edits 计算稳定指纹，用于去重（#20）。"""
-    try:
-        payload = json.dumps(edits, sort_keys=True, ensure_ascii=False)
-    except (TypeError, ValueError):
-        payload = repr(edits)
-    return hashlib.sha256(payload.encode("utf-8", errors="ignore")).hexdigest()[:16]
 
 
 def _strip_bash_xtrace_command(line: str) -> str:
@@ -1944,14 +2253,39 @@ def _edit_region_keys(edits: List[Dict]) -> List[str]:
         path = str(edit.get("path") or "").replace("\\", "/")
         if not path:
             continue
-        try:
-            start = int(edit.get("start_line") or edit.get("line") or 1)
-        except (TypeError, ValueError):
-            start = 1
-        try:
-            end = int(edit.get("end_line") or start)
-        except (TypeError, ValueError):
+        mode = str(edit.get("mode") or "").strip().lower()
+        if mode in {
+            "copy_range_after",
+            "cp",
+            "copy_c_string_array_after",
+            "copy_c_str_array_after",
+        }:
+            try:
+                start = int(edit.get("target_line") or edit.get("after_line") or 1)
+            except (TypeError, ValueError):
+                start = 1
             end = start
+        elif mode == "insert_before":
+            try:
+                start = int(edit.get("before_line") or edit.get("target_line") or edit.get("start_line") or 1)
+            except (TypeError, ValueError):
+                start = 1
+            end = start
+        elif mode == "insert_after":
+            try:
+                start = int(edit.get("after_line") or edit.get("target_line") or edit.get("end_line") or edit.get("start_line") or 1)
+            except (TypeError, ValueError):
+                start = 1
+            end = start
+        else:
+            try:
+                start = int(edit.get("start_line") or edit.get("line") or 1)
+            except (TypeError, ValueError):
+                start = 1
+            try:
+                end = int(edit.get("end_line") or start)
+            except (TypeError, ValueError):
+                end = start
         if end < start:
             start, end = end, start
         midpoint = max(1, (start + end) // 2)
@@ -1960,53 +2294,39 @@ def _edit_region_keys(edits: List[Dict]) -> List[str]:
     return sorted(keys)
 
 
-def _overbroad_c_file_request(requests: List[Dict]) -> Tuple[bool, str]:
-    """Detect C file range requests that are too broad for a repair round."""
-    file_ranges = 0
-    total_lines = 0
-    widest = 0
-    whole_files = 0
-    for req in requests or []:
-        if not isinstance(req, dict):
-            continue
-        kind = str(req.get("kind") or "").strip().lower()
-        mode = str(req.get("mode") or "").strip().lower()
-        if kind != "file":
-            continue
-        if mode != "line_range":
-            whole_files += 1
-            continue
-        try:
-            start = int(req.get("start_line"))
-            end = int(req.get("end_line"))
-        except (TypeError, ValueError):
-            whole_files += 1
-            continue
-        if end < start:
-            start, end = end, start
-        span = max(1, end - start + 1)
-        file_ranges += 1
-        total_lines += span
-        widest = max(widest, span)
-
-    if whole_files:
-        return True, f"{whole_files} whole-file C request(s)"
-    if widest > 300:
-        return True, f"widest C file range is {widest} lines"
-    if file_ranges > 2:
-        return True, f"{file_ranges} C file ranges in one round"
-    if total_lines > 500:
-        return True, f"{total_lines} total C lines requested"
-    return False, ""
+def _format_material_request_feedback(result: _MaterialRequestResult) -> str:
+    lines = ["[System] Material request result from the previous round:"]
+    if result.added:
+        lines.append("New material added to the current prompt:")
+        for item in _unique_preserving_order(result.added)[:16]:
+            lines.append(f"- {item}")
+    if result.already_available:
+        lines.append("Requested material already available in the current prompt:")
+        for item in _unique_preserving_order(result.already_available)[:16]:
+            lines.append(f"- {item}")
+        lines.append(
+            "Use these materials directly from the provided C/Rust/test blocks; repeating the same read request will not add more context."
+        )
+    if result.unavailable:
+        lines.append("Unreadable or unmatched material requests:")
+        for item in _unique_preserving_order(result.unavailable)[:16]:
+            lines.append(f"- {item}")
+        lines.append(
+            "If this evidence is still needed, adjust the path or line range based on the source index/material table."
+        )
+    if not result.added and not result.already_available and not result.unavailable:
+        lines.append(
+            "No resolver details were available. Use the current material table, request a more precise range, or provide concrete edits."
+        )
+    return "\n".join(lines)
 
 
-def _debug_probe_fingerprint(probe: Dict[str, object]) -> str:
-    """对 debug_probe 请求计算稳定指纹，避免同一用例内重复探测。"""
-    try:
-        payload = json.dumps(probe, sort_keys=True, ensure_ascii=False)
-    except (TypeError, ValueError):
-        payload = repr(probe)
-    return hashlib.sha256(payload.encode("utf-8", errors="ignore")).hexdigest()[:16]
+def _format_c_request_label(req: Dict) -> str:
+    query = str(req.get("query") or req.get("path") or req.get("file") or "").strip()
+    mode = str(req.get("mode") or "").strip()
+    if mode in {"line_range", "range"}:
+        return f"{query}:{req.get('start_line')}-{req.get('end_line')}"
+    return query or "<empty>"
 
 
 def _has_meaningful_debug_probe(probe: Dict[str, object]) -> bool:

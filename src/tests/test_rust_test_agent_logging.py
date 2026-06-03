@@ -219,7 +219,45 @@ class TestRunnerLoggingTests(unittest.TestCase):
         self.assertIn("src/main.rs", prompt)
         self.assertIn("42", prompt)
         self.assertIn("static_probe_update", prompt)
-        self.assertIn('"target": "rust | c | both"', prompt)
+
+    def test_repair_prompt_renders_c_line_range_with_line_numbers(self) -> None:
+        material = MaterialBudget()
+        material.add_c_record(
+            {
+                "name": "<file:src/shc.c:8-10>",
+                "file": "src/shc.c",
+                "span": "8-10",
+                "source": "struct shc {\n    int verbose;\n};\n",
+                "start_line": 8,
+                "end_line": 10,
+                "is_file_aggregate": True,
+                "is_line_range": True,
+            }
+        )
+        failing_case = TestCaseResult(
+            name="case.sh",
+            script_path="/tmp/case.sh",
+            passed=False,
+            exit_code=1,
+            stdout="",
+            stderr="",
+        )
+
+        prompt = build_repair_prompt(
+            failing_case=failing_case,
+            script_content="echo hi",
+            project_structure="",
+            rust_overview="",
+            material=material,
+            history_summary="",
+            source_records_index="",
+            attempt=1,
+            max_attempts=3,
+        )
+
+        self.assertIn("   8 | struct shc {", prompt)
+        self.assertIn("   9 |     int verbose;", prompt)
+        self.assertIn("  10 | };", prompt)
 
     def test_repair_prompt_omits_all_probe_guidance_when_log_agent_is_disabled(self) -> None:
         failing_case = TestCaseResult(
