@@ -37,6 +37,22 @@ USE_LOG_AGENT=1 bash scripts/rtest_agent.sh <project>
 - LLM 返回 `debug_probe` 也会被忽略。
 - 修复流程只依赖 stdout、stderr、bash trace、源码片段和测试产物。
 
+========================== 补充 ========================
+
+我们之前只对少量测例执行过动态插桩
+
+动态插桩比静态插桩的条件更苛刻
+
+动态插桩还需要两个条件
+
+一是我们rust编译要debug模式，这个比较方便
+
+二是c项目也要是debug编译的，需要CC FLAG的时候带-g，这个需要我们手动修改大批量的项目
+
+考虑到之后可能仅对少量大项目进行log agent，因此目前还未修改
+
+========================================================
+
 ## 3. LLM 请求格式
 
 当 LogAgent 开启后，`repair_prompt.py` 会在 JSON schema 中暴露 `debug_probe`：
