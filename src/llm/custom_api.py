@@ -16,7 +16,7 @@ class CustomApiGen:
         api_key: str,
         model: str,
         api_base_url: str,
-        max_tokens: int = 896,
+        max_tokens: int = 8192,
         min_interval_seconds: float = 5,
         retry_base_delay_seconds: float = 8,
         max_retries: int = 6,
