@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from argparse import Namespace
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -21,6 +22,8 @@ class MainCDocsFlagTests(unittest.TestCase):
             "use_rust_repair_agent": False,
             "skip_code_fix": False,
             "skip_test_fix": False,
+            "ablation_no_repair": False,
+            "cargo_conda_env_name": "",
         }
         defaults.update(overrides)
         return Namespace(**defaults)
@@ -106,6 +109,35 @@ class MainCDocsFlagTests(unittest.TestCase):
         self.assertTrue(main_module.should_run_legacy_test_fix_stage(self.make_args()))
         self.assertFalse(main_module.should_run_legacy_code_fix_stage(self.make_args(skip_code_fix=True)))
         self.assertFalse(main_module.should_run_legacy_test_fix_stage(self.make_args(skip_test_fix=True)))
+
+    def test_ablation_mode_disables_all_repair_agents(self):
+        args = self.make_args(
+            ablation_no_repair=True,
+            use_rust_repair_agent=True,
+            use_rust_test_agent=True,
+        )
+
+        self.assertTrue(main_module.is_ablation_no_repair_mode(args))
+        self.assertFalse(main_module.should_run_rust_repair_stage(args))
+        self.assertFalse(main_module.should_run_legacy_code_fix_stage(args))
+        self.assertFalse(main_module.should_run_legacy_test_fix_stage(args))
+        self.assertFalse(main_module.should_run_rust_test_agent_stage(args))
+
+    def test_build_cargo_command_uses_explicit_conda_env(self):
+        args = self.make_args(cargo_conda_env_name="c2rust")
+
+        command = main_module.build_cargo_command(args, ["cargo", "build", "--release"])
+
+        self.assertEqual(
+            command,
+            ["conda", "run", "--no-capture-output", "-n", "c2rust", "cargo", "build", "--release"],
+        )
+
+    def test_windows_ablation_defaults_to_c2rust_conda_env(self):
+        args = self.make_args(ablation_no_repair=True, cargo_conda_env_name="")
+
+        with patch.object(main_module.os, "name", "nt"):
+            self.assertEqual(main_module.selected_cargo_conda_env_name(args), "c2rust")
 
 
 if __name__ == "__main__":

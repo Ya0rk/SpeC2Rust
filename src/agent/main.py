@@ -2,14 +2,20 @@
 """
 C 到 Rust 项目转换 Agent 主程序
 
-完整流程：
+默认流程：
 1. 根据 C 项目生成项目文档
 2. 根据文档生成 Rust 代码
 3. 对生成的 Rust 代码进行编译和测试修复
+
+可选消融流程：
+1. 根据 C 项目生成项目文档
+2. 根据文档生成 Rust 代码
+3. 仅做编译检查；通过后运行测试；失败直接退出
 """
 
 import argparse
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -83,19 +89,31 @@ def existing_spec_auxiliary_doc_paths(
     return list(dict.fromkeys(paths))
 
 
+def is_ablation_no_repair_mode(args) -> bool:
+    return bool(getattr(args, "ablation_no_repair", False))
+
+
 def should_run_rust_repair_stage(args) -> bool:
+    if is_ablation_no_repair_mode(args):
+        return False
     return bool(getattr(args, "use_rust_repair_agent", False))
 
 
 def should_run_legacy_code_fix_stage(args) -> bool:
+    if is_ablation_no_repair_mode(args):
+        return False
     return not should_run_rust_repair_stage(args) and not getattr(args, "skip_code_fix", False)
 
 
 def should_run_rust_test_agent_stage(args) -> bool:
+    if is_ablation_no_repair_mode(args):
+        return False
     return bool(getattr(args, "use_rust_test_agent", False))
 
 
 def should_run_legacy_test_fix_stage(args) -> bool:
+    if is_ablation_no_repair_mode(args):
+        return False
     if should_run_rust_repair_stage(args):
         return False
     if should_run_rust_test_agent_stage(args):
@@ -103,9 +121,42 @@ def should_run_legacy_test_fix_stage(args) -> bool:
     return not getattr(args, "skip_test_fix", False)
 
 
-def cargo_command_passes(project_path: str, command: list[str], timeout_seconds: int = 240) -> bool:
+def selected_cargo_conda_env_name(args) -> str:
+    env_name = (getattr(args, "cargo_conda_env_name", "") or "").strip()
+    if env_name:
+        return env_name
+    if is_ablation_no_repair_mode(args) and os.name == "nt":
+        return "c2rust"
+    return ""
+
+
+def build_cargo_command(args, cargo_args: list[str]) -> list[str]:
+    env_name = selected_cargo_conda_env_name(args)
+    if env_name:
+        return ["conda", "run", "--no-capture-output", "-n", env_name, *cargo_args]
+    return cargo_args
+
+
+def shell_command_display(command: list[str]) -> str:
+    if os.name == "nt":
+        return subprocess.list2cmdline(command)
+    return shlex.join(command)
+
+
+def build_cargo_command_string(args, cargo_args: list[str]) -> str:
+    return shell_command_display(build_cargo_command(args, cargo_args))
+
+
+def run_cargo_command(
+    args,
+    project_path: str,
+    cargo_args: list[str],
+    timeout_seconds: int = 240,
+) -> tuple[bool, str, str, str]:
     if not project_path or not os.path.isdir(project_path):
-        return False
+        return False, "", f"Invalid Rust project path: {project_path}", ""
+    command = build_cargo_command(args, cargo_args)
+    display_command = shell_command_display(command)
     try:
         result = subprocess.run(
             command,
@@ -117,17 +168,99 @@ def cargo_command_passes(project_path: str, command: list[str], timeout_seconds:
             errors="ignore",
             timeout=timeout_seconds,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+    except FileNotFoundError as exc:
+        return False, "", f"Command not found: {exc}", display_command
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout or ""
+        stderr = exc.stderr or ""
+        timeout_note = f"\nCommand timed out after {timeout_seconds} seconds"
+        return False, stdout, f"{stderr}{timeout_note}", display_command
+    except OSError as exc:
+        return False, "", str(exc), display_command
+    return result.returncode == 0, result.stdout, result.stderr, display_command
+
+
+def cargo_command_passes(args, project_path: str, command: list[str], timeout_seconds: int = 240) -> bool:
+    success, _, _, _ = run_cargo_command(args, project_path, command, timeout_seconds)
+    return success
+
+
+def cargo_check_passes(args, project_path: str, timeout_seconds: int = 240) -> bool:
+    return cargo_command_passes(args, project_path, ["cargo", "check"], timeout_seconds)
+
+
+def cargo_build_release_passes(args, project_path: str, timeout_seconds: int = 600) -> bool:
+    return cargo_command_passes(args, project_path, ["cargo", "build", "--release"], timeout_seconds)
+
+
+def print_command_output_tail(stdout: str, stderr: str, limit: int = 4000) -> None:
+    if stdout.strip():
+        prYellow(stdout[-limit:])
+    if stderr.strip():
+        prYellow(stderr[-limit:])
+
+
+def run_ablation_shell_test_flow(args, config: Config, rust_project_path: str) -> bool:
+    prBlue("\n" + "=" * 80)
+    prYellow("步骤 3: 消融模式编译检查")
+    prBlue("=" * 80)
+
+    build_ok, stdout, stderr, display_command = run_cargo_command(
+        args,
+        rust_project_path,
+        ["cargo", "build", "--release"],
+        timeout_seconds=600,
+    )
+    if not build_ok:
+        prRed("\n✗ 编译检查失败，直接退出")
+        if display_command:
+            prYellow(f"  执行命令：{display_command}")
+        print_command_output_tail(stdout, stderr)
         return False
-    return result.returncode == 0
 
+    prGreen("\n✓ 编译检查通过")
+    if display_command:
+        prGreen(f"  执行命令：{display_command}")
 
-def cargo_check_passes(project_path: str, timeout_seconds: int = 240) -> bool:
-    return cargo_command_passes(project_path, ["cargo", "check"], timeout_seconds)
+    prBlue("\n" + "=" * 80)
+    prYellow("步骤 4: 消融模式 shell 测试执行")
+    prBlue("=" * 80)
 
+    if not args.c_project_path:
+        prRed("\n✗ 消融模式需要提供 --c_project_path，以便运行项目自带的 sh 测试")
+        return False
 
-def cargo_build_release_passes(project_path: str, timeout_seconds: int = 600) -> bool:
-    return cargo_command_passes(project_path, ["cargo", "build", "--release"], timeout_seconds)
+    test_agent = RustTestAgent(
+        config=config,
+        max_repair_iterations=0,
+        test_timeout_seconds=getattr(args, "rust_test_agent_timeout_seconds", 30),
+        translate_tests=False,
+        enable_log_agent=False,
+        max_debug_probes=getattr(args, "log_agent_max_debug_probes", 6),
+        prompt_budget_chars=getattr(
+            args,
+            "rust_test_agent_prompt_budget_chars",
+            PROMPT_MATERIAL_BUDGET_CHARS,
+        ),
+        cargo_build_command=build_cargo_command_string(args, ["cargo", "build", "--release"]),
+    )
+    summary = test_agent.run(
+        rust_project_path=rust_project_path,
+        c_project_path=args.c_project_path,
+        binary_name=(getattr(args, "rust_test_agent_binary_name", "") or None),
+        repair_failures=False,
+        skip_release_build=True,
+    )
+
+    if summary.total == 0:
+        prRed("\n✗ 未执行任何 shell 测试用例")
+        return False
+    if summary.all_passed:
+        prGreen(f"\n✓ shell 测试全部通过（{summary.total} 个用例）")
+        return True
+
+    prRed(f"\n✗ shell 测试失败：{summary.failed}/{summary.total} 个用例未通过")
+    return False
 
 
 def run_optional_rust_test_agent(args, config: Config, rust_project_path: str):
@@ -138,7 +271,7 @@ def run_optional_rust_test_agent(args, config: Config, rust_project_path: str):
     if not args.c_project_path:
         prRed("\n⊘ 启用了 --use-rust-test-agent，但未提供 --c_project_path，跳过测试")
         return None
-    if not cargo_build_release_passes(rust_project_path):
+    if not cargo_build_release_passes(args, rust_project_path):
         prRed("\n⊘ Rust 项目仍未通过 cargo build --release，跳过 RustTestAgent")
         prYellow("  请先完成编译修复；不能产出 release 二进制时进入功能测试没有意义。")
         return None
@@ -159,6 +292,7 @@ def run_optional_rust_test_agent(args, config: Config, rust_project_path: str):
             "rust_test_agent_prompt_budget_chars",
             PROMPT_MATERIAL_BUDGET_CHARS,
         ),
+        cargo_build_command=build_cargo_command_string(args, ["cargo", "build", "--release"]),
     )
     summary = test_agent.run(
         rust_project_path=rust_project_path,
@@ -360,6 +494,16 @@ def main():
         help="跳过测试修复步骤"
     )
     parser.add_argument(
+        "--ablation-no-repair",
+        action="store_true",
+        help="消融模式：禁用所有编译/测试修复 agent；翻译完成后只做编译检查，编译通过再运行 cargo test，编译失败直接退出"
+    )
+    parser.add_argument(
+        "--cargo-conda-env-name",
+        default="",
+        help="执行 cargo 命令时使用的 conda 环境名；Windows 消融模式下默认自动回退到 c2rust"
+    )
+    parser.add_argument(
         "--use-rust-repair-agent",
         action="store_true",
         help="使用 RustRepairAgent 替代默认 CodeFixer/TestFixer，对当前 Rust 项目做原地深度修复"
@@ -472,6 +616,9 @@ def main():
         prYellow(f"Spec JSON 中间层：{'开启' if args.use_spec_json_agent else '关闭'}")
         prYellow(f"PointerAgent：{'开启' if args.use_pointer_agent else '关闭'}")
         prYellow(f"冻结 c_docs：{'开启' if args.freeze_c_docs else '关闭'}")
+        prYellow(f"消融无修复模式：{'开启' if is_ablation_no_repair_mode(args) else '关闭'}")
+        cargo_conda_env_name = selected_cargo_conda_env_name(args)
+        prYellow(f"Cargo conda 环境：{cargo_conda_env_name or '当前环境 / 直接调用 cargo'}")
         prYellow(f"RustRepairAgent：{'开启' if should_run_rust_repair_stage(args) else '关闭'}")
         prYellow(f"RustTestAgent：{'开启' if should_run_rust_test_agent_stage(args) else '关闭'}")
         prYellow(f"LogAgent：{'开启' if args.use_log_agent else '关闭'}")
@@ -689,7 +836,11 @@ def main():
 
         compile_ready = False
 
-        if should_run_rust_repair_stage(args):
+        if is_ablation_no_repair_mode(args):
+            if not run_ablation_shell_test_flow(args, config, rust_project_path):
+                return 1
+            compile_ready = True
+        elif should_run_rust_repair_stage(args):
             # =========================================================================
             # 步骤 3: 使用 RustRepairAgent 替代默认编译/测试修复链路
             # =========================================================================
@@ -725,7 +876,7 @@ def main():
                     prRed("\n⚠ 代码编译修复失败，后续测试阶段将跳过")
             else:
                 prRed("\n⊘ 跳过代码编译修复步骤")
-                compile_ready = cargo_build_release_passes(rust_project_path)
+                compile_ready = cargo_build_release_passes(args, rust_project_path)
                 if compile_ready:
                     prGreen("  当前项目已通过 cargo build --release")
                 else:
@@ -760,7 +911,7 @@ def main():
         # =========================================================================
         # 步骤 4 (新): RustTestAgent —— 用 C 项目 sh 测试脚本验证 Rust 项目功能
         # =========================================================================
-        if compile_ready or cargo_build_release_passes(rust_project_path):
+        if compile_ready or cargo_build_release_passes(args, rust_project_path):
             run_optional_rust_test_agent(args, config, rust_project_path)
         else:
             prRed("\n⊘ 编译修复未完成，跳过 RustTestAgent 功能测试与修复")

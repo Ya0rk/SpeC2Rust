@@ -9,6 +9,13 @@
 3. 对生成结果执行编译修复
 4. 对生成结果执行测试修复
 
+也支持一个无修复消融流程：
+
+1. 分析 C 项目并生成中间文档
+2. 根据中间文档生成 Rust 项目代码
+3. 只做编译检查
+4. 编译通过后运行项目自带的 `sh` 脚本测试，编译失败直接退出
+
 当前代码支持两类分析路径：
 
 - `CDocAgent` 路径：`CDocAgent -> RustAgent -> CodeFixer -> TestFixer`
@@ -58,6 +65,8 @@ conda run --no-capture-output -n tcode python src/agent/main.py --c_project_path
 | `--use-macro-agent` | 可选开启 `MacroAgent`，分析 C 宏并生成 Rust 迁移指导文档 |
 | `--skip-code-fix` | 跳过编译修复步骤 |
 | `--skip-test-fix` | 跳过测试修复步骤 |
+| `--ablation-no-repair` | 消融模式：禁用所有编译/测试修复 agent，只做编译检查和项目自带 `sh` 测试 |
+| `--cargo-conda-env-name` | 执行 `cargo` 命令时使用的 conda 环境名；Windows 消融模式下默认回退到 `c2rust` |
 | `--max-fix-iterations` | 编译修复和测试修复的最大迭代次数，默认 `5` |
 
 ## 常见启动方式
@@ -76,6 +85,28 @@ python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./ou
 
 - 当前默认 Rust 生成器是 [`rust_agent.py`](./rust_agent.py)
 - 可选替代实现位于 `src/agent/alternatives/`
+
+### 1.1 无修复消融模式
+
+```bash
+python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --ablation-no-repair
+```
+
+Windows + conda `c2rust` 环境：
+
+```bash
+conda run --no-capture-output -n tcode python src/agent/main.py --c_project_path ./datasets/avl-tree/ --output_dir ./output/ --ablation-no-repair --cargo-conda-env-name c2rust
+```
+
+对应流程：
+
+`CDocAgent -> RustAgent -> cargo build --release -> RustTestAgent(shell-only, no repair)`
+
+说明：
+
+- 该模式会禁用 `CodeFixer`、`TestFixer`、`RustRepairAgent`，以及 `RustTestAgent` 的失败修复循环
+- 编译通过后会复用 `RustTestAgent` 的 `sh` 测试执行链路，但不会进入任何失败修复循环
+- 如果 `cargo build --release` 失败，流程会直接以非零状态退出
 
 ### 2. 使用 SpecAgent
 

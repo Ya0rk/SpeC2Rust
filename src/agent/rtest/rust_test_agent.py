@@ -95,6 +95,7 @@ class RustTestAgent:
         enable_log_agent: bool = False,
         max_debug_probes: int = 6,
         prompt_budget_chars: int = PROMPT_MATERIAL_BUDGET_CHARS,
+        cargo_build_command: str = "cargo build --release",
     ):
         self.config = config or Config()
         self.llm = Model(self.config)
@@ -108,6 +109,7 @@ class RustTestAgent:
         self.enable_log_agent = enable_log_agent
         self.max_debug_probes = max(1, max_debug_probes)
         self.prompt_budget_chars = max(1, int(prompt_budget_chars or PROMPT_MATERIAL_BUDGET_CHARS))
+        self.cargo_build_command = (cargo_build_command or "cargo build --release").strip()
 
         # 复用 RustRepairAgent 的本地清洗 / 结构化编辑能力，通过 adapter 访问
         # 它的私有方法，避免耦合未来 RustRepairAgent 的重构。
@@ -126,6 +128,9 @@ class RustTestAgent:
         rust_project_path: str,
         c_project_path: str,
         binary_name: Optional[str] = None,
+        *,
+        repair_failures: bool = True,
+        skip_release_build: bool = False,
     ) -> TestRunSummary:
         rust_project_path = str(Path(rust_project_path).resolve())
         c_project_path = str(Path(c_project_path).resolve())
@@ -167,9 +172,10 @@ class RustTestAgent:
             print(f"[rtest] {test_src} 内未找到任何 .sh 测试脚本")
             return TestRunSummary(0, 0, 0, [])
 
-        if not self._cargo_build_release(rust_project_path):
-            print("[rtest] cargo build --release 失败，无法运行测试")
-            return TestRunSummary(0, 0, 0, [])
+        if not skip_release_build:
+            if not self._cargo_build_release(rust_project_path):
+                print("[rtest] cargo build --release 失败，无法运行测试")
+                return TestRunSummary(0, 0, 0, [])
 
         rust_bin_name = f"{bin_name}-rust"
         binary_path = self._locate_release_binary(rust_project_path, rust_bin_name)
@@ -193,7 +199,7 @@ class RustTestAgent:
         try:
             summary = runner.run_all(scripts)
             self._print_summary(summary, label="首次测试结果")
-            if summary.all_passed:
+            if summary.all_passed or not repair_failures:
                 return summary
 
             project_structure = self._load_project_structure(rust_project_path)
@@ -442,9 +448,9 @@ class RustTestAgent:
     # ----------------------------------------------------------- compile
 
     def _cargo_build_release(self, project_dir: str) -> bool:
-        print(f"[rtest] cargo build --release ({project_dir})")
+        print(f"[rtest] {self.cargo_build_command} ({project_dir})")
         ok, output = self.adapter.run_command(
-            "cargo build --release", project_dir, timeout_seconds=self.build_timeout_seconds
+            self.cargo_build_command, project_dir, timeout_seconds=self.build_timeout_seconds
         )
         if not ok:
             print(output[-4000:])
