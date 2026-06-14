@@ -63,6 +63,7 @@ class SpecAgent:
         self.macro_findings = []
         self.pointer_notes_enabled = False
         self.macro_notes_enabled = False
+        self.no_split_mode = False
 
     def _truncate_text(self, text: str, max_chars: int) -> str:
         # 简单的字符级裁剪器。这里不用 tokenizer，是为了保持依赖轻量且实现简单。
@@ -1065,6 +1066,10 @@ class SpecAgent:
         """
         按 C 文件角色推导默认 Rust 文件边界。只根据通用文件角色和源文件 stem，不使用项目特例。
         """
+        if self.no_split_mode:
+            entry_file = "src/main.rs" if project_kind in {"cli", "mixed"} else "src/lib.rs"
+            return ["Cargo.toml", entry_file, "README.md"]
+
         allowed = ["Cargo.toml"]
         if project_kind in {"cli", "mixed"}:
             allowed.append("src/main.rs")
@@ -1085,6 +1090,38 @@ class SpecAgent:
 
         allowed.append("README.md")
         return allowed
+
+    def _build_single_module_unit(self, project_info: Dict, project_analysis: Dict) -> Dict:
+        """
+        为 no-split 消融实验构造单个聚合模块，完全跳过 ModuleSplitter。
+        """
+        project_name = project_info.get("project_name", "project")
+        normalized_c_files = [
+            self._normalize_path(path)
+            for path in project_info.get("c_files", [])
+        ]
+        normalized_h_files = [
+            self._normalize_path(path)
+            for path in project_info.get("h_files", [])
+        ]
+        functions = sorted(
+            project_analysis.get("functions", []),
+            key=lambda item: (
+                self._normalize_path(item.get("file") or item.get("filename") or ""),
+                int(item.get("start_line", item.get("startLine", 0)) or 0),
+                item.get("name", ""),
+            ),
+        )
+        structs = self._normalize_struct_entries(project_analysis.get("structs", []))
+        return {
+            "name": project_name,
+            "category": "monolith",
+            "directory": "root",
+            "files": normalized_c_files,
+            "headers": normalized_h_files,
+            "functions": functions,
+            "structs": structs,
+        }
 
     def _build_translation_contract(
         self,
@@ -2278,7 +2315,14 @@ class SpecAgent:
             self.macro_findings = macro_agent._select_important_findings(findings, 120)
             print(f"  ✓ 已收集宏条目：{len(self.macro_findings)}")
     
-    def analyze_and_generate_spec(self, project_path: str, output_dir: str, use_pointer_agent: bool = False, use_macro_agent: bool = False) -> None:
+    def analyze_and_generate_spec(
+        self,
+        project_path: str,
+        output_dir: str,
+        use_pointer_agent: bool = False,
+        use_macro_agent: bool = False,
+        no_split: bool = False,
+    ) -> None:
         """
         分析 C 项目并生成完整的 spec 文档集（分层聚类方法）
         
@@ -2289,6 +2333,7 @@ class SpecAgent:
         print("=" * 60)
         print("SpecAgent - C 项目 Spec 文档生成（分层聚类 + 语义细分）")
         print("=" * 60)
+        self.no_split_mode = bool(no_split)
         
         # 整个流程可以粗分为三层：
         # 1. 静态分析层：收集项目信息、AST、依赖图
@@ -2334,11 +2379,17 @@ class SpecAgent:
         # 步骤 3: 使用 ModuleSplitter 进行模块划分。
         # 这一步的输出会决定后面文档是按什么粒度生成。
         print("\n[步骤 3/9] 使用 ModuleSplitter 进行模块划分...")
-        self.module_units, self.cluster_units = self._split_modules(
-            project_info, 
-            self.project_analysis, 
-            self.dependency_graph
-        )
+        if self.no_split_mode:
+            self.module_units = [self._build_single_module_unit(project_info, self.project_analysis)]
+            self.cluster_units = []
+            print("  no-split 模式：跳过 ModuleSplitter，直接构造单模块文档单元")
+            print(f"  ✓ 聚合完成: {len(self.module_units)} 个模块, {len(self.cluster_units)} 个函数簇")
+        else:
+            self.module_units, self.cluster_units = self._split_modules(
+                project_info,
+                self.project_analysis,
+                self.dependency_graph
+            )
         
         # 步骤 4: 生成 repo_manifest.md
         print("\n[步骤 4/9] 生成仓库地图...")

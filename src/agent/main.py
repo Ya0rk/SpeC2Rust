@@ -39,6 +39,11 @@ from config.config import Config
 from utils.fmtpr import prGreen, prRed, prBlue, prYellow
 from utils.translation_metrics import translation_metrics
 
+DEFAULT_LEGACY_FIX_ITERATIONS = 20
+DEFAULT_RUST_REPAIR_MAX_ITERATIONS = 40
+DEFAULT_RUST_TEST_AGENT_MAX_ITERATIONS = 20
+NO_SPLIT_FIX_ITERATIONS = 6
+
 
 def c_docs_writable(args) -> bool:
     return not getattr(args, "freeze_c_docs", False)
@@ -322,6 +327,11 @@ def main():
         help="使用可选的 ContextualRustAgent，按需读取 spec/source/Rust 上下文并维护符号表"
     )
     parser.add_argument(
+        "--no-split",
+        action="store_true",
+        help="消融实验：跳过模块划分，只生成单模块 spec，并将 Rust 实现收敛为单个入口 rs 文件"
+    )
+    parser.add_argument(
         "--rust-entry-kind",
         choices=["auto", "main", "lib"],
         default="auto",
@@ -367,7 +377,7 @@ def main():
     parser.add_argument(
         "--rust-repair-max-iterations",
         type=int,
-        default=40,
+        default=DEFAULT_RUST_REPAIR_MAX_ITERATIONS,
         help="RustRepairAgent 最大修复迭代次数（默认：40）"
     )
     parser.add_argument(
@@ -378,7 +388,7 @@ def main():
     parser.add_argument(
         "--rust-test-agent-max-iterations",
         type=int,
-        default=20,
+        default=DEFAULT_RUST_TEST_AGENT_MAX_ITERATIONS,
         help="RustTestAgent 单个失败用例的最大修复轮数（默认：20）"
     )
     parser.add_argument(
@@ -423,11 +433,19 @@ def main():
     parser.add_argument(
         "--max-fix-iterations",
         type=int,
-        default=20,
+        default=DEFAULT_LEGACY_FIX_ITERATIONS,
         help="最大修复迭代次数（默认：20）"
     )
 
     args = parser.parse_args()
+
+    if args.no_split:
+        if args.max_fix_iterations == DEFAULT_LEGACY_FIX_ITERATIONS:
+            args.max_fix_iterations = NO_SPLIT_FIX_ITERATIONS
+        if args.rust_repair_max_iterations == DEFAULT_RUST_REPAIR_MAX_ITERATIONS:
+            args.rust_repair_max_iterations = NO_SPLIT_FIX_ITERATIONS
+        if args.rust_test_agent_max_iterations == DEFAULT_RUST_TEST_AGENT_MAX_ITERATIONS:
+            args.rust_test_agent_max_iterations = NO_SPLIT_FIX_ITERATIONS
 
     translation_metrics.start()
     rust_project_path = os.path.join(args.output_dir, args.rust_project_name) if args.output_dir else ""
@@ -466,6 +484,7 @@ def main():
         rust_agent_mode = selected_rust_agent_mode(args)
         prYellow(f"代码生成路径：{rust_agent_mode}")
         prYellow(f"Rust 入口策略：{args.rust_entry_kind}")
+        prYellow(f"No-split 消融：{'开启' if args.no_split else '关闭'}")
         prYellow(f"续跑模式：{'开启' if args.continue_run else '关闭（默认全量重建）'}")
         prYellow(f"未完成实现检查：{'关闭' if args.skip_unfinished_check else '开启'}")
         prYellow(f"未完成实现最大续写轮数：{args.unfinished_max_passes}")
@@ -515,6 +534,7 @@ def main():
                     c_doc_dir,
                     use_pointer_agent=args.use_pointer_agent,
                     use_macro_agent=args.use_macro_agent,
+                    no_split=args.no_split,
                 )
             else:
                 c_agent = CDocAgent(config=config)
@@ -629,6 +649,7 @@ def main():
         if args.use_contextual_rust_agent:
             rust_agent = ContextualRustAgent(config=config)
             rust_agent.entry_kind = args.rust_entry_kind
+            rust_agent.no_split = args.no_split
             rust_agent.configure_optional_evidence(
                 use_pointer_agent=args.use_pointer_agent,
                 use_macro_agent=args.use_macro_agent,

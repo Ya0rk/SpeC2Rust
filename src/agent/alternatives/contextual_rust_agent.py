@@ -955,6 +955,24 @@ class ContextualRustAgent(RustAgent):
         self.entry_kind = "auto"
         self.use_pointer_agent = False
         self.use_macro_agent = False
+        self.no_split = False
+
+    def _single_rs_entry_file(self) -> str:
+        return "src/main.rs" if self._effective_entry_kind() == "main" else "src/lib.rs"
+
+    def _single_file_generation_paths(self) -> List[str]:
+        return ["Cargo.toml", self._single_rs_entry_file(), "README.md"]
+
+    def _no_split_context(self) -> str:
+        if not self.no_split:
+            return ""
+        entry_file = self._single_rs_entry_file()
+        return (
+            "No-split ablation constraints:\n"
+            f"- Generate exactly one Rust source file: `{entry_file}`.\n"
+            "- Put all Rust implementation into that single entry file; do not create additional `src/*.rs`, nested modules, or `mod` declarations.\n"
+            "- Keep Cargo.toml and README.md minimal, and make the single Rust file contain the complete executable/library implementation."
+        )
 
     def configure_optional_evidence(
         self,
@@ -1093,6 +1111,9 @@ class ContextualRustAgent(RustAgent):
         )
 
     def _filter_entry_files(self, files: Sequence[str]) -> List[str]:
+        if self.no_split:
+            return self._single_file_generation_paths()
+
         cleaned = self._sanitize_generation_file_list(list(files or []))
         entry_kind = self._effective_entry_kind()
         entry_file = "src/main.rs" if entry_kind == "main" else "src/lib.rs"
@@ -1168,6 +1189,8 @@ class ContextualRustAgent(RustAgent):
             if scope:
                 parts.append(scope)
         parts.append(self._entry_kind_context())
+        if self.no_split:
+            parts.append(self._no_split_context())
 
         if self.source_interface_summary:
             parts.append("Original C external interface facts:\n" + self.source_interface_summary)
@@ -1425,6 +1448,9 @@ class ContextualRustAgent(RustAgent):
         )
 
     def _fallback_file_list(self) -> List[str]:
+        if self.no_split:
+            return self._single_file_generation_paths()
+
         if self.allowed_rust_files:
             return self._filter_entry_files(self.allowed_rust_files)
 
@@ -1541,6 +1567,9 @@ class ContextualRustAgent(RustAgent):
             pascal = _pascal_case(stem)
             if pascal:
                 owns = [pascal]
+        if self.no_split and normalized == self._single_rs_entry_file():
+            role = "Single-file Rust implementation for the entire translated project; all core types, functions, and control flow must stay in this one entry file"
+            owns = []
         return PlannedFile(path=normalized, role=role, owns=owns, spec_queries=spec_queries)
 
     def _sort_contextual_plan(self, plan: Sequence[PlannedFile]) -> List[PlannedFile]:
@@ -1778,6 +1807,8 @@ class ContextualRustAgent(RustAgent):
             return ""
 
         modules = set()
+        if self.no_split and planned.path.replace("\\", "/").endswith(".rs") and len(self._module_spec_docs) == 1:
+            modules.update(self._module_spec_docs.keys())
         for source in (planned.source_files or []):
             normalized = source.replace("\\", "/")
             stem = os.path.splitext(os.path.basename(normalized))[0].lower()
