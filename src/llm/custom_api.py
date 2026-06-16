@@ -16,6 +16,12 @@ class CustomApiGen:
         "Your previous response contained reasoning/thinking content but no visible answer. "
         "For this request, reduce hidden thinking and prioritize returning the final answer in content."
     )
+    LENGTH_TRUNCATION_PROMPT = (
+        "Your previous response hit the max token limit and was truncated. "
+        "For this request, do not send a large all-at-once modification. "
+        "Split the work into small batches, output only the next safe batch, and stop before the response becomes long. "
+        "Do not attempt to complete all remaining changes in one response."
+    )
 
     def __init__(
         self,
@@ -45,6 +51,7 @@ class CustomApiGen:
         self._last_request_time = 0.0
         self._current_max_tokens = self.max_tokens
         self._remind_reduce_thinking = False
+        self._force_batched_after_length = False
         self._current_request_label = ""
         self.last_usage = None
         self.last_stream_diagnostics = None
@@ -286,21 +293,28 @@ class CustomApiGen:
             return self.DEEPSEEK_MAX_TOKENS
         return self._current_max_tokens
 
-    def _messages_with_reduce_thinking_prompt(self, messages):
-        if not (self.enable_thinking and self._remind_reduce_thinking):
+    def _messages_with_adaptive_prompts(self, messages):
+        prompts = []
+        if self.enable_thinking and self._remind_reduce_thinking:
+            prompts.append({"role": "user", "content": self.REDUCE_THINKING_PROMPT})
+        if self._force_batched_after_length:
+            prompts.append({"role": "user", "content": self.LENGTH_TRUNCATION_PROMPT})
+        if not prompts:
             return messages
 
-        prompt = {"role": "user", "content": self.REDUCE_THINKING_PROMPT}
         if isinstance(messages, list):
-            return messages + [prompt]
-        return [prompt, {"role": "user", "content": str(messages)}]
+            return messages + prompts
+        return [{"role": "user", "content": str(messages)}] + prompts
 
     def _update_reduce_thinking_reminder(self, content: str, reasoning_text: str):
         self._remind_reduce_thinking = bool(reasoning_text) and not bool((content or "").strip())
 
+    def _update_length_truncation_reminder(self, finish_reason: str):
+        self._force_batched_after_length = finish_reason == "length"
+
     def _build_payload(self, messages, temperature):
         self.last_sanitized_surrogates = 0
-        request_messages = self._messages_with_reduce_thinking_prompt(messages)
+        request_messages = self._messages_with_adaptive_prompts(messages)
         payload = {
             "model": self.model,
             "messages": self._sanitize_json_value(request_messages),
@@ -354,6 +368,7 @@ class CustomApiGen:
             "reduce_thinking_prompt_added": bool(
                 self.enable_thinking and self._remind_reduce_thinking
             ),
+            "length_truncation_prompt_added": self._force_batched_after_length,
             "sanitized_surrogates": self.last_sanitized_surrogates,
             "payload_keys": sorted(payload.keys()),
         }
@@ -428,9 +443,12 @@ class CustomApiGen:
                 if self.stream:
                     body_content = self._stream_response_content(response)
                     reasoning_text = ""
+                    finish_reason = ""
                     if isinstance(self.last_usage, dict):
                         reasoning_text = str(self.last_usage.get("reasoning_content") or "")
+                        finish_reason = str(self.last_usage.get("finish_reason") or "")
                     self._update_reduce_thinking_reminder(body_content, reasoning_text)
+                    self._update_length_truncation_reminder(finish_reason)
                     self._merge_request_metadata()
                     response_end_prematurely_count = 0
                     return [body_content]
@@ -439,8 +457,14 @@ class CustomApiGen:
                 response_end_prematurely_count = 0
                 self.last_usage = body.get("usage")
                 choice = body["choices"][0]
-                if isinstance(self.last_usage, dict) and choice.get("finish_reason") is not None:
-                    self.last_usage["finish_reason"] = choice.get("finish_reason")
+                finish_reason = ""
+                if choice.get("finish_reason") is not None:
+                    finish_reason = str(choice.get("finish_reason") or "")
+                if finish_reason:
+                    if self.last_usage is None:
+                        self.last_usage = {}
+                    if isinstance(self.last_usage, dict):
+                        self.last_usage["finish_reason"] = finish_reason
                 reasoning_text = self._reasoning_content_from_choice(choice)
                 if reasoning_text:
                     if self.last_usage is None:
@@ -451,6 +475,7 @@ class CustomApiGen:
                 content = self._coerce_content_piece((choice.get("message") or {}).get("content"))
                 content = self._repair_mojibake_text(content)
                 self._update_reduce_thinking_reminder(content, reasoning_text)
+                self._update_length_truncation_reminder(finish_reason)
                 return [content]
             except Exception as e:
                 retry_count += 1
