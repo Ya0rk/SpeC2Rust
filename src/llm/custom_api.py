@@ -11,6 +11,12 @@ from llm.exceptions import ModelException
 class CustomApiGen:
     """OpenAI-compatible chat completions adapter."""
 
+    DEEPSEEK_MAX_TOKENS = 8192
+    REDUCE_THINKING_PROMPT = (
+        "Your previous response contained reasoning/thinking content but no visible answer. "
+        "For this request, reduce hidden thinking and prioritize returning the final answer in content."
+    )
+
     def __init__(
         self,
         api_key: str,
@@ -38,6 +44,7 @@ class CustomApiGen:
         self.disable_thinking = False
         self._last_request_time = 0.0
         self._current_max_tokens = self.max_tokens
+        self._remind_reduce_thinking = False
         self._current_request_label = ""
         self.last_usage = None
         self.last_stream_diagnostics = None
@@ -274,13 +281,31 @@ class CustomApiGen:
             or choice.get("thinking")
         )
 
+    def _request_max_tokens(self) -> int:
+        if self.enable_thinking:
+            return self.DEEPSEEK_MAX_TOKENS
+        return self._current_max_tokens
+
+    def _messages_with_reduce_thinking_prompt(self, messages):
+        if not (self.enable_thinking and self._remind_reduce_thinking):
+            return messages
+
+        prompt = {"role": "user", "content": self.REDUCE_THINKING_PROMPT}
+        if isinstance(messages, list):
+            return messages + [prompt]
+        return [prompt, {"role": "user", "content": str(messages)}]
+
+    def _update_reduce_thinking_reminder(self, content: str, reasoning_text: str):
+        self._remind_reduce_thinking = bool(reasoning_text) and not bool((content or "").strip())
+
     def _build_payload(self, messages, temperature):
         self.last_sanitized_surrogates = 0
+        request_messages = self._messages_with_reduce_thinking_prompt(messages)
         payload = {
             "model": self.model,
-            "messages": self._sanitize_json_value(messages),
+            "messages": self._sanitize_json_value(request_messages),
             "temperature": temperature,
-            "max_tokens": self._current_max_tokens,
+            "max_tokens": self._request_max_tokens(),
             "stream": self.stream,
         }
         if self.enable_thinking:
@@ -323,9 +348,12 @@ class CustomApiGen:
         metadata = {
             "api_model": self.model,
             "stream": self.stream,
-            "max_tokens": self._current_max_tokens,
+            "max_tokens": payload.get("max_tokens"),
             "thinking_enabled": self.enable_thinking,
             "thinking_disabled": self.disable_thinking,
+            "reduce_thinking_prompt_added": bool(
+                self.enable_thinking and self._remind_reduce_thinking
+            ),
             "sanitized_surrogates": self.last_sanitized_surrogates,
             "payload_keys": sorted(payload.keys()),
         }
@@ -399,6 +427,10 @@ class CustomApiGen:
 
                 if self.stream:
                     body_content = self._stream_response_content(response)
+                    reasoning_text = ""
+                    if isinstance(self.last_usage, dict):
+                        reasoning_text = str(self.last_usage.get("reasoning_content") or "")
+                    self._update_reduce_thinking_reminder(body_content, reasoning_text)
                     self._merge_request_metadata()
                     response_end_prematurely_count = 0
                     return [body_content]
@@ -417,7 +449,9 @@ class CustomApiGen:
                         self.last_usage["reasoning_content"] = reasoning_text
                 self._merge_request_metadata()
                 content = self._coerce_content_piece((choice.get("message") or {}).get("content"))
-                return [self._repair_mojibake_text(content)]
+                content = self._repair_mojibake_text(content)
+                self._update_reduce_thinking_reminder(content, reasoning_text)
+                return [content]
             except Exception as e:
                 retry_count += 1
                 if self.max_retries > 0 and retry_count >= self.max_retries:
