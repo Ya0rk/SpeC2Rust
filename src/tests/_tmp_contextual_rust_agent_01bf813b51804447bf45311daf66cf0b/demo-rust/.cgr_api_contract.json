@@ -1,1 +1,0 @@
-{"files": {"src/bounds.rs": {"contract": {"references": [{"path": "src/bounds.rs", "kind": "method", "visibility": "public", "public": true, "owner_type": "Bounds", "name": "new", "params": [], "return_type": "Self", "signature": "Bounds::new() -> Self"}]}}}}

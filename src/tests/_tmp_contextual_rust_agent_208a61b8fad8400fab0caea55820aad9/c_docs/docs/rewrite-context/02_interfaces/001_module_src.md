@@ -1,9 +1,0 @@
-# 接口事实：module_src
-### `point_new`
-- 源文件：`src/point.c`
-### `bounds_new`
-- 源文件：`src/bounds.c`
-### `node_new`
-- 源文件：`src/node.c`
-### `tree_insert`
-- 源文件：`src/quadtree.c`
