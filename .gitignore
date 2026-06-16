@@ -16,3 +16,4 @@ output_gpt*/
 output_deepseek*/
 .tmp
 src/tests
+**/_tmp_*/
