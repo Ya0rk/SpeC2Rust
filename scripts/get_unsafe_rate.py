@@ -12,7 +12,7 @@ UNSAFE_RE = re.compile(r"\bunsafe\b")
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("project_name")
+    parser.add_argument("project_path")
     return parser.parse_args()
 
 
@@ -201,6 +201,57 @@ def find_matching_brace(source, open_brace_index):
     return None
 
 
+def find_construct_body_open_brace(source, index):
+    paren_depth = 0
+    bracket_depth = 0
+    cursor = index
+
+    while cursor < len(source):
+        char = source[cursor]
+
+        if char == '(':
+            paren_depth += 1
+        elif char == ')' and paren_depth > 0:
+            paren_depth -= 1
+        elif char == '[':
+            bracket_depth += 1
+        elif char == ']' and bracket_depth > 0:
+            bracket_depth -= 1
+        elif paren_depth == 0 and bracket_depth == 0:
+            if char == '{':
+                return cursor
+            if char == ';':
+                return None
+
+        cursor += 1
+
+    return None
+
+
+def is_unsafe_braced_construct(source, index):
+    return (
+        is_unsafe_function_signature(source, index)
+        or is_keyword_at(source, skip_whitespace(source, index), "impl")
+        or is_keyword_at(source, skip_whitespace(source, index), "trait")
+        or is_keyword_at(source, skip_whitespace(source, index), "extern")
+    )
+
+
+def select_outer_intervals(intervals):
+    outer_intervals = []
+    for interval in sorted(intervals, key=lambda item: (item[0], -item[1])):
+        if outer_intervals and interval[0] <= outer_intervals[-1][1]:
+            if interval[1] > outer_intervals[-1][1]:
+                outer_intervals[-1] = (
+                    outer_intervals[-1][0],
+                    interval[1],
+                    outer_intervals[-1][2],
+                )
+            continue
+        outer_intervals.append(interval)
+    return outer_intervals
+
+
 def collect_unsafe_intervals(source):
     intervals = []
     unsafe_function_count = 0
@@ -211,10 +262,11 @@ def collect_unsafe_intervals(source):
 
         if is_unsafe_function_signature(source, cursor):
             unsafe_function_count += 1
-            continue
 
         if cursor < len(source) and source[cursor] == '{':
             open_brace = cursor
+        elif is_unsafe_braced_construct(source, cursor):
+            open_brace = find_construct_body_open_brace(source, cursor)
         else:
             continue
 
@@ -225,8 +277,9 @@ def collect_unsafe_intervals(source):
         if close_brace is None:
             continue
 
-        intervals.append((start, close_brace))
-    return intervals, unsafe_function_count
+        kind = "block" if cursor < len(source) and source[cursor] == "{" else "construct"
+        intervals.append((start, close_brace, kind))
+    return select_outer_intervals(intervals), unsafe_function_count
 
 
 def build_line_starts(source):
@@ -257,7 +310,7 @@ def analyze_rust_file(file_path):
     line_starts = build_line_starts(source)
     unsafe_lines = set()
 
-    for start_index, end_index in intervals:
+    for start_index, end_index, _kind in intervals:
         start_line = index_to_line(line_starts, start_index)
         end_line = index_to_line(line_starts, end_index)
         unsafe_lines.update(range(start_line, end_line + 1))
@@ -265,7 +318,7 @@ def analyze_rust_file(file_path):
     return {
         "unsafe_lines": len(unsafe_lines),
         "all_lines": total_lines,
-        "unsafe_blocks": len(intervals),
+        "unsafe_blocks": sum(1 for _start, _end, kind in intervals if kind == "block"),
         "unsafe_functions": unsafe_function_count,
     }
 
@@ -308,11 +361,13 @@ def print_metrics(label, metrics):
 def main():
     args = parse_args()
     root_dir = Path(__file__).resolve().parent
-    project_root = root_dir / "src" / args.project_name
-    rust_dir = project_root 
-    # rust_dir = project_root / "rust"
-    rust_wip_dir = project_root 
-    # rust_wip_dir = project_root / "rust_WIP"
+    project_root = Path(args.project_path)
+    if not project_root.exists():
+        project_root = root_dir / "src" / args.project_path
+    # rust_dir = project_root 
+    rust_dir = project_root / "rust"
+    # rust_wip_dir = project_root 
+    rust_wip_dir = project_root / "rust_WIP"
     output_path = project_root / "unsafe_metrics.json"
 
     if not project_root.exists():
@@ -331,7 +386,7 @@ def main():
     rust_wip_metrics = analyze_rust_directory(rust_wip_dir)
 
     output = {
-        "project": args.project_name,
+        "project": args.project_path,
         "json_path": str(output_path),
         "rust": rust_metrics,
         "rust_WIP": rust_wip_metrics,
@@ -339,7 +394,7 @@ def main():
 
     output_path.write_text(json.dumps(output, indent=4))
 
-    print(f"project: {args.project_name}")
+    print(f"project: {args.project_path}")
     print_metrics("rust", rust_metrics)
     print()
     print_metrics("rust_WIP", rust_wip_metrics)
