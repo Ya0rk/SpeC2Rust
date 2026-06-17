@@ -127,6 +127,10 @@ class RustRepairAgent:
 
         self.use_macro_agent = False
 
+        self.spec_context_enabled = True
+
+        self._context_rejection_feedback: List[str] = []
+
 
 
     def _set_request_label(self, label: str):
@@ -968,7 +972,10 @@ class RustRepairAgent:
         c_docs_path: str = "",
         use_pointer_agent: bool = False,
         use_macro_agent: bool = False,
+        spec_context_enabled: bool = True,
     ) -> None:
+
+        self.spec_context_enabled = bool(spec_context_enabled)
 
         self.c_project_path = str(Path(c_project_path).resolve()) if c_project_path and os.path.isdir(c_project_path) else ""
 
@@ -977,6 +984,16 @@ class RustRepairAgent:
         self.use_pointer_agent = bool(use_pointer_agent)
 
         self.use_macro_agent = bool(use_macro_agent)
+
+        if not self.spec_context_enabled:
+
+            self.c_project_path = ""
+
+            self.c_docs_path = ""
+
+            self.use_pointer_agent = False
+
+            self.use_macro_agent = False
 
 
 
@@ -1015,6 +1032,10 @@ class RustRepairAgent:
         if kind != "spec":
 
             return True
+
+        if not self.spec_context_enabled:
+
+            return False
 
         normalized = (rel_path or "").replace("\\", "/").lower()
 
@@ -1071,6 +1092,28 @@ class RustRepairAgent:
             kind = "rust"
 
         return kind, path
+
+
+
+    def _raw_test_context_disabled(self, kind: str, rel_path: str) -> bool:
+
+        normalized = (rel_path or "").replace("\\", "/").lower().lstrip("/")
+
+        if not normalized:
+
+            return False
+
+        if kind != "rust":
+
+            return False
+
+        if normalized.startswith(("test/", "tests/")) or "/test/" in f"/{normalized}" or "/tests/" in f"/{normalized}":
+
+            return True
+
+        base = os.path.basename(normalized)
+
+        return base.endswith((".sh", ".bash", ".out", ".err", ".log"))
 
 
 
@@ -1587,7 +1630,6 @@ Error organization context:
 """
 
         optional_evidence_block = self._optional_evidence_protocol()
-
         return f"""You are performing Rust compile-repair diagnosis. Do not output code yet.
 
 
@@ -1755,6 +1797,22 @@ Return JSON only, in the following object format:
                 continue
 
             seen.add(key)
+
+            if self._raw_test_context_disabled(kind, path):
+
+                self._context_rejection_feedback.append(
+                    f"read {kind}:{path} was rejected by the ablation setting; use stdout/stderr only for test context"
+                )
+
+                continue
+
+            if not self.spec_context_enabled and kind in {"c", "spec"}:
+
+                self._context_rejection_feedback.append(
+                    f"read {kind}:{path} was rejected by the ablation setting"
+                )
+
+                continue
 
             if mode == "line_range" and isinstance(start_line, int) and isinstance(end_line, int):
 
@@ -1973,6 +2031,22 @@ Return JSON only, in the following object format:
                 continue
 
             seen.add(key)
+
+            if kind == "rust" and self._raw_test_context_disabled(kind, path_glob or query):
+
+                self._context_rejection_feedback.append(
+                    f"search {kind}:{query} was rejected by the ablation setting for test material; use stdout/stderr only for test context"
+                )
+
+                continue
+
+            if not self.spec_context_enabled and kind in {"c", "spec"}:
+
+                self._context_rejection_feedback.append(
+                    f"search {kind}:{query} was rejected by the ablation setting"
+                )
+
+                continue
 
 
 
@@ -2314,6 +2388,29 @@ Error organization context:
 
 """
 
+        rejection_block = ""
+
+        if self._context_rejection_feedback:
+
+            rejected = "\n".join(f"- {item}" for item in dict.fromkeys(self._context_rejection_feedback))
+
+            rejection_block = f"""
+
+System context refusal warning:
+
+```text
+
+The following context requests from the previous turn were intentionally refused for this ablation run:
+{rejected}
+
+Do not retry C source, c_docs, spec, pointer, macro, or test material reads with a different function, file, path, or range. Use only compiler diagnostics, stdout/stderr, current Rust files, and any already available Rust output.
+
+```
+
+"""
+
+            self._context_rejection_feedback = []
+
         return f"""You are now generating the real repair plan.
 
 
@@ -2335,6 +2432,8 @@ Requirements:
 
 6. If the current materials are insufficient for a safe fix, you may return no edits and instead return more_read_requests or search_requests to read more context.
    If the target file/range is already shown in Read material inventory or the provided materials, do not request it again just to be cautious; edit it.
+   You must have enough context before starting a repair; do not make rushed fixes without sufficient evidence.
+   You must have enough C source, Rust source, compiler output, and related test/script context before acting; if any of these are still missing, request more context and do not return edits.
 
 7. This is the {cycle_index}th action in this repair round. You have already seen the latest compile result at this moment.
 
@@ -2379,6 +2478,8 @@ Diagnosis plan:
 {summary_block}
 
 {organizer_block}
+
+{rejection_block}
 
 
 

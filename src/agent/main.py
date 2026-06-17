@@ -45,18 +45,26 @@ def c_docs_writable(args) -> bool:
 
 
 def should_run_primary_c_analysis(args) -> bool:
+    if getattr(args, "use_contextual_rust_agent", False):
+        return False
     return not args.skip_c_analysis and c_docs_writable(args)
 
 
 def should_run_spec_json_stage(args) -> bool:
+    if getattr(args, "use_contextual_rust_agent", False):
+        return False
     return args.use_spec_agent and args.use_spec_json_agent and c_docs_writable(args)
 
 
 def should_run_pointer_stage(args) -> bool:
+    if getattr(args, "use_contextual_rust_agent", False):
+        return False
     return args.use_pointer_agent and not args.use_spec_agent and c_docs_writable(args)
 
 
 def should_run_macro_stage(args) -> bool:
+    if getattr(args, "use_contextual_rust_agent", False):
+        return False
     return args.use_macro_agent and not args.use_spec_agent and c_docs_writable(args)
 
 
@@ -159,6 +167,7 @@ def run_optional_rust_test_agent(args, config: Config, rust_project_path: str):
             "rust_test_agent_prompt_budget_chars",
             PROMPT_MATERIAL_BUDGET_CHARS,
         ),
+        allow_c_materials=not getattr(args, "use_contextual_rust_agent", False),
     )
     summary = test_agent.run(
         rust_project_path=rust_project_path,
@@ -205,7 +214,8 @@ def validate_c_project_at_start(args) -> bool:
 
 def selected_rust_agent_mode(args) -> str:
     if getattr(args, "use_contextual_rust_agent", False):
-        return "ContextualRustAgent"
+        mode = "ContextualRustAgent"
+        return f"{mode} (direct C source ablation)"
     if getattr(args, "use_growth_rust_agent", False):
         return "GrowthRustAgent"
     if getattr(args, "use_stable_rust_agent", False):
@@ -237,12 +247,22 @@ def run_optional_rust_repair_agent(
     if error_organizer_agent is not None:
         repair_kwargs["error_organizer_agent"] = error_organizer_agent
     repair_agent = RustRepairAgent(**repair_kwargs)
+    spec_ablation = bool(getattr(args, "use_contextual_rust_agent", False))
     c_docs_path = os.path.join(args.output_dir, "c_docs") if getattr(args, "output_dir", "") else ""
+    c_project_path = getattr(args, "c_project_path", "") or ""
+    use_pointer_agent = getattr(args, "use_pointer_agent", False)
+    use_macro_agent = getattr(args, "use_macro_agent", False)
+    if spec_ablation:
+        c_docs_path = ""
+        c_project_path = ""
+        use_pointer_agent = False
+        use_macro_agent = False
     repair_agent.configure_context_sources(
-        c_project_path=getattr(args, "c_project_path", "") or "",
+        c_project_path=c_project_path,
         c_docs_path=c_docs_path,
-        use_pointer_agent=getattr(args, "use_pointer_agent", False),
-        use_macro_agent=getattr(args, "use_macro_agent", False),
+        use_pointer_agent=use_pointer_agent,
+        use_macro_agent=use_macro_agent,
+        spec_context_enabled=not spec_ablation,
     )
     result = repair_agent.repair_project(
         project_path=rust_project_path,
@@ -462,7 +482,10 @@ def main():
         prYellow(f"配置文件：{args.config_file}")
         prYellow(f"模型名称：{config.model_name}")
         prYellow(f"远程模型：{config.api_model or '(default)'}")
-        prYellow(f"分析路径：{'SpecAgent' if args.use_spec_agent else 'CDocAgent'}")
+        analysis_mode = 'SpecAgent' if args.use_spec_agent else 'CDocAgent'
+        if args.use_contextual_rust_agent:
+            analysis_mode = "Direct C source (ContextualRustAgent ablation)"
+        prYellow(f"分析路径：{analysis_mode}")
         rust_agent_mode = selected_rust_agent_mode(args)
         prYellow(f"代码生成路径：{rust_agent_mode}")
         prYellow(f"Rust 入口策略：{args.rust_entry_kind}")
@@ -597,18 +620,26 @@ def main():
                 if os.path.exists(doc_path):
                     doc_paths.append(doc_path)
 
+        if args.use_contextual_rust_agent:
+            doc_paths = []
+
         if args.use_pointer_agent and not args.use_spec_agent and os.path.exists(pointer_markdown_path):
             doc_paths.append(pointer_markdown_path)
         if args.use_macro_agent and not args.use_spec_agent and os.path.exists(macro_markdown_path):
             doc_paths.append(macro_markdown_path)
+        if args.use_contextual_rust_agent:
+            doc_paths = []
 
-        if not doc_paths:
+        if not doc_paths and not args.use_contextual_rust_agent:
             prRed("\n✗ 错误：未找到 C 项目文档")
             return 1
 
-        prGreen(f"\n✓ 找到 {len(doc_paths)} 个文档文件")
-        for doc_path in doc_paths:
-            prGreen(f"  - 文档输入：{doc_path}")
+        if args.use_contextual_rust_agent and not doc_paths:
+            prYellow("\n⊘ ContextualRustAgent 消融模式：跳过 c_docs 文档输入，直接使用 C 源码上下文")
+        else:
+            prGreen(f"\n✓ 找到 {len(doc_paths)} 个文档文件")
+            for doc_path in doc_paths:
+                prGreen(f"  - 文档输入：{doc_path}")
 
         source_json_path = ""
         if args.c_project_path:

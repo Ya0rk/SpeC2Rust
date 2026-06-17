@@ -8,6 +8,10 @@ from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from agent.rust_agent import RustAgent
 from agent.alternatives.contextual_spec_agent import ContextualSpecAgent
+from agent.alternatives.rust_generation_spec_agent import (
+    RustGenerationSpecAgent,
+    RustGenerationSpecPrompts,
+)
 from config.config import Config
 
 
@@ -947,6 +951,8 @@ class ContextualRustAgent(RustAgent):
         super().__init__(config=config)
         self.spec_index = SpecDocumentIndex()
         self.spec_context_agent: Optional[ContextualSpecAgent] = None
+        self.rust_context_agent: Optional[RustGenerationSpecAgent] = None
+        self.spec_ablation_enabled = True
         self.registry = RustProjectRegistry()
         self.contextual_plan: List[PlannedFile] = []
         self._plan_by_path: Dict[str, PlannedFile] = {}
@@ -989,35 +995,155 @@ class ContextualRustAgent(RustAgent):
         if hasattr(self.llm, "set_request_label"):
             self.llm.set_request_label(label)
 
+    def configure_source_context(self, c_project_path: str = "", source_json_path: str = ""):
+        super().configure_source_context(c_project_path=c_project_path, source_json_path=source_json_path)
+        self.translation_contract = {}
+        self.allowed_rust_files = []
+        self.allowed_dependencies = set()
+        self.dependency_policy = ""
+        if not self.source_records and self.source_project_path:
+            self.source_records = self._scan_c_project_source_records(self.source_project_path)
+            self.source_context_summary = self._build_source_context_summary()
+            self.tool_interface_constraints = self._build_tool_interface_constraints()
+            self.source_interface_summary = self._build_source_interface_summary()
+            if self.source_records:
+                print(f"已直接扫描 C 源码：{len(self.source_records)} 条源码记录")
+
+    def _scan_c_project_source_records(self, project_path: str) -> List[Dict]:
+        root = Path(project_path)
+        if not root.is_dir():
+            return []
+
+        records: List[Dict] = []
+        for path in sorted(root.rglob("*")):
+            if not path.is_file() or path.suffix.lower() not in {".c", ".h"}:
+                continue
+            rel_path = path.relative_to(root).as_posix()
+            try:
+                text = path.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            records.extend(self._extract_c_function_records(rel_path, text))
+            if not any(record.get("file") == rel_path for record in records):
+                records.append(
+                    {
+                        "name": os.path.splitext(os.path.basename(rel_path))[0],
+                        "file": rel_path,
+                        "span": f"{rel_path}:1:1:{max(1, len(text.splitlines()))}:1",
+                        "source": text,
+                        "num_lines": len(text.splitlines()),
+                        "calls": [],
+                        "func_defid": f"{rel_path}:{os.path.splitext(os.path.basename(rel_path))[0]}",
+                    }
+                )
+        return records
+
+    def _extract_c_function_records(self, rel_path: str, text: str) -> List[Dict]:
+        records: List[Dict] = []
+        pattern = re.compile(
+            r"(?m)^[A-Za-z_][A-Za-z0-9_\s\*\(\),]*?\b(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*\([^;{}]*\)\s*\{"
+        )
+        for match in pattern.finditer(text or ""):
+            name = match.group("name")
+            if name in {"if", "for", "while", "switch"}:
+                continue
+            open_index = text.find("{", match.start(), match.end())
+            close_index = self._find_matching_c_brace(text, open_index)
+            if close_index == -1:
+                continue
+            start = self._function_start_index(text, match.start())
+            source = text[start: close_index + 1].strip()
+            start_line = text.count("\n", 0, start) + 1
+            end_line = text.count("\n", 0, close_index) + 1
+            records.append(
+                {
+                    "name": name,
+                    "file": rel_path,
+                    "span": f"{rel_path}:{start_line}:1:{end_line}:1",
+                    "source": source,
+                    "num_lines": max(1, end_line - start_line + 1),
+                    "calls": [],
+                    "func_defid": f"{rel_path}:{name}",
+                }
+            )
+        return records
+
+    @staticmethod
+    def _function_start_index(text: str, match_start: int) -> int:
+        previous_blank = text.rfind("\n\n", 0, match_start)
+        if previous_blank == -1:
+            return max(0, text.rfind("\n", 0, match_start) + 1)
+        return previous_blank + 2
+
+    @staticmethod
+    def _find_matching_c_brace(text: str, open_index: int) -> int:
+        if open_index < 0:
+            return -1
+        depth = 0
+        for index in range(open_index, len(text)):
+            char = text[index]
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    return index
+        return -1
+
+    def _context_provider(self) -> RustGenerationSpecAgent:
+        if self.rust_context_agent is None:
+            self.rust_context_agent = RustGenerationSpecAgent(
+                doc_contents={},
+                source_records=self.source_records,
+                translation_contract=self.translation_contract,
+                config=self.config,
+            )
+        return self.rust_context_agent
+
     def _spec_agent(self) -> ContextualSpecAgent:
         if self.spec_context_agent is None:
             self.spec_context_agent = ContextualSpecAgent(config=self.config, enable_c_pipeline=False)
         return self.spec_context_agent
 
+    def _ablation_prompt_agent(self) -> RustGenerationSpecPrompts:
+        return RustGenerationSpecPrompts
+
     def _has_spec_context(self) -> bool:
+        if self.spec_ablation_enabled:
+            return False
         return self.spec_context_agent is not None
 
     def _spec_overview(self, max_chars: int = 12000) -> str:
+        if self.spec_ablation_enabled:
+            return self._context_provider().overview(max_chars=max_chars)
         if not self.spec_context_agent:
             return self.spec_index.overview(max_chars=max_chars)
         return self.spec_context_agent.rust_context_overview(max_chars=max_chars)
 
     def _spec_context_for_query(self, query: str, max_chars: int = 18000) -> str:
+        if self.spec_ablation_enabled:
+            return self._context_provider().context_for_query(query, max_chars=max_chars)
         if not self.spec_context_agent:
             return self.spec_index.select_for_query(query, max_slices=5, max_chars=max_chars)
         return self.spec_context_agent.rust_context_for_query(query, max_chars=max_chars)
 
     def _spec_build_file_plan(self, allowed_files: Sequence[str]) -> List[object]:
+        if self.spec_ablation_enabled:
+            return self._context_provider().build_file_plan(allowed_files=allowed_files)
         if not self.spec_context_agent:
             return []
         return self.spec_context_agent.build_rust_file_plan(allowed_files=allowed_files)
 
     def _spec_infer_candidate_files(self) -> List[str]:
+        if self.spec_ablation_enabled:
+            return self._context_provider().infer_candidate_files()
         if not self.spec_context_agent:
             return self.spec_index.infer_candidate_rust_files()
         return self.spec_context_agent.infer_candidate_rust_files()
 
     def _spec_context_for_file(self, planned: PlannedFile) -> str:
+        if self.spec_ablation_enabled:
+            return self._context_provider().context_for_file(planned)
         if not self.spec_context_agent:
             return self.spec_index.select_for_file(
                 planned.path,
@@ -1173,12 +1299,23 @@ class ContextualRustAgent(RustAgent):
             parts.append("Original C external interface facts:\n" + self.source_interface_summary)
         if self.tool_interface_constraints:
             parts.append("Tool/CLI interface preservation constraints:\n" + self.tool_interface_constraints)
+        if self.spec_ablation_enabled and self.source_context_summary:
+            parts.append("Original C source summary:\n" + self.source_context_summary)
+        if self.spec_ablation_enabled and self.rust_context_agent:
+            overview = self._spec_overview()
+            parts.append("Available direct C source index (index only, not full text):\n" + overview)
         if self.spec_index.slices:
             overview = self._spec_overview()
             parts.append("Available spec document index (index only, not full text):\n" + overview)
         return "\n\n".join(part for part in parts if part).strip()
 
     def _rust_rewrite_contract(self, planned: Optional[PlannedFile] = None) -> str:
+        if self.spec_ablation_enabled:
+            del planned
+            return (
+                "Ablation rewrite guidance: translate the observed C source into Rust as directly as possible. "
+                "Use the C source as the main evidence; no spec-derived migration contract is available."
+            )
         return self._spec_agent().rust_rewrite_contract(planned)
 
     def _read_llm(self, messages: List[Dict[str, str]], label: str) -> str:
@@ -1207,6 +1344,14 @@ class ContextualRustAgent(RustAgent):
                 return last_reply
             materials = self._materialize_read_requests(read_requests)
             messages.append({"role": "assistant", "content": last_reply})
+            if self.spec_ablation_enabled:
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": self._ablation_prompt_agent().read_materials_followup(materials),
+                    }
+                )
+                continue
             messages.append(
                 {
                     "role": "user",
@@ -1260,7 +1405,9 @@ class ContextualRustAgent(RustAgent):
         for request in read_requests:
             kind = (request.get("kind") or "").lower()
             query = request.get("query") or ""
-            if kind in {"spec", "doc", "docs"}:
+            if self.spec_ablation_enabled and kind in {"spec", "doc", "docs"}:
+                content = "Spec/doc context is disabled in this ablation run. Request C source instead."
+            elif kind in {"spec", "doc", "docs"}:
                 content = self._spec_context_for_query(query, max_chars=per_request_budget)
             elif kind in {"source", "c", "c_source"}:
                 content = self._read_source_material(query, max_chars=per_request_budget)
@@ -1393,6 +1540,13 @@ class ContextualRustAgent(RustAgent):
         return None
 
     def _request_contextual_plan(self) -> List[PlannedFile]:
+        if self.spec_ablation_enabled:
+            fallback_files = self._fallback_file_list()
+            plan = [self._fallback_planned_file(path) for path in fallback_files]
+            plan = self._apply_entry_policy_to_plan(plan)
+            self._plan_by_path = {item.path: item for item in plan}
+            return plan
+
         if self._has_spec_context():
             fallback_files = self._fallback_file_list()
             file_specs = self._spec_build_file_plan(allowed_files=fallback_files)
@@ -1525,6 +1679,40 @@ class ContextualRustAgent(RustAgent):
     def _fallback_planned_file(self, path: str) -> PlannedFile:
         normalized = path.replace("\\", "/")
         stem = os.path.splitext(os.path.basename(normalized))[0]
+        if self.spec_ablation_enabled:
+            role = "Rust project file"
+            owns: List[str] = []
+            spec_queries: List[str] = []
+            source_files: List[str] = []
+            source_functions: List[str] = []
+            if normalized == "Cargo.toml":
+                role = "Cargo package manifest; locally generate the minimal configuration"
+            elif normalized == "README.md":
+                role = "Project README"
+            elif normalized == "src/main.rs":
+                role = "Executable crate entry point responsible for the CLI/main flow and for calling internal modules; do not re-export it from lib.rs as a library module"
+            elif normalized == "src/lib.rs":
+                role = "Crate entry point, locally rebuilt from generated modules"
+            elif normalized.endswith(".rs"):
+                role = f"Direct translation target for C source file `{stem}.c`"
+                for record in self.source_records:
+                    source_file = str(record.get("file", "")).replace("\\", "/")
+                    if os.path.splitext(os.path.basename(source_file))[0] != stem:
+                        continue
+                    if source_file not in source_files:
+                        source_files.append(source_file)
+                    name = str(record.get("name", "")).strip()
+                    if name and name not in source_functions:
+                        source_functions.append(name)
+            return PlannedFile(
+                path=normalized,
+                role=role,
+                owns=owns,
+                spec_queries=spec_queries,
+                source_files=source_files,
+                source_functions=source_functions,
+            )
+
         role = "Rust project file"
         owns: List[str] = []
         spec_queries = [stem]
@@ -1604,6 +1792,11 @@ class ContextualRustAgent(RustAgent):
         return "\n".join(lines)
 
     def _generate_contextual_project_structure(self) -> str:
+        if self.spec_ablation_enabled:
+            print("消融模式：跳过 LLM 项目结构设计")
+            files = "\n".join(f"- {item.path}" for item in self.contextual_plan)
+            return f"Direct C-source file mapping only:\n{files}"
+
         print("生成项目结构设计...")
         plan_summary = self._format_plan_summary()
         static_context = self._build_static_project_context()
@@ -1626,6 +1819,11 @@ class ContextualRustAgent(RustAgent):
         return structure
 
     def _generate_contextual_implementation_plan(self, project_structure: str) -> str:
+        if self.spec_ablation_enabled:
+            del project_structure
+            print("消融模式：跳过 LLM 实现计划")
+            return "Generate files in the direct C-source mapping order without spec-derived planning."
+
         print("生成实现计划...")
         plan_summary = self._format_plan_summary()
         planned_files = [item.path for item in self.contextual_plan]
@@ -1701,6 +1899,8 @@ class ContextualRustAgent(RustAgent):
             if current_path in item_deps:
                 reverse_deps.add(item.path.replace("\\", "/"))
         relevant_paths = {current_path} | dep_paths | reverse_deps
+        if self.spec_ablation_enabled:
+            relevant_paths = {current_path}
 
         lines = []
         for index, item in enumerate(self.contextual_plan, start=1):
@@ -1727,6 +1927,8 @@ class ContextualRustAgent(RustAgent):
             if item_path in relevant_paths:
                 continue
             owns_hint = f" owns: {', '.join(item.owns)}" if item.owns else ""
+            if self.spec_ablation_enabled:
+                owns_hint = ""
             global_index.append(f"  - {item.path}{owns_hint}")
         if len(global_index) > 1:
             lines.extend(global_index)
@@ -1741,6 +1943,8 @@ class ContextualRustAgent(RustAgent):
         """从 translation_contract 和 doc_contents 构建 C 文件→模块 和 模块→spec文档 的索引。"""
         self._cfile_to_module = {}
         self._module_spec_docs = {}
+        if self.spec_ablation_enabled:
+            return
 
         module_units = (self.translation_contract or {}).get("module_units", [])
         module_dir_by_name: Dict[str, str] = {}
@@ -1812,6 +2016,12 @@ class ContextualRustAgent(RustAgent):
     def _build_targeted_registry_summary(self, planned: PlannedFile) -> str:
         """只保留当前文件依赖的文件的符号，减少无关上下文。
         末尾追加轻量全局类型索引，避免 depends_on 不完整时重复定义符号。"""
+        if self.spec_ablation_enabled:
+            del planned
+            if not self.registry.files:
+                return "(no generated Rust files yet)"
+            return "\n".join(f"- {path}" for path in sorted(self.registry.files.keys()))
+
         dep_paths = {dep.replace("\\", "/") for dep in (planned.depends_on or [])}
         if not dep_paths:
             return self.registry.summary()
@@ -1963,6 +2173,30 @@ class ContextualRustAgent(RustAgent):
         source_context = ""
         if planned.path.endswith(".rs"):
             source_context = self._build_targeted_source_context(planned)
+        if self.spec_ablation_enabled:
+            return f"""Generate the final content of `{planned.path}` from the C source evidence below.
+
+Ablation constraints:
+- The spec module, migration contract, structured owns/dependencies, and reference-table guardrails are disabled.
+- Follow the C source directly and keep this file self-contained when practical.
+- Output only the file content and append `<CGR_DONE>` when complete.
+- If required C source is missing, request it with `<CGR_READ>`.
+
+All planned files:
+{', '.join(planned_files)}
+
+Current file mapping:
+- target: {planned.path}
+- role: {planned.role}
+- source_files: {', '.join(planned.source_files) or '(none)'}
+- source_functions: {', '.join(planned.source_functions) or '(none)'}
+
+Already generated Rust files:
+{self._build_targeted_registry_summary(planned)}
+
+Relevant C source:
+{source_context or '(no matching source found; use <CGR_READ> to request source)'}
+"""
         return self._spec_agent().rust_file_generation_prompt(
             planned=planned,
             planned_files=planned_files,
@@ -2050,8 +2284,11 @@ class ContextualRustAgent(RustAgent):
             return True, content
 
         code_lang = "" if normalized.lower() == "readme.md" else "rust"
+        file_generation_system_prompt = self._spec_agent().rust_file_generation_system_prompt()
+        if self.spec_ablation_enabled:
+            file_generation_system_prompt = self._ablation_prompt_agent().file_generation_system_prompt()
         content = self._generate_file_with_continuation(
-            system_prompt=self._spec_agent().rust_file_generation_system_prompt(),
+            system_prompt=file_generation_system_prompt,
             user_prompt=self._build_file_prompt(planned, planned_files),
             label=f"ContextualRustAgent 代码生成 {planned.path}",
             code_lang=code_lang,
@@ -2123,6 +2360,9 @@ class ContextualRustAgent(RustAgent):
         planned: Optional[PlannedFile] = None,
     ) -> List[str]:
         findings = []
+        if self.spec_ablation_enabled:
+            del rel_path, content, planned_files, planned
+            return _dedupe_keep_order(findings)
         findings.extend(self._lint_generated_code_against_contract(rel_path, content))
         if rel_path.endswith(".rs"):
             findings.extend(self._lint_rust_style_against_c_leak(rel_path, content, planned))
@@ -2243,6 +2483,23 @@ class ContextualRustAgent(RustAgent):
         content: str,
         findings: Sequence[str],
     ) -> str:
+        if self.spec_ablation_enabled:
+            prompt = self._ablation_prompt_agent().repair_prompt(
+                planned=planned,
+                findings=findings,
+                registry_summary=self._build_targeted_registry_summary(planned),
+                plan_summary=self._build_targeted_plan_summary(planned),
+                current_content=content,
+            )
+            response = self._chat_with_context_requests(
+                system_prompt=self._ablation_prompt_agent().repair_system_prompt(),
+                user_prompt=prompt,
+                label=f"ContextualRustAgent 边界修复(整文件) {planned.path}",
+                max_read_rounds=2,
+            )
+            repaired, _ = self._extract_done_marker(response)
+            return self._extract_generated_content(repaired, code_lang="" if planned.path.lower() == "readme.md" else "rust")
+
         prompt = self._spec_agent().rust_repair_prompt(
             planned=planned,
             findings=findings,
@@ -2484,6 +2741,28 @@ Return JSON:
         content: str,
         findings: Sequence[str],
     ) -> Tuple[str, bool, str]:
+        if self.spec_ablation_enabled:
+            prompt = self._ablation_prompt_agent().force_write_prompt(
+                planned=planned,
+                findings=findings,
+                registry_summary=self._build_targeted_registry_summary(planned),
+                plan_summary=self._build_targeted_plan_summary(planned),
+                current_content=content,
+            )
+            response = self._chat_with_context_requests(
+                system_prompt=self._ablation_prompt_agent().force_write_system_prompt(),
+                user_prompt=prompt,
+                label=f"ContextualRustAgent 强制写入确认 {planned.path}",
+                max_read_rounds=2,
+            )
+            response, _ = self._extract_done_marker(response)
+            response, force_write, reason = self._extract_force_write_marker(response)
+            code_lang = "" if planned.path.lower() == "readme.md" else "rust"
+            override = self._extract_generated_content(response, code_lang=code_lang)
+            if force_write and not override.strip():
+                override = content
+            return override, force_write, reason
+
         prompt = self._spec_agent().rust_force_write_prompt(
             planned=planned,
             findings=findings,
@@ -2659,6 +2938,15 @@ Return JSON:
             source_records=self.source_records,
             translation_contract=self.translation_contract,
         )
+        if self.spec_ablation_enabled:
+            self.spec_index = SpecDocumentIndex({})
+            self.spec_context_agent = None
+            self.rust_context_agent = RustGenerationSpecAgent(
+                doc_contents={},
+                source_records=self.source_records,
+                translation_contract=self.translation_contract,
+                config=self.config,
+            )
         self._build_module_index()
 
         # 1. 程序化推导初始文件计划
@@ -2717,7 +3005,7 @@ Return JSON:
         source_json_path: str = "",
     ) -> bool:
         print("=" * 60)
-        print("开始使用 ContextualRustAgent 根据文档生成 Rust 项目")
+        print("开始使用 ContextualRustAgent 消融路径根据 C 源码生成 Rust 项目")
         print("=" * 60)
         self.create_rust_project(project_name, output_dir)
         self.load_documents(doc_paths)
@@ -2727,6 +3015,6 @@ Return JSON:
             print(f"已加载源码 JSON：{self.source_json_path}")
         self.generate_code()
         print("=" * 60)
-        print("ContextualRustAgent Rust 项目生成完成")
+        print("ContextualRustAgent 消融路径 Rust 项目生成完成")
         print("=" * 60)
         return True

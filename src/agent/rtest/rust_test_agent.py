@@ -95,6 +95,7 @@ class RustTestAgent:
         enable_log_agent: bool = False,
         max_debug_probes: int = 6,
         prompt_budget_chars: int = PROMPT_MATERIAL_BUDGET_CHARS,
+        allow_c_materials: bool = True,
     ):
         self.config = config or Config()
         self.llm = Model(self.config)
@@ -108,6 +109,7 @@ class RustTestAgent:
         self.enable_log_agent = enable_log_agent
         self.max_debug_probes = max(1, max_debug_probes)
         self.prompt_budget_chars = max(1, int(prompt_budget_chars or PROMPT_MATERIAL_BUDGET_CHARS))
+        self.allow_c_materials = bool(allow_c_materials)
 
         # 复用 RustRepairAgent 的本地清洗 / 结构化编辑能力，通过 adapter 访问
         # 它的私有方法，避免耦合未来 RustRepairAgent 的重构。
@@ -788,6 +790,9 @@ class RustTestAgent:
         compiler stderr, wrapper stdout). Waiting for the LLM to request those
         files wastes rounds and encourages speculative generator rewrites.
         """
+        if not self.allow_c_materials:
+            return
+
         run_dir = self._run_dir_for_case(failing_case)
         if not run_dir.is_dir():
             return
@@ -861,6 +866,20 @@ class RustTestAgent:
     def _read_runtime_evidence(failing_case: TestCaseResult) -> Dict[str, object]:
         return RuntimeProbeService.read_runtime_evidence(failing_case)
 
+    @staticmethod
+    def _stdout_stderr_only_case(failing_case: TestCaseResult) -> TestCaseResult:
+        return TestCaseResult(
+            name="stdout-stderr-only",
+            script_path="",
+            passed=failing_case.passed,
+            exit_code=failing_case.exit_code,
+            stdout=failing_case.stdout,
+            stderr=failing_case.stderr,
+            duration_seconds=failing_case.duration_seconds,
+            trace="",
+            run_dir=failing_case.run_dir,
+        )
+
     def _execute_debug_probe(
         self,
         *,
@@ -933,7 +952,7 @@ class RustTestAgent:
             cmd for idx, cmd, _raw in tested_commands if idx < current_idx
         )
         previous = [cmd for cmd in previous if cmd != current_cmd][-8:]
-        script_matches = _find_matching_script_lines(
+        script_matches = [] if not script_content else _find_matching_script_lines(
             script_content,
             current_cmd,
             bin_name,
@@ -1024,6 +1043,10 @@ class RustTestAgent:
         flags = extract_test_flags(failing_case.name, script_content)
         keywords = extract_test_keywords(failing_case.name, script_content)
         expected_outputs = extract_expected_outputs(script_content)
+        if not self.allow_c_materials:
+            flags = []
+            keywords = []
+            expected_outputs = []
         if flags:
             print(f"  [rtest] 推断被测 flag：{', '.join(flags)}")
         if keywords:
@@ -1033,6 +1056,8 @@ class RustTestAgent:
 
         # 首轮主动注入
         for rec in seed_c_sources(flags, source_index, keywords=keywords, limit=SEED_C_LIMIT):
+            if not self.allow_c_materials:
+                continue
             if material.add_c_record(rec):
                 print(f"  [rtest] 首轮注入 C 源码：{rec.get('name')} [{rec.get('file')}]")
         for rel, text in seed_rust_files(
@@ -1173,9 +1198,28 @@ class RustTestAgent:
         runtime_evidence = (
             self._read_runtime_evidence(failing_case) if self.enable_log_agent else {}
         )
-        prompt = build_repair_prompt(
-            failing_case=failing_case,
+        prompt_case = failing_case
+        prompt_script_content = script_content
+        prompt_flags = flags
+        prompt_keywords = keywords
+        prompt_expected_outputs = expected_outputs
+        prompt_subcase_context = self._trace_subcase_context(
+            failing_case,
             script_content=script_content,
+            bin_name=bin_name,
+        )
+        prompt_test_artifact_index = self._list_test_artifacts(failing_case)
+        if not self.allow_c_materials:
+            prompt_case = self._stdout_stderr_only_case(failing_case)
+            prompt_script_content = ""
+            prompt_flags = []
+            prompt_keywords = []
+            prompt_expected_outputs = []
+            prompt_subcase_context = ""
+            prompt_test_artifact_index = ""
+        prompt = build_repair_prompt(
+            failing_case=prompt_case,
+            script_content=prompt_script_content,
             project_structure=project_structure,
             rust_overview=rust_overview,
             material=material,
@@ -1184,17 +1228,13 @@ class RustTestAgent:
             attempt=attempt,
             max_attempts=self.max_repair_iterations,
             last_build_error=state.last_build_error,
-            flags=flags,
-            keywords=keywords,
-            expected_outputs=expected_outputs,
+            flags=prompt_flags,
+            keywords=prompt_keywords,
+            expected_outputs=prompt_expected_outputs,
             regression_warning=state.regression_warning,
-            focused_failure=self._focused_failure_block(failing_case),
-            subcase_context=self._trace_subcase_context(
-                failing_case,
-                script_content=script_content,
-                bin_name=bin_name,
-            ),
-            test_artifact_index=self._list_test_artifacts(failing_case),
+            focused_failure=self._focused_failure_block(prompt_case),
+            subcase_context=prompt_subcase_context,
+            test_artifact_index=prompt_test_artifact_index,
             material_request_feedback=state.material_request_feedback,
             runtime_evidence=runtime_evidence,
             log_agent_enabled=self.enable_log_agent,
@@ -1509,6 +1549,10 @@ class RustTestAgent:
             query = str(
                 request.get("query") or request.get("path") or request.get("file") or ""
             ).strip()
+            request_label = _format_c_request_label(request)
+            if not self.allow_c_materials:
+                result.unavailable.append(f"c:{request_label} (C source material disabled by ablation)")
+                continue
             start_line = request.get("start_line")
             end_line = request.get("end_line")
             if kind == "file" and mode in {"line_range", "range"}:
@@ -1537,7 +1581,6 @@ class RustTestAgent:
                         f"{canonical} ({full.stat().st_size} bytes <= {SMALL_FILE_WHOLE_FILE_CHARS})"
                     )
             rec = source_index.fulfill_request(request)
-            request_label = _format_c_request_label(request)
             if not rec:
                 result.unavailable.append(f"c:{request_label}")
                 continue
@@ -1716,6 +1759,9 @@ class RustTestAgent:
                 end_line = None
             rel = rel.strip().lstrip("/")
             if not rel:
+                continue
+            if not self.allow_c_materials:
+                result.unavailable.append(f"test:{rel} (test material disabled by ablation; use stdout/stderr only)")
                 continue
             if (
                 mode == "line_range"
@@ -2308,12 +2354,36 @@ def _format_material_request_feedback(result: _MaterialRequestResult) -> str:
             "Use these materials directly from the provided C/Rust/test blocks; repeating the same read request will not add more context."
         )
     if result.unavailable:
-        lines.append("Unreadable or unmatched material requests:")
-        for item in _unique_preserving_order(result.unavailable)[:16]:
-            lines.append(f"- {item}")
-        lines.append(
-            "If this evidence is still needed, adjust the path or line range based on the source index/material table."
-        )
+        unavailable = _unique_preserving_order(result.unavailable)
+        ablation_rejections = [
+            item for item in unavailable
+            if "disabled by ablation" in item
+        ]
+        ordinary_unavailable = [
+            item for item in unavailable
+            if "disabled by ablation" not in item
+        ]
+        if ablation_rejections:
+            lines.append("Material requests rejected by the ablation setting:")
+            for item in ablation_rejections[:16]:
+                lines.append(f"- {item}")
+            lines.append(
+                "These requests were intentionally refused for this experiment. Do not retry refused C source or test material reads with a different function, file, path, or range; use stdout/stderr plus the current Rust files and outputs instead."
+            )
+        if not ablation_rejections:
+            lines.append("Unreadable or unmatched material requests:")
+            for item in _unique_preserving_order(result.unavailable)[:16]:
+                lines.append(f"- {item}")
+            lines.append(
+                "If this evidence is still needed, adjust the path or line range based on the source index/material table."
+            )
+        elif ordinary_unavailable:
+            lines.append("Unreadable or unmatched material requests:")
+            for item in ordinary_unavailable[:16]:
+                lines.append(f"- {item}")
+            lines.append(
+                "If this evidence is still needed, adjust the path or line range based on the source index/material table."
+            )
     if not result.added and not result.already_available and not result.unavailable:
         lines.append(
             "No resolver details were available. Use the current material table, request a more precise range, or provide concrete edits."
