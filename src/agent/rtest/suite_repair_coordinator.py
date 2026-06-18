@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Set
+from typing import Dict, List, Set
 
 from .models import TestRunSummary
 from .source_loader import CSourceIndex
@@ -22,6 +22,7 @@ class SuiteRepairContext:
     scripts: List[Path]
     initial_binary_path: str
     max_suite_repair_cycles: int
+    max_case_repair_iterations: int = 20
 
 
 class SuiteRepairCoordinator:
@@ -34,6 +35,7 @@ class SuiteRepairCoordinator:
     def run(self) -> TestRunSummary:
         rust_bin_name = f"{self.context.bin_name}-rust"
         current_summary = self.context.summary
+        case_attempt_counts: Dict[str, int] = {}
         for suite_cycle in range(1, self.context.max_suite_repair_cycles + 1):
             if current_summary.all_passed:
                 return current_summary
@@ -56,12 +58,20 @@ class SuiteRepairCoordinator:
 
                 failing_cases.sort(key=_script_size)
                 case = failing_cases[0]
+                used_attempts = case_attempt_counts.get(case.name, 0)
+                if used_attempts >= self.context.max_case_repair_iterations:
+                    print(
+                        f"[rtest] 跳过 {case.name}：累计修复轮数 {used_attempts}/"
+                        f"{self.context.max_case_repair_iterations} 已达上限"
+                    )
+                    attempted_names.add(case.name)
+                    continue
                 attempted_names.add(case.name)
                 baseline_pass_names: Set[str] = {
                     result.name for result in current_summary.results if result.passed
                 }
                 passed_before = current_summary.passed
-                fixed = self.agent._repair_failing_case(  # noqa: SLF001
+                outcome = self.agent._repair_failing_case(  # noqa: SLF001
                     rust_project_path=self.context.rust_project_path,
                     bin_name=self.context.bin_name,
                     runner=self.context.runner,
@@ -69,7 +79,9 @@ class SuiteRepairCoordinator:
                     source_index=self.context.source_index,
                     failing_case=case,
                     baseline_pass_names=baseline_pass_names,
+                    max_attempts=self.context.max_case_repair_iterations - used_attempts,
                 )
+                case_attempt_counts[case.name] = used_attempts + outcome.attempts_used
 
                 final_binary = self.agent._locate_release_binary(  # noqa: SLF001
                     self.context.rust_project_path, rust_bin_name
@@ -86,10 +98,23 @@ class SuiteRepairCoordinator:
                     result.name == case.name and result.passed
                     for result in current_summary.results
                 )
-                if fixed and case_now_passed and current_summary.passed > passed_before:
+                if outcome.repaired and case_now_passed and current_summary.passed > passed_before:
                     fixed_any = True
                 if current_summary.all_passed:
                     return current_summary
+
+            remaining_actionable = any(
+                not case.passed
+                and case_attempt_counts.get(case.name, 0)
+                < self.context.max_case_repair_iterations
+                for case in current_summary.results
+            )
+            if not remaining_actionable:
+                print(
+                    "[rtest] 所有失败用例都已达到修复上限或无法继续修复，"
+                    "结束套件修复"
+                )
+                return current_summary
 
             if not fixed_any:
                 if suite_cycle < self.context.max_suite_repair_cycles:

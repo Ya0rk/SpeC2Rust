@@ -50,6 +50,13 @@ class TestRunSummary:
         return self.failed == 0 and self.total > 0
 
 
+@dataclass
+class RepairCaseOutcome:
+    repaired: bool
+    attempts_used: int
+    aborted: bool = False
+
+
 def _normalize_failure_material(text: str) -> str:
     """去掉时间戳、长 PATH 和临时路径噪声，让 stall 检测关注真正的失败语义。"""
     normalized = text or ""

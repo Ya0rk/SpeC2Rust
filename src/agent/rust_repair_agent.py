@@ -133,6 +133,28 @@ class RustRepairAgent:
 
 
 
+    def _compile_repair_ablation_prompt_suffix(self) -> str:
+
+        if self.spec_context_enabled:
+
+            return ""
+
+        return """
+
+Additional ablation-mode hard rule:
+
+```text
+Direct C source, c_docs/spec, pointer/macro guidance, test files, and test-run artifacts are unavailable in this run.
+Do not request or search those materials again after they have been refused, including through kind=all.
+This rule overrides any earlier instruction that says to gather C/spec/test context before editing.
+Use only compiler diagnostics, already provided Rust files, current Rust-project searches, and already available Rust context.
+If no additional Rust-only context can change the decision, do not loop on empty edits plus refused reads/searches; either make the smallest compile-directed Rust edit supported by current diagnostics, or state that the current batch is blocked by the ablation constraints without requesting more forbidden material.
+```
+
+"""
+
+
+
     def _set_request_label(self, label: str):
 
         if hasattr(self.llm, "set_request_label"):
@@ -1095,6 +1117,75 @@ class RustRepairAgent:
 
 
 
+    def _request_targets_disabled_context(self, request: Dict, *, is_search: bool) -> bool:
+
+        kind = str(request.get("kind") or request.get("scope") or "rust").strip().lower()
+
+        if kind not in {"rust", "c", "spec", "all"}:
+
+            kind = "rust"
+
+        target = (
+            str(request.get("path") or request.get("path_glob") or request.get("query") or "")
+            .strip()
+            .replace("\\", "/")
+        )
+
+        if self._raw_test_context_disabled("rust", target):
+
+            return True
+
+        if self.spec_context_enabled:
+
+            return False
+
+        if kind in {"c", "spec", "all"}:
+
+            return True
+
+        return False
+
+
+
+    def _filter_disabled_context_requests(self, requests: List[Dict], *, is_search: bool) -> List[Dict]:
+
+        if not requests:
+
+            return []
+
+        allowed: List[Dict] = []
+
+        for request in requests:
+
+            if not isinstance(request, dict):
+
+                continue
+
+            if self._request_targets_disabled_context(request, is_search=is_search):
+
+                kind = str(request.get("kind") or request.get("scope") or "rust").strip().lower()
+
+                label = str(
+                    request.get("path")
+                    or request.get("path_glob")
+                    or request.get("query")
+                    or "<empty>"
+                ).strip()
+
+                action = "search" if is_search else "read"
+
+                self._context_rejection_feedback.append(
+                    f"{action} {kind}:{label} was rejected by the ablation setting before execution"
+                )
+
+                continue
+
+            allowed.append(request)
+
+        return allowed
+
+
+
     def _raw_test_context_disabled(self, kind: str, rel_path: str) -> bool:
 
         normalized = (rel_path or "").replace("\\", "/").lower().lstrip("/")
@@ -1732,6 +1823,8 @@ Return JSON only, in the following object format:
 
         prompt = self._build_diagnosis_prompt(grouped_errors, project_overview, handoff_summary)
 
+        prompt += self._compile_repair_ablation_prompt_suffix()
+
         self._set_request_label("修复诊断计划")
 
         response = self.llm.generate([
@@ -1801,7 +1894,7 @@ Return JSON only, in the following object format:
             if self._raw_test_context_disabled(kind, path):
 
                 self._context_rejection_feedback.append(
-                    f"read {kind}:{path} was rejected by the ablation setting; use stdout/stderr only for test context"
+                    f"read {kind}:{path} was rejected by the ablation setting; do not request test files or test-run artifacts in this run"
                 )
 
                 continue
@@ -2035,7 +2128,7 @@ Return JSON only, in the following object format:
             if kind == "rust" and self._raw_test_context_disabled(kind, path_glob or query):
 
                 self._context_rejection_feedback.append(
-                    f"search {kind}:{query} was rejected by the ablation setting for test material; use stdout/stderr only for test context"
+                    f"search {kind}:{query} was rejected by the ablation setting for test material; do not request test files or test-run artifacts in this run"
                 )
 
                 continue
@@ -2055,6 +2148,18 @@ Return JSON only, in the following object format:
             query_lower = query.lower()
 
             search_kinds = ["rust", "c", "spec"] if kind == "all" else [kind]
+
+            if not self.spec_context_enabled:
+
+                skipped = [search_kind for search_kind in search_kinds if search_kind in {"c", "spec"}]
+
+                if skipped:
+
+                    self._context_rejection_feedback.append(
+                        f"search {kind}:{query} skipped disabled scopes {', '.join(skipped)} by the ablation setting"
+                    )
+
+                search_kinds = [search_kind for search_kind in search_kinds if search_kind == "rust"]
 
             for search_kind in search_kinds:
 
@@ -2596,6 +2701,8 @@ Return JSON:
     def _request_structured_edits(self, project_dir: str, diagnosis_plan: Dict, grouped_errors: Dict[str, str], materials: List[Dict], cycle_index: int, current_summary: str = "", handoff_summary: str = "") -> Dict:
 
         prompt = self._build_edit_prompt(project_dir, diagnosis_plan, grouped_errors, materials, cycle_index, current_summary, handoff_summary)
+
+        prompt += self._compile_repair_ablation_prompt_suffix()
 
         self._set_request_label("结构化修复编辑")
 
@@ -3939,6 +4046,16 @@ Relevant context:
 
         diagnosis_plan = self._request_diagnosis_plan(grouped_errors, project_overview, handoff_summary)
 
+        diagnosis_plan["read_requests"] = self._filter_disabled_context_requests(
+            diagnosis_plan.get("read_requests", []) or [],
+            is_search=False,
+        )
+
+        diagnosis_plan["search_requests"] = self._filter_disabled_context_requests(
+            diagnosis_plan.get("search_requests", []) or [],
+            is_search=True,
+        )
+
         materials = self._materialize_read_requests(run_dir, diagnosis_plan.get("read_requests", []), max_chars=None)
 
         diagnosis_search_materials = self._materialize_search_requests(run_dir, diagnosis_plan.get("search_requests", []), max_chars=None)
@@ -4046,6 +4163,16 @@ Relevant context:
                     current_summary or handoff_summary,
                 )
 
+                diagnosis_plan["read_requests"] = self._filter_disabled_context_requests(
+                    diagnosis_plan.get("read_requests", []) or [],
+                    is_search=False,
+                )
+
+                diagnosis_plan["search_requests"] = self._filter_disabled_context_requests(
+                    diagnosis_plan.get("search_requests", []) or [],
+                    is_search=True,
+                )
+
                 materials.extend(
                     self._materialize_read_requests(
                         run_dir,
@@ -4082,7 +4209,11 @@ Relevant context:
 
             more_reads = structured.get("more_read_requests", []) or []
 
+            more_reads = self._filter_disabled_context_requests(more_reads, is_search=False)
+
             search_requests = structured.get("search_requests", []) or []
+
+            search_requests = self._filter_disabled_context_requests(search_requests, is_search=True)
 
             updated_summary = (structured.get("updated_summary") or structured.get("summary") or current_summary).strip()
 

@@ -48,7 +48,7 @@ from .material_policy import (  # noqa: E402
     read_text_file_slice,
     should_upgrade_line_range_to_whole_file,
 )
-from .models import TestCaseResult, TestRunSummary  # noqa: E402
+from .models import RepairCaseOutcome, TestCaseResult, TestRunSummary  # noqa: E402
 from .repair_adapter import RepairAdapter  # noqa: E402
 from .repair_prompt import MaterialBudget, build_repair_prompt  # noqa: E402
 from .response_contract import RepairResponseContract  # noqa: E402
@@ -871,13 +871,13 @@ class RustTestAgent:
         return TestCaseResult(
             name="stdout-stderr-only",
             script_path="",
-            passed=failing_case.passed,
-            exit_code=failing_case.exit_code,
-            stdout=failing_case.stdout,
-            stderr=failing_case.stderr,
-            duration_seconds=failing_case.duration_seconds,
+            passed=False,
+            exit_code=-1,
+            stdout="",
+            stderr="",
+            duration_seconds=0.0,
             trace="",
-            run_dir=failing_case.run_dir,
+            run_dir="",
         )
 
     def _execute_debug_probe(
@@ -1030,7 +1030,8 @@ class RustTestAgent:
         source_index: CSourceIndex,
         failing_case: TestCaseResult,
         baseline_pass_names: Set[str],
-    ) -> bool:
+        max_attempts: int,
+    ) -> RepairCaseOutcome:
         print(f"\n[rtest] --- 修复失败用例：{failing_case.name} ---")
         rust_overview = self._build_rust_project_overview(rust_project_path)
         source_index_display = build_source_index_display(source_index, C_SOURCE_INDEX_MAX_ITEMS)
@@ -1092,8 +1093,9 @@ class RustTestAgent:
 
         repaired = False
         try:
-            for attempt in range(1, self.max_repair_iterations + 1):
-                print(f"  [rtest] 修复迭代 {attempt}/{self.max_repair_iterations}")
+            max_attempts = max(1, int(max_attempts))
+            for attempt in range(1, max_attempts + 1):
+                print(f"  [rtest] 修复迭代 {attempt}/{max_attempts}")
                 script_content = self._read_script_text(failing_case.script_path)
                 outcome = self._repair_one_round(
                     rust_project_path=rust_project_path,
@@ -1116,12 +1118,12 @@ class RustTestAgent:
                 )
                 if outcome == "passed":
                     repaired = True
-                    return True
+                    return RepairCaseOutcome(repaired=True, attempts_used=attempt)
                 if outcome == "abort":
-                    return False
+                    return RepairCaseOutcome(repaired=False, attempts_used=attempt, aborted=True)
                 # "continue" -> 下一轮
             print(f"  [rtest] 已达最大修复轮数，仍未修复 {failing_case.name}")
-            return False
+            return RepairCaseOutcome(repaired=False, attempts_used=max_attempts)
         finally:
             if not repaired:
                 try:
@@ -1217,6 +1219,7 @@ class RustTestAgent:
             prompt_expected_outputs = []
             prompt_subcase_context = ""
             prompt_test_artifact_index = ""
+            runtime_evidence = {}
         prompt = build_repair_prompt(
             failing_case=prompt_case,
             script_content=prompt_script_content,
@@ -1240,6 +1243,12 @@ class RustTestAgent:
             log_agent_enabled=self.enable_log_agent,
             active_static_probes=list(state.static_probes.values()),
         )
+        if not self.allow_c_materials:
+            prompt += (
+                "\n\n[System] Runtime outputs are intentionally redacted in this ablation run. "
+                "Do not rely on stdout, stderr, exit code, trace, runtime evidence, test files, "
+                "or test-run artifacts; they are unavailable."
+            )
         state.regression_warning = ""  # 只提示一次
         state.material_request_feedback = ""  # 只提示一次
 
