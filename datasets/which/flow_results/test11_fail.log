@@ -1,0 +1,5 @@
+Test #11: Multiple non-existent commands
+Command: ./which_t11 non_existent1 non_existent2
+Actual output: ./test/run_test.sh: line 251: ./which_t11: No such file or directory
+Exit code: 127
+Status: FAILED

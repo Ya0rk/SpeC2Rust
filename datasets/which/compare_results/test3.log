@@ -1,0 +1,15 @@
+Test #3: multiple commands
+Args: ls cat grep
+C exit code: 0
+Rust exit code: 0
+
+[C output]
+/usr/usr/bin/ls
+/usr/usr/bin/cat
+/usr/usr/bin/grep
+
+[Rust output]
+/usr/usr/bin/ls
+/usr/usr/bin/cat
+/usr/usr/bin/grep
+Status: PASSED

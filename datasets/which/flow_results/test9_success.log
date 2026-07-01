@@ -1,0 +1,6 @@
+Test #9: Show dot option
+Command: ./which --show-dot ls
+Expected output: /usr/bin/ls
+Actual output: /usr/bin/ls
+Exit code: 0
+Status: PASSED

@@ -1,0 +1,8 @@
+Test #3: Multiple commands
+Command: ./which ls cat grep
+Expected: ls,cat,grep paths
+Actual output: /usr/bin/ls
+/usr/bin/cat
+/usr/bin/grep
+Exit code: 0
+Status: PASSED

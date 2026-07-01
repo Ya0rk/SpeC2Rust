@@ -1,0 +1,6 @@
+Test #5: Version option
+Command: ./which_t5 --version | head -n 4
+Expected output: GNU which v2.21, Copyright (C) 1999 - 2015 Carlo Wood.
+Actual output: ./test/run_test.sh: line 114: ./which_t5: No such file or directory
+Exit code: 0
+Status: FAILED

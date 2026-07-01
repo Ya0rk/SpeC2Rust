@@ -1,0 +1,6 @@
+Test #8: Skip tilde option
+Command: ./which --skip-tilde ls
+Expected output: /usr/bin/ls
+Actual output: /usr/bin/ls
+Exit code: 0
+Status: PASSED

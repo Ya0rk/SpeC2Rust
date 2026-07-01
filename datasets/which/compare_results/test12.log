@@ -1,0 +1,11 @@
+Test #12: skip functions option
+Args: --skip-functions ls
+C exit code: 0
+Rust exit code: 0
+
+[C output]
+/usr/usr/bin/ls
+
+[Rust output]
+/usr/usr/bin/ls
+Status: PASSED

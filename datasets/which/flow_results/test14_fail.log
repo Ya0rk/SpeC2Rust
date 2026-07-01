@@ -1,0 +1,5 @@
+Test #14: Empty command
+Command: ./which_t14 ''
+Actual output: ./test/run_test.sh: line 318: ./which_t14: No such file or directory
+Exit code: 127
+Status: FAILED

@@ -1,0 +1,11 @@
+Test #7: skip dot option
+Args: --skip-dot ls
+C exit code: 0
+Rust exit code: 0
+
+[C output]
+/usr/usr/bin/ls
+
+[Rust output]
+/usr/usr/bin/ls
+Status: PASSED

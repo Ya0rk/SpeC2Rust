@@ -1,0 +1,5 @@
+Test #15: Commands with multiple spaces
+Command: ./which_t15 cat ls
+Actual output: ./test/run_test.sh: line 341: ./which_t15: No such file or directory
+Exit code: 127
+Status: FAILED

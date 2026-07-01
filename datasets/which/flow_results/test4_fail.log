@@ -1,0 +1,6 @@
+Test #4: All option
+Command: ./which_t4 -a ls | sort | uniq
+Expected output: /usr/usr/bin/ls
+Actual output: ./test/run_test.sh: line 91: ./which_t4: No such file or directory
+Exit code: 0
+Status: FAILED

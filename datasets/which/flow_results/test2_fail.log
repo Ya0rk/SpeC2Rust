@@ -1,0 +1,6 @@
+Test #2: Non-existent command
+Command: ./which_t2 non_existent_command
+Expected output: ./which_t2: no non_existent_command in
+Actual output: ./test/run_test.sh: line 44: ./which_t2: No such file or directory
+Exit code: 127
+Status: FAILED

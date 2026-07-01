@@ -1,0 +1,6 @@
+Test #1: Basic functionality
+Command: ./which ls
+Expected output: /usr/bin/ls
+Actual output: /usr/bin/ls
+Exit code: 0
+Status: PASSED

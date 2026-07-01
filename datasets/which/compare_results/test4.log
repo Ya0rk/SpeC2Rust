@@ -1,0 +1,13 @@
+Test #4: all option
+Args: -a ls
+C exit code: 0
+Rust exit code: 0
+
+[C output]
+/usr/usr/bin/ls
+/usr/bin/ls
+
+[Rust output]
+/usr/usr/bin/ls
+/usr/bin/ls
+Status: PASSED

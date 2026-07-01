@@ -1,0 +1,6 @@
+Test #7: Skip dot option
+Command: ./which --skip-dot ls
+Expected output: /usr/bin/ls
+Actual output: /usr/bin/ls
+Exit code: 0
+Status: PASSED

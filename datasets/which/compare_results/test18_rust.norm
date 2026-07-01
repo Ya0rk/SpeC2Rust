@@ -1,0 +1,14 @@
+Usage: which [options] program [...]
+Options:
+  -a, --all             print all matching pathnames
+  -i, --read-alias      read shell aliases from input
+  -v, -V, --version     print version information
+      --help            print this help and exit
+      --skip-dot        skip directories in PATH that start with .
+      --skip-tilde      skip directories in PATH that start with ~
+      --show-dot        show ./ for matches found below current directory
+      --show-tilde      show ~/ for matches found below home directory
+      --tty-only        stop processing long display options when not on a tty
+      --skip-alias      ignore shell aliases supplied to process_alias
+      --read-functions  read shell functions from input
+      --skip-functions  ignore shell functions during search

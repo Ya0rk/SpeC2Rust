@@ -1,0 +1,12 @@
+Test #13: restricted PATH
+Args: ls
+PATH: /usr/local/bin:/usr/bin
+C exit code: 0
+Rust exit code: 0
+
+[C output]
+/usr/usr/bin/ls
+
+[Rust output]
+/usr/usr/bin/ls
+Status: PASSED

@@ -1,0 +1,5 @@
+Test #20: Path with spaces
+Command: ./which_t20 'program with spaces'
+Actual output: ./test/run_test.sh: line 450: ./which_t20: No such file or directory
+Exit code: 127
+Status: FAILED

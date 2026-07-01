@@ -1,0 +1,7 @@
+Test #4: All option
+Command: ./which -a ls | sort | uniq
+Expected output: /usr/bin/ls
+Actual output: /usr/bin/ls
+/usr/bin/ls
+Exit code: 0
+Status: PASSED

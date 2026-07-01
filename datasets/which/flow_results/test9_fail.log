@@ -1,0 +1,6 @@
+Test #9: Show dot option
+Command: ./which_t9 --show-dot ls
+Expected output: /usr/usr/bin/ls
+Actual output: ./test/run_test.sh: line 206: ./which_t9: No such file or directory
+Exit code: 127
+Status: FAILED

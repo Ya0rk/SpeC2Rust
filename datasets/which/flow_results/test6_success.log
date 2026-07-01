@@ -1,0 +1,6 @@
+Test #6: Help option
+Command: ./which --help | head -n 1
+Expected output: Usage: ./which [options] [--] COMMAND [...]
+Actual output: Usage: ./which [options] [--] COMMAND [...]
+Exit code: 0
+Status: PASSED

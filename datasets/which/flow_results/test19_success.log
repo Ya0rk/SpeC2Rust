@@ -1,0 +1,5 @@
+Test #19: Directory command
+Command: ./which /usr/bin
+Actual output: ./which: no bin in (/usr)
+Exit code: 1
+Status: PASSED
