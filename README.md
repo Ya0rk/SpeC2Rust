@@ -1,16 +1,18 @@
-### 运行环境
+### env
 
 Python 3.12.12
 rustc 1.95.0 (59807616e 2026-04-14)
 
-### 运行步骤
+### steps
 
-0. 安装依赖
+0. install requirements and api
 ```
 pip install -r requirements.txt
 ```
 
-1. 启动翻译
+You need to change the `api_key` and `model_name` in `./config.example.json` to your own api key and model name, then rename it to `config.json`.
+
+1. start translation
 ```
 ./scripts/agent.sh [repo_name]
 ```

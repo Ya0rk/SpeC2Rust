@@ -1,20 +1,7 @@
-# 基础深度学习与大模型工具
-torch
-datasets
-transformers
-trl
-peft
-requests
-openai
+requests>=2.31.0
 
-# 语法解析核心（这一组版本必须严格匹配以避开 Windows 的 ABI 错误）
 tree-sitter==0.21.3
 tree-sitter-c==0.21.3
 
-# 评估工具
-# 建议用 0.6.0，因为它默认兼容 tree-sitter 0.21.x
-# 如果强行用 0.7.0，pip install -r 会因为版本冲突而报错中止
-codebleu==0.6.0
-
-# 图形/网络分析（请确认是 network 还是 networkx）
-networkx==0.1
+networkx
+pydot
