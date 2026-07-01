@@ -16,8 +16,8 @@ Environment overrides:
   CONDA_ENV=tcode
   CGR_NO_DEFAULT_FLAGS=1
   CGR_ALLOW_SYSTEM_PYTHON=1
-  CGR_RUST_REPAIR_MAX_ITERATIONS=64
-  CGR_RUST_TEST_MAX_ITERATIONS=64
+  CGR_RUST_REPAIR_MAX_ITERATIONS=20
+  CGR_RUST_TEST_MAX_ITERATIONS=20
 EOF
 }
 
@@ -164,8 +164,8 @@ if [[ "${CGR_NO_DEFAULT_FLAGS:-0}" != "1" ]]; then
     # --freeze-c-docs
     --use-error-organizer-agent --error-batch-size 10
     --rust-entry-kind main
-    --rust-repair-max-iterations "${CGR_RUST_REPAIR_MAX_ITERATIONS:-64}"
-    --rust-test-agent-max-iterations "${CGR_RUST_TEST_MAX_ITERATIONS:-64}"
+    --rust-repair-max-iterations "${CGR_RUST_REPAIR_MAX_ITERATIONS:-20}"
+    --rust-test-agent-max-iterations "${CGR_RUST_TEST_MAX_ITERATIONS:-20}"
     --rust-test-agent-prompt-budget-chars "${CGR_RUST_TEST_PROMPT_BUDGET_CHARS:-256000}"
   )
   if [[ "${CGR_USE_LOG_AGENT:-0}" == "1" ]]; then

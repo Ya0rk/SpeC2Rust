@@ -34,6 +34,7 @@ class SuiteRepairCoordinator:
     def run(self) -> TestRunSummary:
         rust_bin_name = f"{self.context.bin_name}-rust"
         current_summary = self.context.summary
+        attempted_names: Set[str] = set()
         for suite_cycle in range(1, self.context.max_suite_repair_cycles + 1):
             if current_summary.all_passed:
                 return current_summary
@@ -44,7 +45,6 @@ class SuiteRepairCoordinator:
                 )
 
             fixed_any = False
-            attempted_names: Set[str] = set()
             while True:
                 failing_cases = [
                     case
@@ -92,13 +92,19 @@ class SuiteRepairCoordinator:
                     return current_summary
 
             if not fixed_any:
-                if suite_cycle < self.context.max_suite_repair_cycles:
+                remaining_unattempted = [
+                    case.name
+                    for case in current_summary.results
+                    if not case.passed and case.name not in attempted_names
+                ]
+                if remaining_unattempted and suite_cycle < self.context.max_suite_repair_cycles:
                     print(
                         "[rtest] 本轮没有任何失败用例被修复，"
-                        "继续下一轮套件修复以避免过早停止"
+                        "继续下一轮套件修复剩余未尝试用例"
                     )
                     continue
-                print("[rtest] 已达套件修复轮次上限，仍有用例未通过")
+                print("[rtest] 已达每个失败用例最多一次修复尝试（单用例最多 20 轮），仍有用例未通过")
+                break
 
         return current_summary
 

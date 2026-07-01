@@ -550,6 +550,53 @@ def build_repair_prompt(
     material_manifest_block = material.material_manifest()
     material_feedback_block = material_request_feedback or "(none)"
 
+    if last_build_error:
+        build_error_block = (
+            "\nLatest Rust compile error after the previous edit:\n"
+            f"```text\n{last_build_error[-BUILD_ERROR_TAIL_CHARS:]}\n```\n"
+        )
+    regression_status = "yes" if regression_warning else "no"
+    return f"""You are fixing a Rust project translated from a C project so that it passes the functional test suite.
+This is an ablation branch with one-shot Rust-only context injection.
+
+Current test status:
+- test_file: {failing_case.name}
+- passed: false
+- repair_round: {attempt}/{max_attempts}
+- previous_edit_caused_regression: {regression_status}
+{build_error_block}
+
+Provided Rust files:
+{rust_block_text}
+
+Return exactly one raw JSON object, with no markdown fences and no text outside the JSON.
+Do not request C source, test scripts, test documentation, stdout/stderr, traces, generated test artifacts, expected outputs, runtime logs, or any other layered material.
+Do not use `cgr_read`, `rust_read_requests`, `test_artifact_read`, `debug_probe`, or `static_probe_update`.
+
+Use this structure:
+{{
+  "summary": "Concise Rust-side diagnosis based only on the visible Rust files and pass/fail status.",
+  "edits": [
+    {{
+      "path": "src/<module>.rs",
+      "mode": "replace_range",
+      "start_line": 10,
+      "end_line": 20,
+      "content": "Replacement valid Rust snippet"
+    }}
+  ],
+  "complete": false,
+  "updated_summary": "Brief memory for the next round"
+}}
+
+Requirements:
+1. Only edit translated Rust project files (`*.rs`, `Cargo.toml`, etc.); never edit tests or fixtures.
+2. Line numbers must come from the visible Rust blocks. The `NNNN |` prefix is the real line number and must not be copied into content.
+3. If a visible Rust defect is clear, submit edits now. If the defect cannot be inferred from Rust files plus pass/fail status, return no edits and explain the Rust-side uncertainty in `summary`.
+4. Do not create placeholder behavior such as `todo!()`, `unimplemented!()`, panic stubs, or default-empty implementations that merely silence failures.
+5. The runner will rebuild and rerun the same test after edits; you only know whether it passed or failed in the next round.
+"""
+
     return f"""You are fixing a Rust project translated from a C project so that it passes sh functional tests.
 The current case failed (repair round {attempt}/{max_attempts}).
 

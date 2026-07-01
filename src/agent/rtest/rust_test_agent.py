@@ -72,6 +72,7 @@ from .test_runner import TestRunner  # noqa: E402
 
 EDIT_REGION_BUCKET_LINES = 150
 AUTO_CONTEXT_LINES = 180
+MAX_REPAIR_ITERATIONS = 20
 
 
 # ---------------------------------------------------------------------------
@@ -98,8 +99,8 @@ class RustTestAgent:
     ):
         self.config = config or Config()
         self.llm = Model(self.config)
-        self.max_repair_iterations = max_repair_iterations
-        self.max_suite_repair_cycles = max_suite_repair_cycles
+        self.max_repair_iterations = max(1, min(int(max_repair_iterations or MAX_REPAIR_ITERATIONS), MAX_REPAIR_ITERATIONS))
+        self.max_suite_repair_cycles = max(1, max_suite_repair_cycles)
         self.build_timeout_seconds = build_timeout_seconds
         self.test_timeout_seconds = test_timeout_seconds
         self.verbose = verbose
@@ -623,11 +624,37 @@ class RustTestAgent:
             if not isinstance(edit, dict):
                 continue
             rel = (edit.get("path") or "").replace("\\", "/")
-            if self._is_editable_rust_path(rel):
-                clean.append(edit)
+            if not self._is_editable_rust_path(rel):
+                print(f"    [rtest] 已拒绝对非 Rust 源文件的编辑请求：{rel or '(空 path)'}")
                 continue
-            print(f"    [rtest] 已拒绝对非 Rust 源文件的编辑请求：{rel or '(空 path)'}")
+            reason = self._ablation_disallowed_edit_reason(edit)
+            if reason:
+                print(f"    [rtest] 已拒绝消融模式不允许的编辑：{rel} - {reason}")
+                continue
+            clean.append(edit)
+            continue
         return clean
+
+    @staticmethod
+    def _ablation_disallowed_edit_reason(edit: Dict) -> str:
+        mode = str(edit.get("mode") or "replace_range").strip().lower()
+        if mode in {"copy_c_string_array_after", "copy_c_str_array_after"}:
+            return "copy_c_string_array_after is disabled"
+        if mode in {"copy_range_after", "cp"}:
+            source_kind = str(
+                edit.get("source_kind")
+                or edit.get("source_scope")
+                or edit.get("kind")
+                or "rust"
+            ).strip().lower()
+            source_path = str(
+                edit.get("source_path") or edit.get("from_path") or edit.get("src_path") or ""
+            ).strip()
+            if source_kind != "rust":
+                return f"copy source kind {source_kind or '(empty)'} is disabled"
+            if not source_path:
+                return "copy_range_after requires a Rust source_path"
+        return ""
 
     @staticmethod
     def _resolve_under_root(root: Path, rel_path: str) -> Optional[Path]:
@@ -857,6 +884,34 @@ class RustTestAgent:
             if material.add_test_artifact(rel, content):
                 print(f"  [rtest] 首轮注入测试产物：{rel}")
 
+    def _seed_ablation_rust_files(self, rust_project_path: str, material: MaterialBudget) -> None:
+        """Inject Rust source files once; no C source or test artifacts are exposed."""
+        root = Path(rust_project_path).resolve()
+        src_dir = root / "src"
+        if not src_dir.is_dir():
+            return
+        try:
+            files = sorted(src_dir.rglob("*.rs"))
+        except OSError:
+            files = []
+
+        def priority(path: Path) -> Tuple[int, str]:
+            rel = path.relative_to(root).as_posix()
+            if rel == "src/main.rs":
+                return (0, rel)
+            if rel == "src/lib.rs":
+                return (1, rel)
+            return (2, rel)
+
+        for full in sorted(files, key=priority):
+            try:
+                rel = full.relative_to(root).as_posix()
+            except ValueError:
+                continue
+            content = self.adapter.read_file_slice(str(root), rel)
+            if content and material.add_rust_file(rel, content):
+                print(f"  [rtest] ablation 注入 Rust 文件：{rel}")
+
     @staticmethod
     def _read_runtime_evidence(failing_case: TestCaseResult) -> Dict[str, object]:
         return RuntimeProbeService.read_runtime_evidence(failing_case)
@@ -1014,37 +1069,17 @@ class RustTestAgent:
     ) -> bool:
         print(f"\n[rtest] --- 修复失败用例：{failing_case.name} ---")
         rust_overview = self._build_rust_project_overview(rust_project_path)
-        source_index_display = build_source_index_display(source_index, C_SOURCE_INDEX_MAX_ITEMS)
-        script_content = self._read_script_text(failing_case.script_path)
+        source_index_display = ""
+        script_content = ""
+        flags: List[str] = []
+        keywords: List[str] = []
+        expected_outputs: List[str] = []
 
-        # 原始首跑跳过 trace（#11），这里按需懒加载
-        if not failing_case.trace and os.path.exists(failing_case.script_path):
-            failing_case.trace = runner.capture_trace_for(Path(failing_case.script_path))
+        material = MaterialBudget(budget_chars=max(self.prompt_budget_chars, 50_000_000))
 
-        flags = extract_test_flags(failing_case.name, script_content)
-        keywords = extract_test_keywords(failing_case.name, script_content)
-        expected_outputs = extract_expected_outputs(script_content)
-        if flags:
-            print(f"  [rtest] 推断被测 flag：{', '.join(flags)}")
-        if keywords:
-            print(f"  [rtest] 推断被测关键字：{', '.join(keywords)}")
-
-        material = MaterialBudget(budget_chars=self.prompt_budget_chars)
-
-        # 首轮主动注入
-        for rec in seed_c_sources(flags, source_index, keywords=keywords, limit=SEED_C_LIMIT):
-            if material.add_c_record(rec):
-                print(f"  [rtest] 首轮注入 C 源码：{rec.get('name')} [{rec.get('file')}]")
-        for rel, text in seed_rust_files(
-            flags, rust_project_path, keywords=keywords, limit=SEED_RUST_LIMIT
-        ).items():
-            if material.add_rust_file(rel, text):
-                print(f"  [rtest] 首轮注入 Rust 文件：{rel}")
-        self._seed_test_artifacts(
-            failing_case,
-            material,
-            keywords=keywords,
-        )
+        # Ablation: inject Rust files once; do not expose C source, test scripts,
+        # test outputs, traces, expected outputs, or generated artifacts.
+        self._seed_ablation_rust_files(rust_project_path, material)
 
         # 快照项目，便于回归回滚
         snapshot = ProjectSnapshot(rust_project_path)
@@ -1069,7 +1104,6 @@ class RustTestAgent:
         try:
             for attempt in range(1, self.max_repair_iterations + 1):
                 print(f"  [rtest] 修复迭代 {attempt}/{self.max_repair_iterations}")
-                script_content = self._read_script_text(failing_case.script_path)
                 outcome = self._repair_one_round(
                     rust_project_path=rust_project_path,
                     bin_name=bin_name,
@@ -1170,35 +1204,29 @@ class RustTestAgent:
         snapshot: ProjectSnapshot,
     ) -> str:
         """返回 ``passed`` / ``abort`` / ``continue``。"""
-        runtime_evidence = (
-            self._read_runtime_evidence(failing_case) if self.enable_log_agent else {}
-        )
+        runtime_evidence: Dict[str, object] = {}
         prompt = build_repair_prompt(
             failing_case=failing_case,
-            script_content=script_content,
-            project_structure=project_structure,
-            rust_overview=rust_overview,
+            script_content="",
+            project_structure="",
+            rust_overview="",
             material=material,
             history_summary=state.history_summary,
-            source_records_index=source_index_display,
+            source_records_index="",
             attempt=attempt,
             max_attempts=self.max_repair_iterations,
             last_build_error=state.last_build_error,
-            flags=flags,
-            keywords=keywords,
-            expected_outputs=expected_outputs,
+            flags=[],
+            keywords=[],
+            expected_outputs=[],
             regression_warning=state.regression_warning,
-            focused_failure=self._focused_failure_block(failing_case),
-            subcase_context=self._trace_subcase_context(
-                failing_case,
-                script_content=script_content,
-                bin_name=bin_name,
-            ),
-            test_artifact_index=self._list_test_artifacts(failing_case),
-            material_request_feedback=state.material_request_feedback,
+            focused_failure="",
+            subcase_context="",
+            test_artifact_index="",
+            material_request_feedback="",
             runtime_evidence=runtime_evidence,
-            log_agent_enabled=self.enable_log_agent,
-            active_static_probes=list(state.static_probes.values()),
+            log_agent_enabled=False,
+            active_static_probes=[],
         )
         state.regression_warning = ""  # 只提示一次
         state.material_request_feedback = ""  # 只提示一次
@@ -1209,8 +1237,8 @@ class RustTestAgent:
                 {
                     "role": "system",
                     "content": (
-                        "You are an experienced Rust repair assistant skilled at using sh test script failure information "
-                        "to locate and fix functional defects in C-to-Rust translation outputs."
+                        "You are an experienced Rust repair assistant. Use only pass/fail status, "
+                        "Rust compile errors, and the visible Rust files to repair functional defects."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -1253,13 +1281,21 @@ class RustTestAgent:
             payload.get("updated_summary") or payload.get("summary") or state.history_summary
         ).strip()
 
-        cgr_requests = payload.get("cgr_read") or payload.get("c_source_requests") or []
-        rust_read_requests = payload.get("rust_read_requests") or []
-        test_artifact_requests = (
-            payload.get("test_artifact_read")
+        ignored_requests = bool(
+            payload.get("cgr_read")
+            or payload.get("c_source_requests")
+            or payload.get("rust_read_requests")
+            or payload.get("test_artifact_read")
             or payload.get("test_artifact_requests")
-            or []
         )
+        cgr_requests: List[Dict] = []
+        rust_read_requests: List[Dict] = []
+        test_artifact_requests: List[Dict] = []
+        if ignored_requests:
+            state.history_summary += (
+                "\n[System] Material read requests were ignored in ablation mode. "
+                "Use only the Rust files already injected in the prompt."
+            )
         material_keep = payload.get("material_keep")
         if isinstance(material_keep, dict):
             # `material_keep` is only a priority hint. Hard-pruning here made later
@@ -1278,11 +1314,11 @@ class RustTestAgent:
                 "Test scripts and fixtures are human-preprocessed read-only inputs; "
                 "do not propose changes to them in later rounds."
             )
-        edits = self._filter_fake_impl_edits(raw_edits, expected_outputs)
+        edits = self._filter_fake_impl_edits(raw_edits, [])
         if raw_edits and not edits:
             state.history_summary += (
                 "\n[System] All edits submitted in the previous round were rejected by the anti-cheat check; "
-                "implement the real flag logic from the C source instead of placeholders or repeating expected output."
+                "repair the visible Rust implementation instead of placeholders or hardcoded outputs."
             )
         material_result = self._absorb_material_requests(
             rust_project_path, source_index, cgr_requests, rust_read_requests, material
@@ -1311,8 +1347,13 @@ class RustTestAgent:
             for key in _edit_region_keys(edits):
                 state.edit_region_counts[key] = state.edit_region_counts.get(key, 0) + 1
 
-        debug_probe = payload.get("debug_probe") or payload.get("instrumentation")
-        static_probe_update = payload.get("static_probe_update")
+        debug_probe = None
+        static_probe_update = None
+        if payload.get("debug_probe") or payload.get("instrumentation") or payload.get("static_probe_update"):
+            state.history_summary += (
+                "\n[System] Runtime/debug probes are disabled in ablation mode. "
+                "Use only pass/fail status, compile errors, and provided Rust files."
+            )
         if not self.enable_log_agent and (
             isinstance(debug_probe, dict) or isinstance(static_probe_update, dict)
         ):
@@ -1451,8 +1492,8 @@ class RustTestAgent:
             state.history_summary += (
                 "\n[System] The previous round set complete=true, but the current test case still fails. "
                 "That signal is not accepted as a stop condition for a failing case. "
-                "If you believe the failure is caused by the runner/environment, request fresh trace or test artifacts "
-                "that prove it for the current run; otherwise provide a focused Rust edit. "
+                "If you believe the failure is caused by the runner/environment, explain that from the visible Rust/project state; "
+                "otherwise provide a focused Rust edit. "
                 "Do not repeat stale diagnoses from earlier runs."
             )
             return "continue"
@@ -1464,8 +1505,8 @@ class RustTestAgent:
             else:
                 print("    [rtest] LLM 既没请求材料也没产生新编辑，继续下一轮并要求改变策略")
                 state.history_summary += (
-                    "\n[System] The previous round did not produce any executable action. The next round must request missing materials "
-                    "or provide new valid edits."
+                    "\n[System] The previous round did not produce any executable action. In ablation mode, material requests are disabled; "
+                    "provide new valid Rust edits or explain why the visible Rust context is insufficient."
                 )
             return "continue"
         return "continue"
@@ -2088,7 +2129,7 @@ class RustTestAgent:
             )
             state.history_summary += (
                 "\n[System] The current failure signature has remained unchanged for multiple rounds. The next round must change strategy: "
-                "prioritize reading the latest Rust files, necessary C functions, or test artifacts; do not keep submitting the same kind of edits."
+                "use the already provided Rust files and any Rust compile errors; C source, test outputs, and test artifacts are unavailable in ablation mode."
             )
             return "continue"
 

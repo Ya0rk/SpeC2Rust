@@ -12,7 +12,7 @@
 #
 # 环境变量：
 #   SKIP_TEST_AGENT=1                    跳过 RustTestAgent
-#   CGR_RUST_REPAIR_MAX_ITERATIONS=40    编译修复最大迭代
+#   CGR_RUST_REPAIR_MAX_ITERATIONS=20    编译修复最大迭代（硬上限 20）
 #   CGR_RUST_TEST_MAX_ITERATIONS=20      测试修复最大迭代
 #   CGR_TEST_TIMEOUT=30                  单个测试超时秒数
 
@@ -56,7 +56,7 @@ if [ ! -f "$RUST_PROJECT/Cargo.toml" ]; then
 fi
 
 # Defaults
-MAX_REPAIR_ITERS=${CGR_RUST_REPAIR_MAX_ITERATIONS:-40}
+MAX_REPAIR_ITERS=${CGR_RUST_REPAIR_MAX_ITERATIONS:-20}
 MAX_TEST_ITERS=${CGR_RUST_TEST_MAX_ITERATIONS:-20}
 TEST_TIMEOUT=${CGR_TEST_TIMEOUT:-30}
 SKIP_TEST_AGENT=${SKIP_TEST_AGENT:-0}
@@ -121,7 +121,8 @@ echo ">>> Step 1: RustRepairAgent (compile repair)"
     "$@") || repair_rc=$?
 
 if [ "${repair_rc:-0}" -ne 0 ]; then
-    echo "WARNING: RustRepairAgent exited with code $repair_rc"
+    echo "ERROR: RustRepairAgent exited with code $repair_rc; compile repair failed, exiting."
+    exit "$repair_rc"
 fi
 
 # Step 2: RustTestAgent (functional test + fix)

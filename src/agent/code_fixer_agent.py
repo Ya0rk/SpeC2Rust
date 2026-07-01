@@ -16,6 +16,9 @@ from llm.model import Model
 from agent.alternatives.contextual_rust_agent import RustProjectRegistry
 
 
+MAX_REPAIR_ITERATIONS = 20
+
+
 class Fixer:
     """代码修复父类 - 提供通用的修复功能"""
     
@@ -32,7 +35,7 @@ class Fixer:
         self.llm = Model(config)
 
         self.project_path = project_path
-        self.max_iterations = max_iterations
+        self.max_iterations = max(1, min(int(max_iterations or MAX_REPAIR_ITERATIONS), MAX_REPAIR_ITERATIONS))
         self.fix_history = []
         self.error_organizer_agent = error_organizer_agent
     

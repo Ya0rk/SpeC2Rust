@@ -50,6 +50,9 @@ except ModuleNotFoundError as exc:
 
 
 
+MAX_REPAIR_ITERATIONS = 20
+
+
 @dataclass
 
 class RepairRunResult:
@@ -101,7 +104,7 @@ class RustRepairAgent:
     def __init__(
         self,
         config: Optional[Config] = None,
-        max_iterations: int = 15,
+        max_iterations: int = MAX_REPAIR_ITERATIONS,
         error_organizer_agent=None,
     ):
 
@@ -109,7 +112,7 @@ class RustRepairAgent:
 
         self.llm = Model(self.config)
 
-        self.max_iterations = max_iterations
+        self.max_iterations = max(1, min(int(max_iterations or MAX_REPAIR_ITERATIONS), MAX_REPAIR_ITERATIONS))
 
         self.iteration_timeout_seconds = 600
 
@@ -1804,6 +1807,125 @@ Return JSON only, in the following object format:
 
 
 
+    def _extract_error_rust_paths(self, output: str, project_dir: str) -> List[str]:
+        """Return Rust files directly named by the current rustc diagnostics."""
+        root = Path(project_dir).resolve()
+        seen = set()
+        paths: List[str] = []
+        for match in re.finditer(r"-->\s+(.+?\.rs):\d+:\d+", output or ""):
+            raw = match.group(1).strip().replace("\\", "/")
+            candidates = [raw]
+            src_pos = raw.find("/src/")
+            if src_pos >= 0:
+                candidates.append(raw[src_pos + 1 :])
+            for candidate in candidates:
+                rel = candidate.lstrip("./")
+                full = (root / rel).resolve()
+                try:
+                    if os.path.commonpath([str(root), str(full)]) != str(root):
+                        continue
+                except ValueError:
+                    continue
+                if full.is_file() and rel not in seen:
+                    seen.add(rel)
+                    paths.append(rel)
+                    break
+        return paths
+
+    def _ablation_rust_context_requests(self, project_dir: str, grouped_errors: Dict[str, str], output: str) -> List[Dict]:
+        """Build the one-shot Rust-only context for compile repair ablation."""
+        root = Path(project_dir).resolve()
+        ordered: List[str] = []
+        seen = set()
+
+        def add_rel(rel: str) -> None:
+            rel = (rel or "").replace("\\", "/").lstrip("./")
+            if not rel.endswith(".rs") or rel in seen:
+                return
+            full = (root / rel).resolve()
+            try:
+                if os.path.commonpath([str(root), str(full)]) != str(root):
+                    return
+            except ValueError:
+                return
+            if full.is_file():
+                seen.add(rel)
+                ordered.append(rel)
+
+        for path in grouped_errors:
+            if path and path != "__organized_batch__":
+                add_rel(path)
+        for path in self._extract_error_rust_paths(output, project_dir):
+            add_rel(path)
+        for entry in ("src/main.rs", "src/lib.rs"):
+            add_rel(entry)
+
+        src_dir = root / "src"
+        try:
+            all_rs = sorted(src_dir.rglob("*.rs")) if src_dir.is_dir() else []
+        except OSError:
+            all_rs = []
+        if len(all_rs) <= 24:
+            for full in all_rs:
+                try:
+                    add_rel(full.relative_to(root).as_posix())
+                except ValueError:
+                    continue
+
+        return [{"kind": "rust", "path": rel, "mode": "whole_file"} for rel in ordered]
+
+    def _ablation_diagnosis_plan(
+        self,
+        project_dir: str,
+        grouped_errors: Dict[str, str],
+        output: str,
+        handoff_summary: str = "",
+    ) -> Dict:
+        requests = self._ablation_rust_context_requests(project_dir, grouped_errors, output)
+        target_files = [req["path"] for req in requests if req.get("path")]
+        return {
+            "summary": (
+                "Ablation compile repair: the prompt contains all current diagnostics "
+                "and the related Rust source files in one shot."
+            ),
+            "target_files": target_files,
+            "read_requests": requests,
+            "search_requests": [],
+            "edit_strategy": "Repair using only the provided Rust files and current compiler diagnostics.",
+            "reasoning": [
+                "C sources, spec documents, searches, and layered context requests are disabled in this ablation branch.",
+                handoff_summary.strip(),
+            ],
+        }
+
+
+    @staticmethod
+    def _merge_materials(materials: List[Dict], new_materials: List[Dict]) -> None:
+        seen = {
+            (
+                material.get("kind", "rust"),
+                material.get("path", ""),
+                material.get("mode", ""),
+                material.get("start_line"),
+                material.get("end_line"),
+            )
+            for material in materials
+        }
+        for material in new_materials:
+            key = (
+                material.get("kind", "rust"),
+                material.get("path", ""),
+                material.get("mode", ""),
+                material.get("start_line"),
+                material.get("end_line"),
+            )
+            if key in seen:
+                continue
+            materials.append(material)
+            seen.add(key)
+
+
+
     def _refresh_materials_for_edited_files(self, project_dir: str, materials: List[Dict], edited_paths: set) -> None:
 
         """编辑应用后，刷新 materials 中被修改文件的内容，避免 LLM 看到过时的代码。
@@ -2076,63 +2198,27 @@ Return JSON only, in the following object format:
 
     def _build_repair_tool_protocol(self, project_dir: str) -> str:
 
-        roots = self._context_roots(project_dir)
-
         lines = [
 
-            "Available context and tool protocol:",
+            "Ablation context policy:",
 
-            "- more_read_requests: read a full file or line range. Fields: kind=rust/c/spec, path, mode=whole_file/line_range, start_line, end_line.",
+            "- The program has already injected the current compiler diagnostics and the related Rust source files in this prompt.",
 
-            "- search_requests: search keywords in files. Fields: kind=rust/c/spec/all, query, path_glob, context_lines, max_results.",
+            "- Do not request C source, spec documents, test artifacts, shell scripts, stdout/stderr logs, or additional layered context.",
 
-            "- edits: modify the Rust project only when evidence is sufficient. mode may be replace_range/delete_range/insert_before/insert_after/copy_range_after/cp/copy_c_string_array_after/create_file/create_dir.",
+            "- Do not use more_read_requests or search_requests; if the visible Rust files are insufficient, explain the missing Rust-side uncertainty in summary and return no edits.",
 
-            "- copy_range_after/cp copies an existing source file line range into the target file after target_line. Fields: path, target_line, source_path, source_start_line, source_end_line, optional source_kind=rust/c/spec. Use it for large strings, arrays, or templates instead of pasting them into JSON.",
+            "- edits: modify the Rust project only when evidence is sufficient. mode may be replace_range/delete_range/insert_before/insert_after/copy_range_after/cp/create_file/create_dir.",
 
-            "- copy_c_string_array_after parses C string literals from source_path[source_start_line..source_end_line] and inserts `static <constant_name>: &[&str] = &[...]` after target_line. Use it for RTC-style C string arrays. Optional array_name narrows a wide range to one C array block.",
+            "- copy_range_after/cp may only copy from visible Rust project files in this ablation branch. Do not set source_kind=c/spec.",
 
-            "- If you need a larger coherent read or a larger coherent patch, request or return it directly; it will not be rejected or shrunk solely because it is large.",
-
-            "- kind=rust means the current Rust project, readable and writable; kind=c means the original C project, read-only; kind=spec means c_docs/spec documents, read-only.",
-
-            "- Allowed context sources: " + ", ".join(f"{kind}={path}" for kind, path in roots.items()),
-
-            "- If the error involves a missing business module, empty file, unknown behavior, or unknown interface, you must read c/spec/rust evidence first; do not jump straight to a minimal compilable implementation.",
-
-            "- If the currently read material is not enough for a real fix, return empty edits and continue gathering evidence through more_read_requests/search_requests.",
+            "- If a larger coherent patch is needed, return that edit directly; it will not be rejected or shrunk solely because it is large.",
 
             "- If the defect is already identified from the current material, do not delay the fix just to request confirmation. Submit edits now.",
 
-            "- copy_range_after/cp/copy_c_string_array_after are edit operations, not read requests. Use them immediately when the source path/range is known.",
-
-            "",
-
-            "Read request examples:",
-
-            '{"kind":"rust","path":"src/main.rs","mode":"whole_file"}',
-
-            '{"kind":"c","path":"which.c","mode":"line_range","start_line":1,"end_line":160}',
-
-            '{"kind":"spec","path":"docs/rewrite-context/00_repo_manifest.md","mode":"whole_file"}',
-
-            "",
-
-            "Search request examples:",
-
-            '{"kind":"rust","query":"struct Which","path_glob":"src/*.rs","context_lines":2,"max_results":10}',
-
-            '{"kind":"c","query":"main","path_glob":"**/*.c","context_lines":4,"max_results":10}',
-
-            '{"kind":"spec","query":"Which","path_glob":"**/*.md","context_lines":3,"max_results":10}',
+            "- copy_range_after/cp are edit operations, not read requests. Use them immediately when the Rust source path/range is known.",
 
         ]
-
-        optional_evidence = self._optional_evidence_protocol().strip()
-
-        if optional_evidence:
-
-            lines.extend(["", optional_evidence])
 
         return "\n".join(lines)
 
@@ -2142,7 +2228,7 @@ Return JSON only, in the following object format:
 
         if not materials:
 
-            return "- No material is available yet; you must first obtain context through more_read_requests/search_requests."
+            return "- No Rust material is available; return no edits and report the missing Rust-side context in summary."
 
         lines = []
 
@@ -2314,7 +2400,7 @@ Error organization context:
 
 """
 
-        return f"""You are now generating the real repair plan.
+        return f"""You are now generating the real repair plan for the ablation branch.
 
 
 
@@ -2322,7 +2408,7 @@ Requirements:
 
 1. Return JSON only, without explanations.
 
-2. Allowed edit modes: replace_range / delete_range / insert_before / insert_after / copy_range_after / cp / copy_c_string_array_after / create_file / create_dir.
+2. Allowed edit modes: replace_range / delete_range / insert_before / insert_after / copy_range_after / cp / create_file / create_dir.
    insert_before accepts `before_line` or `target_line`; insert_after accepts `after_line` or `target_line`.
 
 3. `replace_file` is not allowed. Only when creating a new file may create_file.content contain the full file content; create_file does not overwrite existing files by default, and overwrite must be explicitly set to `true` if needed.
@@ -2333,8 +2419,8 @@ Requirements:
 
    Read materials are shown as `NNNN | code`; `NNNN` is the real line number to fill into the edit.
 
-6. If the current materials are insufficient for a safe fix, you may return no edits and instead return more_read_requests or search_requests to read more context.
-   If the target file/range is already shown in Read material inventory or the provided materials, do not request it again just to be cautious; edit it.
+6. If the current materials are insufficient for a safe fix, return no edits and explain the missing Rust-side uncertainty in `summary`.
+   Do not request C/spec/test/log context. Do not use more_read_requests or search_requests in this ablation branch.
 
 7. This is the {cycle_index}th action in this repair round. You have already seen the latest compile result at this moment.
 
@@ -2352,17 +2438,16 @@ Requirements:
 
 14. Do not create empty-behavior stubs or fallbacks just to make compilation pass, such as `fn main(_args) -> i32 {{ 0 }}`, default-empty Vec/None/Ok returns, or placeholder implementations that ignore all arguments.
 
-15. If the missing part is a core business module, do not create a minimal empty implementation; first use more_read_requests/search_requests to read the corresponding C source, spec, or existing Rust-related modules, then do a real fix.
+15. If the missing part is a core business module, do not create a minimal empty implementation. Use only the Rust files already provided in this prompt.
 
 16. Do not use delete_range/replace_range to drastically shorten an already valid implementation. Prefer the smallest coherent range that matches the current error, but if the evidence shows a broader coherent patch is needed, use it.
 
 17. create_file may only be used to "create a real implementation based on already read evidence" or "create a pure module declaration file"; do not create placeholder business modules that return defaults.
 
-18. If the current error is `could not find module/type/function`, first search and read existing Rust/C/spec evidence to determine whether the issue is a missing module declaration, a wrong file path, inconsistent naming, or missing code generation.
+18. If the current error is `could not find module/type/function`, use the provided Rust project files to determine whether the issue is a missing module declaration, a wrong file path, inconsistent naming, or missing generated Rust code.
 
-19. For large existing strings, arrays, generated templates, or repeated code blocks, prefer copy_range_after/cp instead of pasting the copied text into JSON. `source_kind` defaults to `rust`; use `source_kind="c"` or a `c:path` source_path only when copying from the original C project.
-    For C string literal arrays, prefer copy_c_string_array_after with `constant_name` and optional `array_name` instead of manually converting hundreds of escaped strings.
-    These copy modes are edits. Do not request "the copy" for a later round when the source path and line range are already known.
+19. For large existing Rust strings, arrays, generated templates, or repeated code blocks, prefer copy_range_after/cp instead of pasting the copied text into JSON.
+    These copy modes are edits. Do not request "the copy" for a later round when the Rust source path and line range are already known.
 
 {tool_protocol}
 
@@ -2434,33 +2519,13 @@ Return JSON:
 
       "target_line": 120,
 
-      "source_kind": "c",
+      "source_kind": "rust",
 
-      "source_path": "src/original.c",
+      "source_path": "src/existing.rs",
 
       "source_start_line": 50,
 
       "source_end_line": 180
-
-    }},
-
-    {{
-
-      "path": "src/file.rs",
-
-      "mode": "copy_c_string_array_after",
-
-      "target_line": 20,
-
-      "source_path": "src/original.c",
-
-      "source_start_line": 150,
-
-      "source_end_line": 760,
-
-      "array_name": "RTC",
-
-      "constant_name": "RTC_LINES"
 
     }}
 
@@ -2468,17 +2533,9 @@ Return JSON:
 
   "more_read_requests": [
 
-    {{"kind": "rust", "path": "src/file.rs", "mode": "line_range", "start_line": 40, "end_line": 120}},
-
-    {{"kind": "c", "path": "which.c", "mode": "whole_file"}},
-
-    {{"kind": "spec", "path": "docs/rewrite-context/00_repo_manifest.md", "mode": "whole_file"}}
-
   ],
 
   "search_requests": [
-
-    {{"kind": "all", "query": "rotate_right", "path_glob": "**/*", "context_lines": 2, "max_results": 6}}
 
   ],
 
@@ -2907,6 +2964,32 @@ Was this round accepted as the new baseline: {"yes" if accepted_as_best else "no
 
 
 
+    def _is_ablation_disallowed_edit(self, edit: Dict) -> str:
+
+        """Reject edit operations that would bypass Rust-only ablation context."""
+
+        mode = str(edit.get("mode") or "replace_range").strip().lower()
+
+        if self._is_c_string_array_copy(mode):
+
+            return "copy_c_string_array_after is disabled in Rust-only ablation mode"
+
+        if self._is_copy_range_edit(mode):
+
+            source_kind, source_rel_path = self._copy_source_ref(edit)
+
+            if source_kind != "rust":
+
+                return f"copy source kind {source_kind or '(empty)'} is disabled in Rust-only ablation mode"
+
+            if not source_rel_path:
+
+                return "copy_range_after requires a Rust source_path in Rust-only ablation mode"
+
+        return ""
+
+
+
     @staticmethod
 
     def _edit_source_path(edit: Dict) -> str:
@@ -3292,6 +3375,14 @@ Was this round accepted as the new baseline: {"yes" if accepted_as_best else "no
                 continue
 
             mode = edit.get("mode") or "replace_range"
+
+            disallowed_reason = self._is_ablation_disallowed_edit(edit)
+
+            if disallowed_reason:
+
+                audit_records.append({"path": rel_path, "mode": mode, "skipped": True, "reason": disallowed_reason})
+
+                continue
 
             if mode == "create_dir":
 
@@ -3834,15 +3925,20 @@ Relevant context:
 
         grouped_errors = self._select_repair_error_batch(check_output, run_dir)
 
-        project_overview = self._build_project_overview(run_dir)
+        diagnosis_plan = self._ablation_diagnosis_plan(
+            run_dir,
+            grouped_errors,
+            check_output,
+            handoff_summary,
+        )
 
-        diagnosis_plan = self._request_diagnosis_plan(grouped_errors, project_overview, handoff_summary)
+        materials = self._materialize_read_requests(
+            run_dir,
+            diagnosis_plan.get("read_requests", []),
+            max_chars=None,
+        )
 
-        materials = self._materialize_read_requests(run_dir, diagnosis_plan.get("read_requests", []), max_chars=None)
-
-        diagnosis_search_materials = self._materialize_search_requests(run_dir, diagnosis_plan.get("search_requests", []), max_chars=None)
-
-        materials.extend(diagnosis_search_materials)
+        diagnosis_search_materials: List[Dict] = []
 
         active_batch_signature = self._error_signature("\n\n".join(grouped_errors.values()))
 
@@ -3898,7 +3994,9 @@ Relevant context:
 
 
 
-        while True:
+        max_actions_this_iteration = 1
+
+        while cycle_index < max_actions_this_iteration:
 
             if self._monotonic() - round_start >= self.iteration_timeout_seconds:
 
@@ -3931,6 +4029,20 @@ Relevant context:
             cycle_index += 1
 
             grouped_errors = self._select_repair_error_batch(current_check_output, run_dir)
+            diagnosis_plan = self._ablation_diagnosis_plan(
+                run_dir,
+                grouped_errors,
+                current_check_output,
+                current_summary or handoff_summary,
+            )
+            self._merge_materials(
+                materials,
+                self._materialize_read_requests(
+                    run_dir,
+                    diagnosis_plan.get("read_requests", []),
+                    max_chars=None,
+                ),
+            )
 
             selected_batch_signature = self._error_signature("\n\n".join(grouped_errors.values()))
 
@@ -3939,26 +4051,11 @@ Relevant context:
                 and selected_batch_signature != active_batch_signature
             ):
 
-                diagnosis_plan = self._request_diagnosis_plan(
+                diagnosis_plan = self._ablation_diagnosis_plan(
+                    run_dir,
                     grouped_errors,
-                    project_overview,
+                    current_check_output,
                     current_summary or handoff_summary,
-                )
-
-                materials.extend(
-                    self._materialize_read_requests(
-                        run_dir,
-                        diagnosis_plan.get("read_requests", []),
-                        max_chars=None,
-                    )
-                )
-
-                materials.extend(
-                    self._materialize_search_requests(
-                        run_dir,
-                        diagnosis_plan.get("search_requests", []),
-                        max_chars=None,
-                    )
                 )
 
                 active_batch_signature = selected_batch_signature
@@ -3992,124 +4089,26 @@ Relevant context:
 
 
             if more_reads:
-
-                new_materials = self._materialize_read_requests(run_dir, more_reads, max_chars=None)
-
-                existing_keys = {
-
-                    (m.get("kind", "rust"), m["path"], m["mode"], m["start_line"], m["end_line"])
-
-                    for m in materials
-
-                }
-
-                for material in new_materials:
-
-                    key = (material.get("kind", "rust"), material["path"], material["mode"], material["start_line"], material["end_line"])
-
-                    if key not in existing_keys:
-
-                        materials.append(material)
-
-                        existing_keys.add(key)
-
                 self._append_repair_record(journal_path, {
-
                     "iteration": iteration,
-
-                    "stage": "llm_more_context",
-
+                    "stage": "ablation_ignored_more_context",
                     "cycle_index": cycle_index,
-
                     "more_read_requests": more_reads,
-
                     "updated_summary": current_summary,
-
-                    "materials_now": [
-
-                        {
-
-                            "kind": material.get("kind", "rust"),
-
-                            "path": material["path"],
-
-                            "mode": material["mode"],
-
-                            "start_line": material["start_line"],
-
-                            "end_line": material["end_line"],
-
-                            "content_chars": len(material["content"]),
-
-                        }
-
-                        for material in materials
-
-                    ],
-
                 })
+                more_reads = []
 
 
 
             if search_requests:
-
-                new_search_materials = self._materialize_search_requests(run_dir, search_requests, max_chars=None)
-
-                existing_keys = {
-
-                    (m.get("kind", "rust"), m.get("query"), m["path"], m["mode"], m["start_line"], m["end_line"])
-
-                    for m in materials
-
-                }
-
-                added_search_materials = []
-
-                for material in new_search_materials:
-
-                    key = (material.get("kind", "rust"), material.get("query"), material["path"], material["mode"], material["start_line"], material["end_line"])
-
-                    if key not in existing_keys:
-
-                        materials.append(material)
-
-                        added_search_materials.append(material)
-
-                        existing_keys.add(key)
-
                 self._append_repair_record(journal_path, {
-
                     "iteration": iteration,
-
-                    "stage": "llm_search_context",
-
+                    "stage": "ablation_ignored_search_context",
                     "cycle_index": cycle_index,
-
                     "search_requests": search_requests,
-
                     "updated_summary": current_summary,
-
-                    "materials_now": [
-
-                        {
-
-                            "kind": material.get("kind", "rust"),
-
-                            "path": material["path"],
-
-                            "mode": material["mode"],
-
-                            "query": material.get("query"),
-
-                            "content_chars": len(material["content"]),
-
-                        }
-
-                        for material in added_search_materials
-
-                    ],
-
                 })
+                search_requests = []
 
 
 
@@ -4526,7 +4525,7 @@ def main():
 
     parser.add_argument("--config-file", default=str(Path(__file__).parent.parent.parent / "local_config.json"))
 
-    parser.add_argument("--max-iterations", type=int, default=15)
+    parser.add_argument("--max-iterations", type=int, default=MAX_REPAIR_ITERATIONS)
 
     parser.add_argument("--runs-root", default="")
 
@@ -4585,6 +4584,12 @@ def main():
     print(f"build_release_passed: {result.test_passed}")
 
     print(f"error_count: {result.error_count}")
+    if not (result.check_passed and result.test_passed):
+        print(
+            f"\nRustRepairAgent compilation repair failed after {agent.max_iterations} iterations "
+            f"(hard limit {MAX_REPAIR_ITERATIONS})."
+        )
+        sys.exit(1)
 
 
 

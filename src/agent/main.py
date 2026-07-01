@@ -40,6 +40,9 @@ from utils.fmtpr import prGreen, prRed, prBlue, prYellow
 from utils.translation_metrics import translation_metrics
 
 
+MAX_REPAIR_ITERATIONS = 20
+
+
 def c_docs_writable(args) -> bool:
     return not getattr(args, "freeze_c_docs", False)
 
@@ -149,7 +152,10 @@ def run_optional_rust_test_agent(args, config: Config, rust_project_path: str):
 
     test_agent = RustTestAgent(
         config=config,
-        max_repair_iterations=getattr(args, "rust_test_agent_max_iterations", 20),
+        max_repair_iterations=min(
+            getattr(args, "rust_test_agent_max_iterations", MAX_REPAIR_ITERATIONS),
+            MAX_REPAIR_ITERATIONS,
+        ),
         test_timeout_seconds=getattr(args, "rust_test_agent_timeout_seconds", 30),
         translate_tests=getattr(args, "rust_test_agent_translate_tests", False),
         enable_log_agent=getattr(args, "use_log_agent", False),
@@ -232,7 +238,10 @@ def run_optional_rust_repair_agent(
 
     repair_kwargs = {
         "config": config,
-        "max_iterations": getattr(args, "rust_repair_max_iterations", 15),
+        "max_iterations": min(
+            getattr(args, "rust_repair_max_iterations", MAX_REPAIR_ITERATIONS),
+            MAX_REPAIR_ITERATIONS,
+        ),
     }
     if error_organizer_agent is not None:
         repair_kwargs["error_organizer_agent"] = error_organizer_agent
@@ -256,6 +265,12 @@ def run_optional_rust_repair_agent(
         prYellow("\n⚠ RustRepairAgent 修复后 cargo check 通过，但 cargo build --release 仍未通过")
     else:
         prRed(f"\n⚠ RustRepairAgent 修复后仍有 {result.error_count} 个错误")
+    if not (result.check_passed and result.test_passed):
+        prRed(
+            f"\nRustRepairAgent 编译修复 {repair_agent.max_iterations} 轮后仍失败"
+            f"（硬上限 {MAX_REPAIR_ITERATIONS} 轮），直接退出程序。"
+        )
+        sys.exit(1)
     return result
 
 
@@ -367,8 +382,8 @@ def main():
     parser.add_argument(
         "--rust-repair-max-iterations",
         type=int,
-        default=40,
-        help="RustRepairAgent 最大修复迭代次数（默认：40）"
+        default=MAX_REPAIR_ITERATIONS,
+        help="RustRepairAgent 最大修复迭代次数（默认：20，硬上限：20）"
     )
     parser.add_argument(
         "--use-rust-test-agent",
@@ -378,8 +393,8 @@ def main():
     parser.add_argument(
         "--rust-test-agent-max-iterations",
         type=int,
-        default=20,
-        help="RustTestAgent 单个失败用例的最大修复轮数（默认：20）"
+        default=MAX_REPAIR_ITERATIONS,
+        help="RustTestAgent 单个失败用例的最大修复轮数（默认：20，硬上限：20）"
     )
     parser.add_argument(
         "--rust-test-agent-binary-name",
@@ -423,11 +438,14 @@ def main():
     parser.add_argument(
         "--max-fix-iterations",
         type=int,
-        default=20,
-        help="最大修复迭代次数（默认：20）"
+        default=MAX_REPAIR_ITERATIONS,
+        help="最大修复迭代次数（默认：20，硬上限：20）"
     )
 
     args = parser.parse_args()
+    args.max_fix_iterations = max(1, min(args.max_fix_iterations, MAX_REPAIR_ITERATIONS))
+    args.rust_repair_max_iterations = max(1, min(args.rust_repair_max_iterations, MAX_REPAIR_ITERATIONS))
+    args.rust_test_agent_max_iterations = max(1, min(args.rust_test_agent_max_iterations, MAX_REPAIR_ITERATIONS))
 
     translation_metrics.start()
     rust_project_path = os.path.join(args.output_dir, args.rust_project_name) if args.output_dir else ""
@@ -722,7 +740,11 @@ def main():
                 if success:
                     prGreen("\n✓ 代码编译修复成功")
                 else:
-                    prRed("\n⚠ 代码编译修复失败，后续测试阶段将跳过")
+                    prRed(
+                        f"\n代码编译修复 {args.max_fix_iterations} 轮后仍失败"
+                        f"（硬上限 {MAX_REPAIR_ITERATIONS} 轮），直接退出程序。"
+                    )
+                    sys.exit(1)
             else:
                 prRed("\n⊘ 跳过代码编译修复步骤")
                 compile_ready = cargo_build_release_passes(rust_project_path)
